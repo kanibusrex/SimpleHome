@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Home</title>
+<meta name="theme-color" id="themeColorMeta" content="#0a0606">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Home">
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0606'/%3E%3Cpath d='M16 34 32 20l16 14v14a2 2 0 0 1-2 2H34V40h-4v10H18a2 2 0 0 1-2-2z' fill='%23e0362b'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -334,6 +339,72 @@
     text-transform: uppercase;
     color: var(--text-dim);
     flex-shrink: 0;
+  }
+
+  .result-prefix {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    flex-shrink: 0;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 10px 10px 10px 20px;
+    font-size: 12.5px;
+    color: var(--text);
+    box-shadow: 0 14px 34px -12px rgba(0,0,0,0.6);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.22s ease;
+    z-index: 40;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+  }
+  .toast button {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .tile-hotkey {
+    position: absolute;
+    top: 5px;
+    left: 7px;
+    font-size: 9.5px;
+    color: var(--text-dim);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+  body.show-hotkeys .tile-hotkey { opacity: 0.8; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    .particles { display: none; }
   }
 
   .panel-btn {
@@ -937,9 +1008,15 @@
     <p class="hint">
       <kbd class="k">/</kbd> jump to search &nbsp;·&nbsp;
       <kbd class="k">&#8593;</kbd><kbd class="k">&#8595;</kbd> pick a result &nbsp;·&nbsp;
+      <kbd class="k">Alt</kbd>+<kbd class="k">1</kbd>–<kbd class="k">9</kbd> open a tile &nbsp;·&nbsp;
       <kbd class="k">Shift</kbd>+<kbd class="k">S</kbd> scratchpad &nbsp;·&nbsp;
       <kbd class="k">Esc</kbd> close
     </p>
+  </div>
+  <div class="panel-section">
+    <h3>Search commands</h3>
+    <p class="hint">Start a search with a prefix to send it somewhere specific — <kbd class="k">gh react</kbd> searches GitHub.</p>
+    <p class="hint" id="commandList"></p>
   </div>
   <div class="panel-section">
     <h3>Shortcuts</h3>
@@ -957,6 +1034,11 @@
     <span id="scratchStatus">Saved automatically</span>
     <button class="link-btn" id="scratchClear">Clear</button>
   </div>
+</div>
+
+<div class="toast" id="toast">
+  <span id="toastMsg"></span>
+  <button id="toastAction">Undo</button>
 </div>
 
 <div class="modal-overlay hidden" id="modalOverlay">
@@ -1022,6 +1104,33 @@
 
   var shortcuts = loadShortcuts();
 
+  // ---- Toast with undo ----
+  var toastEl = document.getElementById('toast');
+  var toastMsg = document.getElementById('toastMsg');
+  var toastAction = document.getElementById('toastAction');
+  var toastTimer = null;
+  var undoFn = null;
+
+  function showToast(msg, onUndo, actionLabel) {
+    toastMsg.textContent = msg;
+    undoFn = onUndo || null;
+    toastAction.textContent = actionLabel || 'Undo';
+    toastAction.style.display = undoFn ? '' : 'none';
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, 6000);
+  }
+
+  function hideToast() {
+    toastEl.classList.remove('show');
+    undoFn = null;
+  }
+
+  toastAction.addEventListener('click', function () {
+    if (undoFn) undoFn();
+    hideToast();
+  });
+
   function normalizeUrl(input) {
     var v = input.trim();
     if (!v) return '';
@@ -1035,6 +1144,18 @@
 
   function initialFor(name) {
     return (name.trim().charAt(0) || '?').toUpperCase();
+  }
+
+  function removeShortcut(index) {
+    var removed = shortcuts[index];
+    shortcuts.splice(index, 1);
+    saveShortcuts(shortcuts);
+    renderShortcuts();
+    showToast('Removed ' + removed.name, function () {
+      shortcuts.splice(index, 0, removed);
+      saveShortcuts(shortcuts);
+      renderShortcuts();
+    });
   }
 
   function renderShortcuts() {
@@ -1069,17 +1190,20 @@
       tile.appendChild(icon);
       tile.appendChild(label);
 
+      if (i < 9) {
+        var hk = document.createElement('div');
+        hk.className = 'tile-hotkey';
+        hk.textContent = i + 1;
+        tile.appendChild(hk);
+      }
+
       if (editing) {
         var removeBtn = document.createElement('button');
         removeBtn.className = 'tile-remove';
         removeBtn.textContent = '\u00d7';
         removeBtn.addEventListener('click', function (e) {
           e.stopPropagation();
-          if (confirm('Remove "' + s.name + '"?')) {
-            shortcuts.splice(i, 1);
-            saveShortcuts(shortcuts);
-            renderShortcuts();
-          }
+          removeShortcut(i);
         });
         tile.appendChild(removeBtn);
 
@@ -1157,6 +1281,15 @@
     var name = tileNameInput.value.trim();
     var url = normalizeUrl(tileUrlInput.value);
     if (!name || !url) return;
+
+    var host = hostnameFor(url).replace(/^www\./, '');
+    var dupe = shortcuts.findIndex(function (s, i) {
+      return i !== editingIndex && hostnameFor(s.url).replace(/^www\./, '') === host;
+    });
+    if (host && dupe > -1) {
+      if (!confirm(shortcuts[dupe].name + ' already points to ' + host + '. Add this anyway?')) return;
+    }
+
     if (editingIndex === null) {
       shortcuts.push({ name: name, url: url });
     } else {
@@ -1168,12 +1301,10 @@
   });
 
   modalDelete.addEventListener('click', function () {
-    if (editingIndex !== null && confirm('Remove "' + shortcuts[editingIndex].name + '"?')) {
-      shortcuts.splice(editingIndex, 1);
-      saveShortcuts(shortcuts);
-      closeModal();
-      renderShortcuts();
-    }
+    if (editingIndex === null) return;
+    var idx = editingIndex;
+    closeModal();
+    removeShortcut(idx);
   });
 
   editBtn.addEventListener('click', function () {
@@ -1198,6 +1329,19 @@
     Array.prototype.forEach.call(themeGrid.children, function (btn) {
       btn.classList.toggle('active', btn.dataset.swatch === theme);
     });
+    var cs = getComputedStyle(document.documentElement);
+    var bg = cs.getPropertyValue('--bg').trim();
+    var accent = cs.getPropertyValue('--accent').trim();
+    var meta = document.getElementById('themeColorMeta');
+    if (meta && bg) meta.setAttribute('content', bg);
+    var fav = document.getElementById('favicon');
+    if (fav && bg && accent) {
+      fav.href = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='"
+        + encodeURIComponent(bg)
+        + "'/%3E%3Cpath d='M16 34 32 20l16 14v14a2 2 0 0 1-2 2H34V40h-4v10H18a2 2 0 0 1-2-2z' fill='"
+        + encodeURIComponent(accent)
+        + "'/%3E%3C/svg%3E";
+    }
     renderParticles(theme);
   }
 
@@ -1365,6 +1509,35 @@
   var matches = [];
   var selectedIdx = 0;
 
+  var COMMANDS = [
+    { prefix: 'g',  label: 'Google',        url: 'https://www.google.com/search?q=' },
+    { prefix: 'd',  label: 'DuckDuckGo',    url: 'https://duckduckgo.com/?q=' },
+    { prefix: 'y',  label: 'YouTube',       url: 'https://www.youtube.com/results?search_query=' },
+    { prefix: 'gh', label: 'GitHub',        url: 'https://github.com/search?q=' },
+    { prefix: 'w',  label: 'Wikipedia',     url: 'https://en.wikipedia.org/w/index.php?search=' },
+    { prefix: 'r',  label: 'Reddit',        url: 'https://www.reddit.com/search/?q=' },
+    { prefix: 'a',  label: 'Amazon',        url: 'https://www.amazon.com/s?k=' },
+    { prefix: 'm',  label: 'Maps',          url: 'https://www.google.com/maps/search/' },
+    { prefix: 'i',  label: 'Images',        url: 'https://www.google.com/search?tbm=isch&q=' },
+    { prefix: 'np', label: 'npm',           url: 'https://www.npmjs.com/search?q=' },
+    { prefix: 'mdn',label: 'MDN',           url: 'https://developer.mozilla.org/en-US/search?q=' },
+    { prefix: 'so', label: 'Stack Overflow',url: 'https://stackoverflow.com/search?q=' }
+  ];
+
+  function parseCommand(q) {
+    var m = q.match(/^(\S+)\s+(.*)$/);
+    if (!m) return null;
+    var cmd = COMMANDS.find(function (c) { return c.prefix === m[1].toLowerCase(); });
+    if (!cmd || !m[2].trim()) return null;
+    return { cmd: cmd, term: m[2].trim() };
+  }
+
+  function partialCommands(q) {
+    var v = q.trim().toLowerCase();
+    if (!v || /\s/.test(v)) return [];
+    return COMMANDS.filter(function (c) { return c.prefix.indexOf(v) === 0; });
+  }
+
   function scoreMatch(shortcut, q) {
     var name = shortcut.name.toLowerCase();
     var host = hostnameFor(shortcut.url).toLowerCase().replace(/^www\./, '');
@@ -1403,19 +1576,38 @@
       return;
     }
 
+    var rows = [];
+    var parsed = parseCommand(q);
+
+    if (parsed) {
+      rows.push({
+        kind: 'command',
+        label: parsed.term,
+        sub: 'on ' + parsed.cmd.label,
+        prefix: parsed.cmd.prefix,
+        url: parsed.cmd.url + encodeURIComponent(parsed.term)
+      });
+    }
+
     matches = computeMatches(q);
-    var rows = matches.map(function (s) {
-      return { kind: 'shortcut', label: s.name, url: s.url };
+    matches.forEach(function (s) {
+      rows.push({ kind: 'shortcut', label: s.name, url: s.url });
     });
 
-    if (looksLikeUrl(q)) {
-      rows.push({ kind: 'open', label: q.trim(), url: normalizeUrl(q) });
-    }
-    rows.push({
-      kind: 'search',
-      label: q.trim(),
-      url: engineSelect.value + encodeURIComponent(q.trim())
+    partialCommands(q).forEach(function (c) {
+      rows.push({ kind: 'hint', label: 'Search ' + c.label, prefix: c.prefix, hint: true });
     });
+
+    if (!parsed) {
+      if (looksLikeUrl(q)) {
+        rows.push({ kind: 'open', label: q.trim(), url: normalizeUrl(q) });
+      }
+      rows.push({
+        kind: 'search',
+        label: q.trim(),
+        url: engineSelect.value + encodeURIComponent(q.trim())
+      });
+    }
 
     if (selectedIdx >= rows.length) selectedIdx = 0;
 
@@ -1438,18 +1630,35 @@
       } else {
         var glyph = document.createElement('div');
         glyph.className = 'result-fallback';
-        glyph.textContent = row.kind === 'search' ? '\u2315' : '\u2197';
+        glyph.textContent = row.kind === 'open' ? '\u2197' : '\u2315';
         el.appendChild(glyph);
       }
 
       var text = document.createElement('div');
       text.className = 'result-text';
       text.textContent = row.label;
+      if (row.sub) {
+        var sub = document.createElement('span');
+        sub.className = 'result-host';
+        sub.textContent = row.sub;
+        text.appendChild(sub);
+      }
       el.appendChild(text);
+
+      if (row.prefix) {
+        var pf = document.createElement('div');
+        pf.className = 'result-prefix';
+        pf.textContent = row.prefix + ' \u2026';
+        el.appendChild(pf);
+      }
 
       var kind = document.createElement('div');
       kind.className = 'result-kind';
-      kind.textContent = row.kind === 'shortcut' ? 'Shortcut' : (row.kind === 'open' ? 'Open' : 'Search');
+      kind.textContent = row.kind === 'shortcut' ? 'Shortcut'
+        : row.kind === 'open' ? 'Open'
+        : row.kind === 'hint' ? 'Command'
+        : row.kind === 'command' ? 'Go'
+        : 'Search';
       el.appendChild(kind);
 
       el.addEventListener('mouseenter', function () {
@@ -1458,13 +1667,22 @@
           c.classList.toggle('selected', ci === i);
         });
       });
-      el.addEventListener('click', function () { go(row.url); });
+
+      el.addEventListener('click', function () {
+        if (row.hint) {
+          searchInput.value = row.prefix + ' ';
+          selectedIdx = 0;
+          searchInput.focus();
+          renderResults();
+        } else {
+          go(row.url);
+        }
+      });
 
       resultsEl.appendChild(el);
     });
 
     resultsEl.classList.remove('hidden');
-    resultsEl.dataset.count = rows.length;
   }
 
   function go(url) {
@@ -1514,6 +1732,50 @@
     e.preventDefault();
     activateSelection();
   });
+
+  document.addEventListener('keyup', function (e) {
+    if (e.key === 'Alt') document.body.classList.remove('show-hotkeys');
+  });
+  window.addEventListener('blur', function () {
+    document.body.classList.remove('show-hotkeys');
+  });
+
+  // ---- Pause background animation when the tab isn't visible ----
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      if (particleTimer) { clearInterval(particleTimer); particleTimer = null; }
+      particlesEl.style.animationPlayState = 'paused';
+      particlesEl.querySelectorAll('*').forEach(function (el) {
+        el.style.animationPlayState = 'paused';
+      });
+    } else {
+      renderParticles(document.documentElement.getAttribute('data-theme'));
+    }
+  });
+
+  // ---- Installable app manifest ----
+  (function () {
+    var icon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0606'/%3E%3Cpath d='M16 34 32 20l16 14v14a2 2 0 0 1-2 2H34V40h-4v10H18a2 2 0 0 1-2-2z' fill='%23e0362b'/%3E%3C/svg%3E";
+    var manifest = {
+      name: 'Home',
+      short_name: 'Home',
+      description: 'A custom browser home page.',
+      start_url: '.',
+      display: 'standalone',
+      background_color: '#0a0606',
+      theme_color: '#0a0606',
+      icons: [
+        { src: icon, sizes: 'any', type: 'image/svg+xml', purpose: 'any' }
+      ]
+    };
+    try {
+      var blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+      var link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = URL.createObjectURL(blob);
+      document.head.appendChild(link);
+    } catch (e) {}
+  })();
 
   // ---- Scratchpad ----
   var STORAGE_SCRATCH = 'homepage.scratch';
@@ -1669,6 +1931,17 @@
       return;
     }
 
+    if (e.altKey && !e.metaKey && !e.ctrlKey && /^[1-9]$/.test(e.key)) {
+      var idx = parseInt(e.key, 10) - 1;
+      if (shortcuts[idx]) {
+        e.preventDefault();
+        window.location.href = shortcuts[idx].url;
+      }
+      return;
+    }
+
+    if (e.key === 'Alt') document.body.classList.add('show-hotkeys');
+
     if (e.key === 'Escape') {
       if (!modalOverlay.classList.contains('hidden')) {
         closeModal();
@@ -1682,6 +1955,13 @@
       }
     }
   });
+
+  var commandListEl = document.getElementById('commandList');
+  if (commandListEl) {
+    commandListEl.innerHTML = COMMANDS.map(function (c) {
+      return '<kbd class="k">' + c.prefix + '</kbd> ' + c.label;
+    }).join(' &nbsp;·&nbsp; ');
+  }
 
   var savedTheme = localStorage.getItem(STORAGE_THEME) || 'ember';
   applyTheme(savedTheme);

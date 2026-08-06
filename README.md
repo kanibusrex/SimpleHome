@@ -6,7 +6,11 @@ A custom browser home page. One HTML file, no build step, no dependencies, no tr
 
 **Launcher search.** Type to filter your shortcuts live. Matching runs against both the shortcut name and its hostname, ranked so exact matches beat prefixes beat substrings. Arrow keys move the selection, Enter opens it. If nothing matches, Enter runs a web search instead; if what you typed looks like a domain, an "Open" row appears too. Google, DuckDuckGo, and Bing are selectable.
 
-**Editable shortcuts.** Click the pencil to enter edit mode, then drag tiles to reorder, click one to rename or change its URL, or hit the × to remove it. The + tile adds new ones. Icons are pulled automatically from each site's favicon, with a letter avatar as fallback.
+**Command prefixes.** Start a query with a prefix to route it somewhere specific — `gh react` searches GitHub, `y live sets` searches YouTube. Typing a partial prefix suggests the matching commands. Built in: `g` Google · `d` DuckDuckGo · `y` YouTube · `gh` GitHub · `w` Wikipedia · `r` Reddit · `a` Amazon · `m` Maps · `i` Images · `np` npm · `mdn` MDN · `so` Stack Overflow. Add your own by editing the `COMMANDS` array.
+
+**Editable shortcuts.** Click the pencil to enter edit mode, then drag tiles to reorder, click one to rename or change its URL, or hit the × to remove it. The + tile adds new ones. Removals show an undo toast rather than a confirmation dialog, and adding a shortcut that duplicates an existing hostname warns first. Icons are pulled automatically from each site's favicon, with a letter avatar as fallback.
+
+**Tile hotkeys.** `Alt+1` through `Alt+9` open the first nine tiles. Hold `Alt` to see the numbers.
 
 **Scratchpad.** A persistent notes panel that saves as you type. `Shift+S` from anywhere.
 
@@ -36,14 +40,15 @@ Shortcut tiles, the search bar, and the scratchpad share a hover/focus treatment
 | `/` | Jump to search |
 | `↑` `↓` | Move through results |
 | `Enter` | Open the selected result |
+| `Alt+1`–`Alt+9` | Open the first nine tiles |
 | `Shift+S` | Toggle the scratchpad |
 | `Esc` | Close the open panel, modal, or search |
 
 ## Setup
 
-Download `home.html` and open it — that's the whole install. To use it as your actual home page:
+Download `index.html` and open it — that's the whole install. To use it as your actual home page:
 
-**Hosted (recommended).** Push `home.html` to a repo as `index.html`, enable GitHub Pages under Settings → Pages, and point your browser at the resulting URL. This way the same page and its favicons work across every device you sign into.
+**Hosted (recommended).** Push `index.html` to a repo, enable GitHub Pages under Settings → Pages, and point your browser at the resulting URL. This way the same page and its favicons work across every device you sign into.
 
 **Local file.** Point your browser at the `file://` path instead. Works fine, but favicons need a network connection either way, and the file won't follow you between machines.
 
@@ -60,6 +65,9 @@ Browsers deliberately don't let a plain web page override the new tab page — t
 ## Notes
 
 - Data is stored under the `homepage.*` keys in `localStorage`. Nothing leaves your browser.
+- The page is installable — it ships a generated web app manifest, so Chrome and Safari will offer to add it to your dock or home screen as a standalone app. The favicon and status bar color follow the active theme.
+- Background animations pause when the tab is hidden, so a backgrounded home page costs nothing.
+- `prefers-reduced-motion` is respected: animated backgrounds are hidden and transitions are cut for anyone who has that set at the OS level.
 - The one external request is to Google's favicon service (`s2/favicons`) for tile icons. Remove that line in `renderShortcuts()` if you'd rather have zero third-party requests — tiles fall back to letter avatars.
 - The traveling glow uses `@property` for the animated gradient angle: Chrome/Edge 85+, Safari 16.4+, Firefox 128+. On older browsers the outline renders static instead of animating; nothing breaks.
 
