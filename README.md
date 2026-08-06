@@ -1,6 +1,6 @@
 # Home
 
-A custom browser home page. One HTML file, no build step, no dependencies, no tracking — clock, launcher search, editable shortcuts, a scratchpad, and eight themes with animated backgrounds.
+A custom browser home page. One HTML file, no build step, no dependencies, no tracking — clock, launcher search, editable shortcuts, a scratchpad, and eighteen themes with animated backgrounds.
 
 ## Features
 
@@ -14,7 +14,7 @@ A custom browser home page. One HTML file, no build step, no dependencies, no tr
 
 **Scratchpad.** A persistent notes panel that saves as you type. `Shift+S` from anywhere.
 
-**Eight themes**, each with its own background animation:
+**Eighteen themes**, each with its own background animation:
 
 | Theme | Palette | Animation |
 |---|---|---|
@@ -26,8 +26,20 @@ A custom browser home page. One HTML file, no build step, no dependencies, no tr
 | Frost | Cool light | Falling snow |
 | Sunset | Pink / peach | Drifting clouds |
 | Bloom | Lavender / pink | Falling petals |
+| Matrix | Phosphor green / black | Digital rain — katakana columns falling at staggered speeds, each led by a bright white glyph, with the trailing characters churning as they fall |
+| Synthwave | Magenta / cyan on deep purple | A perspective grid scrolling toward the horizon under a striped, slowly pulsing sun |
+| Cosmos | Indigo / violet | A deep starfield with drifting nebula clouds and periodic shooting stars |
+| Storm | Slate blue | Wind-driven rain streaks with occasional sheet lightning |
+| Abyss | Deep sea cyan | Bubbles wobbling up through swaying shafts of light |
+| Circuit | Slate / lime | Pulses travelling along etched right-angle board traces |
+| Terminal | Amber on black | CRT phosphor — scanlines, a rolling refresh bar, and a faint flicker |
+| Festival | Night blue / multicolour | Rockets climbing and bursting into falling sparks |
+| Ripple | Pale blue light | Rings spreading outward like rain on still water |
+| Lava | Plum / magenta | Metaball blobs rising and merging, lava-lamp style |
 
 Shortcut tiles, the search bar, and the scratchpad share a hover/focus treatment: a dark outline with a gradient glow that travels around the perimeter, colored from the active theme's accent.
+
+**Clock.** A monospace instrument readout: 24-hour time with live seconds, an unlit `88:88` layer showing through behind the digits, a blinking separator, and a bar under the readout that sweeps once per minute. Below it sits a technical strip — ISO date, ISO week number, day of year, and UTC offset. The digits aren't plain black or white — each theme defines its own `--clock` and `--clock-2` pair, and the numerals are filled with a gradient between them, so the readout carries the theme's color rather than sitting on top of it. Those pairs are hand-picked to clear WCAG's 3:1 large-text contrast bar against every background. Set `CLOCK_24H = false` near `tick()` for a 12-hour clock with an AM/PM suffix.
 
 **Time-of-day greeting** above the clock, switching between morning, afternoon, evening, and night.
 

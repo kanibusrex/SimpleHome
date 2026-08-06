@@ -28,6 +28,8 @@
     --accent: #e0362b;
     --accent-2: #ff8552;
     --shadow: rgba(224, 54, 43, 0.35);
+    --clock: #ff9d6e;
+    --clock-2: #e8483a;
   }
 
   html[data-theme="noir"] {
@@ -41,6 +43,8 @@
     --accent: #cfd6e4;
     --accent-2: #6ea8ff;
     --shadow: rgba(110, 168, 255, 0.18);
+    --clock: #e3e9f5;
+    --clock-2: #7fb3ff;
   }
 
   html[data-theme="daybreak"] {
@@ -54,6 +58,8 @@
     --accent: #b8842c;
     --accent-2: #d9a441;
     --shadow: rgba(184, 132, 44, 0.18);
+    --clock: #7a5312;
+    --clock-2: #a5711b;
   }
 
   html[data-theme="frost"] {
@@ -67,6 +73,8 @@
     --accent: #2563eb;
     --accent-2: #0891b2;
     --shadow: rgba(37, 99, 235, 0.15);
+    --clock: #16408f;
+    --clock-2: #0e7490;
   }
 
   html[data-theme="aurora"] {
@@ -80,6 +88,8 @@
     --accent: #34d399;
     --accent-2: #a78bfa;
     --shadow: rgba(167, 139, 250, 0.25);
+    --clock: #5eead4;
+    --clock-2: #a78bfa;
   }
 
   html[data-theme="forest"] {
@@ -93,6 +103,8 @@
     --accent: #7cbf6a;
     --accent-2: #d4e157;
     --shadow: rgba(212, 225, 87, 0.2);
+    --clock: #a8e08a;
+    --clock-2: #d9ed5e;
   }
 
   html[data-theme="sunset"] {
@@ -106,6 +118,8 @@
     --accent: #e2596b;
     --accent-2: #f4a259;
     --shadow: rgba(226, 89, 107, 0.18);
+    --clock: #b0324a;
+    --clock-2: #c4552b;
   }
 
   html[data-theme="bloom"] {
@@ -119,6 +133,158 @@
     --accent: #b565a7;
     --accent-2: #f2a6c9;
     --shadow: rgba(181, 101, 167, 0.18);
+    --clock: #8e3a82;
+    --clock-2: #bd5fa6;
+  }
+
+  html[data-theme="matrix"] {
+    --bg: #000500;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #04220b, #000500 65%);
+    --surface: #04140a;
+    --surface-hover: #07200f;
+    --border: #0e3f1c;
+    --text: #c8facd;
+    --text-dim: #4f9c5f;
+    --accent: #00ff41;
+    --accent-2: #7dff9b;
+    --shadow: rgba(0, 255, 65, 0.3);
+    --clock: #7dff9b;
+    --clock-2: #00c62f;
+  }
+
+  html[data-theme="synthwave"] {
+    --bg: #12002e;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #330a5c, #12002e 65%);
+    --surface: #1c0640;
+    --surface-hover: #290a55;
+    --border: #45108a;
+    --text: #f7e6ff;
+    --text-dim: #a97fd0;
+    --accent: #ff2e97;
+    --accent-2: #00e5ff;
+    --shadow: rgba(255, 46, 151, 0.35);
+    --clock: #00e5ff;
+    --clock-2: #ff5cae;
+  }
+
+  html[data-theme="cosmos"] {
+    --bg: #05060f;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #151c40, #05060f 65%);
+    --surface: #0d1024;
+    --surface-hover: #161b3a;
+    --border: #232a52;
+    --text: #e6e9ff;
+    --text-dim: #8b93c4;
+    --accent: #8b9dff;
+    --accent-2: #d8b4fe;
+    --shadow: rgba(139, 157, 255, 0.28);
+    --clock: #b9c4ff;
+    --clock-2: #d8b4fe;
+  }
+
+  html[data-theme="storm"] {
+    --bg: #0a0f14;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #17242f, #0a0f14 65%);
+    --surface: #101820;
+    --surface-hover: #17222d;
+    --border: #24323f;
+    --text: #dde7f0;
+    --text-dim: #7d8fa3;
+    --accent: #5eb8f0;
+    --accent-2: #9fd4ff;
+    --shadow: rgba(94, 184, 240, 0.25);
+    --clock: #9fd4ff;
+    --clock-2: #4fa8e0;
+  }
+
+  html[data-theme="abyss"] {
+    --bg: #020c12;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #06283a, #020c12 65%);
+    --surface: #061821;
+    --surface-hover: #0a2430;
+    --border: #10394a;
+    --text: #d6f2f7;
+    --text-dim: #6b9bab;
+    --accent: #22d3ee;
+    --accent-2: #67e8f9;
+    --shadow: rgba(34, 211, 238, 0.28);
+    --clock: #7fe9f7;
+    --clock-2: #22b8d4;
+  }
+
+  html[data-theme="circuit"] {
+    --bg: #070b0d;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #0e1f1d, #070b0d 65%);
+    --surface: #0c1416;
+    --surface-hover: #121e21;
+    --border: #1c3033;
+    --text: #d8f0ee;
+    --text-dim: #6f9a96;
+    --accent: #22e0b0;
+    --accent-2: #a3e635;
+    --shadow: rgba(34, 224, 176, 0.25);
+    --clock: #8ff0d4;
+    --clock-2: #22c99e;
+  }
+
+  html[data-theme="terminal"] {
+    --bg: #0d0803;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #2a1905, #0d0803 65%);
+    --surface: #150d04;
+    --surface-hover: #1e1206;
+    --border: #3a2409;
+    --text: #ffd08a;
+    --text-dim: #a87b3c;
+    --accent: #ffb000;
+    --accent-2: #ffd76a;
+    --shadow: rgba(255, 176, 0, 0.3);
+    --clock: #ffd76a;
+    --clock-2: #ff9d00;
+  }
+
+  html[data-theme="festival"] {
+    --bg: #05070f;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #111c38, #05070f 65%);
+    --surface: #0c1122;
+    --surface-hover: #141c33;
+    --border: #212c4d;
+    --text: #e8ecff;
+    --text-dim: #8792bd;
+    --accent: #ffd166;
+    --accent-2: #ef476f;
+    --shadow: rgba(239, 71, 111, 0.28);
+    --clock: #ffd9a0;
+    --clock-2: #ff8fa8;
+  }
+
+  html[data-theme="ripple"] {
+    --bg: #eef4f8;
+    --bg-gradient: linear-gradient(180deg, #ffffff, #eef4f8 70%);
+    --surface: #ffffff;
+    --surface-hover: #e6eff6;
+    --border: #d5e3ee;
+    --text: #172733;
+    --text-dim: #6c8398;
+    --accent: #0e7490;
+    --accent-2: #38bdf8;
+    --shadow: rgba(14, 116, 144, 0.15);
+    --clock: #0b4f63;
+    --clock-2: #0e7490;
+  }
+
+  html[data-theme="lava"] {
+    --bg: #0d0410;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #2a0a20, #0d0410 65%);
+    --surface: #170720;
+    --surface-hover: #210c2d;
+    --border: #3b1543;
+    --text: #ffe3f3;
+    --text-dim: #b083a8;
+    --accent: #ff4d8d;
+    --accent-2: #ffa14a;
+    --shadow: rgba(255, 77, 141, 0.3);
+    --clock: #ffb3d0;
+    --clock-2: #ff6ea3;
   }
 
   * { box-sizing: border-box; }
@@ -238,6 +404,356 @@
     0% { transform: translate(0, 0) scale(1); }
     50% { transform: translate(6vw, 3vh) scale(1.15); }
     100% { transform: translate(-5vw, -2vh) scale(0.95); }
+  }
+
+  /* ---- Matrix: digital rain ---- */
+  /* Each column is one string of glyphs scrolling past, masked so it fades out
+     at the top. The trailing glyph is the bright "head" of the drop. */
+  .rain-column {
+    position: absolute;
+    top: 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 15px;
+    line-height: 1.15;
+    white-space: pre;
+    color: var(--accent);
+    text-shadow: 0 0 6px var(--accent);
+    opacity: 0.55;
+    will-change: transform;
+    animation: rain-fall linear infinite;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 45%);
+    mask-image: linear-gradient(to bottom, transparent, #000 45%);
+  }
+
+  .rain-head {
+    color: #ffffff;
+    text-shadow: 0 0 10px var(--accent), 0 0 18px var(--accent);
+  }
+
+  @keyframes rain-fall {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100vh); }
+  }
+
+  /* ---- Synthwave: perspective grid and striped sun ---- */
+  .synth-grid {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    width: 320vw;
+    height: 100vh;
+    margin-left: -160vw;
+    /* Perspective and angle set where the horizon lands: roughly
+       perspective / tan(angle) above the bottom edge. */
+    transform: perspective(650px) rotateX(68deg);
+    transform-origin: bottom center;
+    background-image:
+      repeating-linear-gradient(to right, var(--accent) 0 1px, transparent 1px 64px),
+      repeating-linear-gradient(to bottom, var(--accent) 0 2px, transparent 2px 64px);
+    opacity: 0.4;
+    animation: synth-scroll 1.8s linear infinite;
+    -webkit-mask-image: linear-gradient(to top, #000 25%, transparent 85%);
+    mask-image: linear-gradient(to top, #000 25%, transparent 85%);
+  }
+
+  @keyframes synth-scroll {
+    0% { background-position: 0 0, 0 0; }
+    100% { background-position: 0 0, 0 64px; }
+  }
+
+  .synth-sun {
+    position: absolute;
+    left: 50%;
+    bottom: 15vh;
+    width: 240px;
+    height: 240px;
+    margin-left: -120px;
+    border-radius: 50%;
+    background: linear-gradient(180deg, var(--accent-2), var(--accent) 55%, #ff8a3d);
+    opacity: 0.5;
+    filter: blur(0.5px);
+    -webkit-mask-image: repeating-linear-gradient(to bottom, #000 0 12px, transparent 12px 19px);
+    mask-image: repeating-linear-gradient(to bottom, #000 0 12px, transparent 12px 19px);
+    animation: synth-sun-pulse 6s ease-in-out infinite alternate;
+  }
+
+  @keyframes synth-sun-pulse {
+    0% { opacity: 0.38; }
+    100% { opacity: 0.6; }
+  }
+
+  /* ---- Cosmos: shooting stars over the shared starfield ---- */
+  .shooting-star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 6px 1px #fff;
+    opacity: 0;
+    animation: shoot linear forwards;
+  }
+
+  .shooting-star::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    width: 90px;
+    height: 1px;
+    transform: translateY(-50%);
+    background: linear-gradient(to left, #ffffff, transparent);
+  }
+
+  @keyframes shoot {
+    0% { transform: translate(0, 0) rotate(20deg); opacity: 0; }
+    10% { opacity: 1; }
+    100% { transform: translate(60vw, 34vh) rotate(20deg); opacity: 0; }
+  }
+
+  /* ---- Storm: rain streaks and lightning ---- */
+  .rain-streak {
+    position: absolute;
+    top: -12vh;
+    width: 1px;
+    border-radius: 0;
+    background: linear-gradient(to bottom, transparent, var(--accent-2));
+    opacity: 0;
+    animation: streak linear infinite;
+  }
+
+  /* The tilt leans the streak into its drift direction so it reads as driving
+     rain rather than a static line. */
+  @keyframes streak {
+    0% { transform: translate(0, 0) rotate(9deg); opacity: 0; }
+    10% { opacity: 0.55; }
+    100% { transform: translate(var(--drift, -12vw), 115vh) rotate(9deg); opacity: 0; }
+  }
+
+  .lightning {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 50% at 50% 0%, #ffffff, transparent 70%);
+    opacity: 0;
+    animation: flash 220ms ease-out;
+  }
+
+  @keyframes flash {
+    0% { opacity: 0; }
+    15% { opacity: 0.28; }
+    30% { opacity: 0.05; }
+    45% { opacity: 0.22; }
+    100% { opacity: 0; }
+  }
+
+  /* ---- Abyss: buoyant bubbles under swaying light shafts ---- */
+  .bubble {
+    position: absolute;
+    bottom: -60px;
+    border-radius: 50%;
+    border: 1px solid var(--accent-2);
+    background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.4), transparent 55%);
+    opacity: 0;
+    animation: bubble-rise linear infinite;
+  }
+
+  /* Wobbles one way on the way up and back the other, like real buoyancy. */
+  @keyframes bubble-rise {
+    0% { transform: translate(0, 0) scale(0.8); opacity: 0; }
+    12% { opacity: 0.75; }
+    50% { transform: translate(var(--wobble, 16px), -55vh) scale(1); }
+    88% { opacity: 0.5; }
+    100% { transform: translate(calc(var(--wobble, 16px) * -1), -115vh) scale(1.12); opacity: 0; }
+  }
+
+  .water-ray {
+    position: absolute;
+    top: -15vh;
+    width: 90px;
+    height: 130vh;
+    background: linear-gradient(to bottom, var(--accent), transparent 72%);
+    opacity: 0.09;
+    filter: blur(22px);
+    transform-origin: top center;
+    animation: ray-sway ease-in-out infinite alternate;
+  }
+
+  @keyframes ray-sway {
+    0% { transform: rotate(5deg) scaleX(1); opacity: 0.06; }
+    100% { transform: rotate(13deg) scaleX(1.4); opacity: 0.13; }
+  }
+
+  /* ---- Circuit: pulses travelling along etched traces ---- */
+  .circuit-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .circuit-trace {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1;
+    opacity: 0.12;
+  }
+
+  .circuit-pulse {
+    fill: none;
+    stroke: var(--accent-2);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 4px var(--accent-2));
+    animation: trace-pulse linear infinite;
+  }
+
+  /* --dash is the full travel distance, set per-path from getTotalLength(). */
+  @keyframes trace-pulse {
+    from { stroke-dashoffset: 0; }
+    to { stroke-dashoffset: var(--dash); }
+  }
+
+  .circuit-node {
+    fill: var(--accent);
+    opacity: 0.3;
+    animation: node-pulse ease-in-out infinite alternate;
+  }
+
+  @keyframes node-pulse {
+    0% { opacity: 0.15; }
+    100% { opacity: 0.7; }
+  }
+
+  /* ---- Terminal: amber CRT ---- */
+  .crt-scanlines {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.55) 0 1px, transparent 1px 3px);
+    opacity: 0.55;
+  }
+
+  .crt-roll {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 22vh;
+    background: linear-gradient(to bottom, transparent, rgba(255, 208, 138, 0.06), transparent);
+    animation: crt-roll 7s linear infinite;
+  }
+
+  @keyframes crt-roll {
+    0% { top: -25vh; }
+    100% { top: 105vh; }
+  }
+
+  .crt-glow {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 55% at 50% 40%, var(--accent), transparent 75%);
+    opacity: 0.05;
+    animation: crt-flicker 3.2s steps(1, end) infinite;
+  }
+
+  @keyframes crt-flicker {
+    0%, 92%, 100% { opacity: 0.05; }
+    93% { opacity: 0.09; }
+    95% { opacity: 0.03; }
+    97% { opacity: 0.08; }
+  }
+
+  .crt-vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 85% 75% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.75));
+  }
+
+  /* ---- Festival: rockets and bursts ---- */
+  .rocket {
+    position: absolute;
+    width: 2px;
+    height: 20px;
+    border-radius: 2px;
+    background: linear-gradient(to bottom, var(--spark-color, #fff), transparent);
+    box-shadow: 0 0 8px 1px var(--spark-color, #fff);
+    animation: rocket-climb cubic-bezier(0.15, 0.6, 0.55, 1) forwards;
+  }
+
+  @keyframes rocket-climb {
+    0% { transform: translateY(0); opacity: 0; }
+    12% { opacity: 1; }
+    100% { transform: translateY(var(--climb, -40vh)); opacity: 0.9; }
+  }
+
+  .spark {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--spark-color, #fff);
+    box-shadow: 0 0 9px 2px var(--spark-color, #fff);
+    animation: spark-burst cubic-bezier(0.1, 0.7, 0.3, 1) forwards;
+  }
+
+  /* The extra downward offset at the end is the gravity droop. */
+  @keyframes spark-burst {
+    0% { transform: translate(0, 0) scale(1.3); opacity: 1; }
+    70% { opacity: 0.9; }
+    100% { transform: translate(var(--dx, 0), calc(var(--dy, 0) + 70px)) scale(0.25); opacity: 0; }
+  }
+
+  .burst-flash {
+    position: absolute;
+    width: 90px;
+    height: 90px;
+    margin: -45px 0 0 -45px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--spark-color, #fff), transparent 65%);
+    animation: burst-flash 420ms ease-out forwards;
+  }
+
+  @keyframes burst-flash {
+    0% { opacity: 0.55; transform: scale(0.3); }
+    100% { opacity: 0; transform: scale(1.6); }
+  }
+
+  /* ---- Ripple: rain rings on still water ---- */
+  .ripple-ring {
+    position: absolute;
+    width: var(--r, 200px);
+    height: var(--r, 200px);
+    margin-left: calc(var(--r, 200px) / -2);
+    margin-top: calc(var(--r, 200px) / -2);
+    border: 1.5px solid var(--accent);
+    border-radius: 50%;
+    transform: scale(0);
+    opacity: 0.5;
+    animation: ripple-out ease-out forwards;
+  }
+
+  @keyframes ripple-out {
+    to { transform: scale(1); opacity: 0; }
+  }
+
+  /* ---- Lava: metaballs ---- */
+  /* The merge comes from an SVG filter that blurs then hard-thresholds the
+     ALPHA channel. CSS contrast() would do it on colour instead, which wrecks
+     the hue and leaves hard-edged rings rather than soft necks. */
+  .lava-field {
+    position: absolute;
+    inset: 0;
+    filter: url(#goo);
+    opacity: 0.45;
+  }
+
+  .lava-blob {
+    position: absolute;
+    border-radius: 50%;
+    animation: lava-float ease-in-out infinite alternate;
+  }
+
+  @keyframes lava-float {
+    0% { transform: translateY(8vh) scale(0.9); }
+    100% { transform: translateY(-70vh) scale(1.15); }
   }
 
   .app {
@@ -542,28 +1058,167 @@
   }
 
   .clock {
-    font-family: 'Sora', sans-serif;
-    font-weight: 300;
-    font-size: clamp(48px, 10vw, 88px);
-    letter-spacing: 1px;
+    position: relative;
+    display: inline-block;
+    padding: 6px 20px 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: clamp(58px, 13vw, 128px);
+    letter-spacing: 3px;
     line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Corner brackets, like a framed instrument readout. */
+  .clock::before,
+  .clock::after {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--accent);
+    opacity: 0.45;
+  }
+
+  .clock::before {
+    top: -8px;
+    left: -8px;
+    border-right: 0;
+    border-bottom: 0;
+  }
+
+  .clock::after {
+    bottom: -8px;
+    right: -8px;
+    border-left: 0;
+    border-top: 0;
+  }
+
+  /* The unlit segments sitting behind the live digits. */
+  .clock-ghost {
+    position: absolute;
+    top: 6px;
+    left: 20px;
+    color: var(--clock-2);
+    opacity: 0.11;
+    pointer-events: none;
+  }
+
+  /* Digits are filled with a theme gradient, so text-shadow can't be used for
+     the glow -- a transparent fill would let it show straight through. */
+  .clock-face {
+    position: relative;
+    color: var(--clock-2);
+    background: linear-gradient(160deg, var(--clock), var(--clock-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 30px var(--shadow));
+  }
+
+  /* Opt back out of the parent's gradient fill so these paint their own color
+     and the blink animation doesn't fight the background-clip. */
+  .clock-sep {
+    color: var(--accent);
+    -webkit-text-fill-color: var(--accent);
+    animation: clock-blink 2s steps(1, end) infinite;
+  }
+
+  @keyframes clock-blink {
+    0%, 49% { opacity: 0.3; }
+    50%, 100% { opacity: 1; }
+  }
+
+  .clock-secs {
+    position: relative;
+    top: -0.72em;
+    margin-left: 10px;
+    font-size: 0.3em;
+    font-weight: 500;
+    letter-spacing: 2px;
+    color: var(--accent);
+    -webkit-text-fill-color: var(--accent);
+  }
+
+  /* Sweeps once per minute, spanning the width of the readout. */
+  .clock-meter {
+    display: block;
+    width: 100%;
+    height: 2px;
+    margin-top: 14px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .clock-meter i {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    transition: width 1s linear;
+  }
+
+  .clock-meter i.no-anim {
+    transition: none;
   }
 
   .greeting {
-    font-family: 'Sora', sans-serif;
+    font-family: 'IBM Plex Mono', monospace;
     font-weight: 500;
-    font-size: 15px;
-    letter-spacing: 0.5px;
+    font-size: 12px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
     color: var(--text-dim);
-    margin-bottom: 6px;
+    margin-bottom: 14px;
+  }
+
+  .greeting::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 9px;
+    border-radius: 50%;
+    background: var(--accent);
+    vertical-align: middle;
+    box-shadow: 0 0 8px var(--accent);
   }
 
   .date {
-    margin-top: 8px;
+    margin-top: 14px;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 13px;
     letter-spacing: 3px;
     text-transform: uppercase;
     color: var(--text-dim);
+  }
+
+  .clock-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 18px;
+    margin-top: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+  }
+
+  .clock-meta span {
+    white-space: nowrap;
+  }
+
+  .clock-meta em {
+    font-style: normal;
+  }
+
+  .clock-meta b {
+    margin-right: 6px;
+    font-weight: 600;
+    color: var(--accent);
+    opacity: 0.75;
   }
 
   .search {
@@ -868,6 +1523,26 @@
   .swatch[data-swatch="sunset"] .swatch-preview { background: linear-gradient(135deg, #e2596b, #f4a259); }
   .swatch[data-swatch="bloom"] { background: #ffffff; color: #332638; }
   .swatch[data-swatch="bloom"] .swatch-preview { background: linear-gradient(135deg, #b565a7, #f2a6c9); }
+  .swatch[data-swatch="matrix"] { background: #04140a; }
+  .swatch[data-swatch="matrix"] .swatch-preview { background: linear-gradient(135deg, #00ff41, #000500); }
+  .swatch[data-swatch="synthwave"] { background: #1c0640; }
+  .swatch[data-swatch="synthwave"] .swatch-preview { background: linear-gradient(135deg, #ff2e97, #00e5ff); }
+  .swatch[data-swatch="cosmos"] { background: #0d1024; }
+  .swatch[data-swatch="cosmos"] .swatch-preview { background: linear-gradient(135deg, #d8b4fe, #05060f); }
+  .swatch[data-swatch="storm"] { background: #101820; }
+  .swatch[data-swatch="storm"] .swatch-preview { background: linear-gradient(135deg, #9fd4ff, #0a0f14); }
+  .swatch[data-swatch="abyss"] { background: #061821; }
+  .swatch[data-swatch="abyss"] .swatch-preview { background: linear-gradient(135deg, #67e8f9, #020c12); }
+  .swatch[data-swatch="circuit"] { background: #0c1416; }
+  .swatch[data-swatch="circuit"] .swatch-preview { background: linear-gradient(135deg, #a3e635, #22e0b0); }
+  .swatch[data-swatch="terminal"] { background: #150d04; }
+  .swatch[data-swatch="terminal"] .swatch-preview { background: linear-gradient(135deg, #ffb000, #0d0803); }
+  .swatch[data-swatch="festival"] { background: #0c1122; }
+  .swatch[data-swatch="festival"] .swatch-preview { background: linear-gradient(135deg, #ffd166, #ef476f); }
+  .swatch[data-swatch="ripple"] { background: #ffffff; color: #172733; }
+  .swatch[data-swatch="ripple"] .swatch-preview { background: linear-gradient(135deg, #38bdf8, #0e7490); }
+  .swatch[data-swatch="lava"] { background: #170720; }
+  .swatch[data-swatch="lava"] .swatch-preview { background: linear-gradient(135deg, #ffa14a, #ff4d8d); }
 
   .hint { font-size: 11.5px; color: var(--text-dim); line-height: 1.6; }
 
@@ -955,8 +1630,18 @@
 <div class="app">
   <header class="hero">
     <div class="greeting" id="greeting"></div>
-    <div class="clock" id="clock">--:--</div>
+    <div class="clock" id="clock" role="timer">
+      <span class="clock-ghost" aria-hidden="true">88:88</span>
+      <span class="clock-face"><span id="clockH">--</span><span class="clock-sep">:</span><span id="clockM">--</span><span class="clock-secs" id="clockS">--</span></span>
+      <span class="clock-meter" aria-hidden="true"><i id="clockMeter"></i></span>
+    </div>
     <div class="date" id="date"></div>
+    <div class="clock-meta" aria-hidden="true">
+      <span><b>ISO</b><em id="metaIso"></em></span>
+      <span><b>WK</b><em id="metaWeek"></em></span>
+      <span><b>DOY</b><em id="metaDoy"></em></span>
+      <span><b>TZ</b><em id="metaTz"></em></span>
+    </div>
   </header>
 
   <div class="search-wrap">
@@ -992,6 +1677,16 @@
       <button class="swatch" data-swatch="frost"><div class="swatch-preview"></div>Frost</button>
       <button class="swatch" data-swatch="sunset"><div class="swatch-preview"></div>Sunset</button>
       <button class="swatch" data-swatch="bloom"><div class="swatch-preview"></div>Bloom</button>
+      <button class="swatch" data-swatch="matrix"><div class="swatch-preview"></div>Matrix</button>
+      <button class="swatch" data-swatch="synthwave"><div class="swatch-preview"></div>Synthwave</button>
+      <button class="swatch" data-swatch="cosmos"><div class="swatch-preview"></div>Cosmos</button>
+      <button class="swatch" data-swatch="storm"><div class="swatch-preview"></div>Storm</button>
+      <button class="swatch" data-swatch="abyss"><div class="swatch-preview"></div>Abyss</button>
+      <button class="swatch" data-swatch="circuit"><div class="swatch-preview"></div>Circuit</button>
+      <button class="swatch" data-swatch="terminal"><div class="swatch-preview"></div>Terminal</button>
+      <button class="swatch" data-swatch="festival"><div class="swatch-preview"></div>Festival</button>
+      <button class="swatch" data-swatch="ripple"><div class="swatch-preview"></div>Ripple</button>
+      <button class="swatch" data-swatch="lava"><div class="swatch-preview"></div>Lava</button>
     </div>
   </div>
   <div class="panel-section">
@@ -1352,9 +2047,18 @@
   });
 
   var particlesEl = document.getElementById('particles');
-  var particleTimer = null;
+  // Some effects run more than one interval (a spawner plus glyph churn, say),
+  // so timers are tracked as a list and torn down together.
+  var particleTimers = [];
+
+  function addTimer(fn, ms) { particleTimers.push(setInterval(fn, ms)); }
+  function stopTimers() {
+    particleTimers.forEach(clearInterval);
+    particleTimers = [];
+  }
 
   function rand(min, max) { return min + Math.random() * (max - min); }
+  function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
 
   var THEME_ANIM = {
     ember:    { type: 'rise',    color: 'var(--accent-2)', size: [2, 4], duration: [6, 12],  interval: 850, seed: 6 },
@@ -1364,12 +2068,22 @@
     daybreak: { type: 'firefly', color: 'var(--accent-2)', count: 14,    size: [1.5, 3] },
     frost:    { type: 'fall',    color: '#ffffff',         size: [2, 4], duration: [8, 15],  interval: 750, seed: 6 },
     sunset:   { type: 'clouds' },
-    bloom:    { type: 'fall',    color: 'var(--accent-2)', size: [6, 10], duration: [9, 16],  interval: 1000, seed: 5, petal: true }
+    bloom:    { type: 'fall',    color: 'var(--accent-2)', size: [6, 10], duration: [9, 16],  interval: 1000, seed: 5, petal: true },
+    matrix:    { type: 'rain',   maxColumns: 64, length: [8, 26], duration: [6, 16], churn: 3 },
+    synthwave: { type: 'synth' },
+    cosmos:    { type: 'cosmos', stars: 60, shootInterval: 5200 },
+    storm:     { type: 'storm',  duration: [0.7, 1.4], interval: 60, seed: 30, flashChance: 0.45 },
+    abyss:     { type: 'bubbles', size: [4, 16], duration: [9, 18], interval: 700, seed: 18, rays: 4 },
+    circuit:   { type: 'circuit', traces: 14, nodes: 16 },
+    terminal:  { type: 'crt' },
+    festival:  { type: 'fireworks', interval: 1900, sparks: 22 },
+    ripple:    { type: 'ripple', interval: 1100 },
+    lava:      { type: 'lava', blobs: 6 }
   };
 
   function clearParticles() {
     particlesEl.innerHTML = '';
-    if (particleTimer) { clearInterval(particleTimer); particleTimer = null; }
+    stopTimers();
   }
 
   function spawnRiseOrFall(cfg, kind) {
@@ -1392,7 +2106,7 @@
       setTimeout(function () { p.remove(); }, duration * 1000);
     }
     for (var i = 0; i < cfg.seed; i++) setTimeout(spawn, i * (cfg.interval * 0.7));
-    particleTimer = setInterval(spawn, cfg.interval);
+    addTimer(spawn, cfg.interval);
   }
 
   function spawnStars(count) {
@@ -1466,6 +2180,334 @@
     }
   }
 
+  // Half-width katakana, the glyphs the film's rain is built from, plus digits.
+  var RAIN_GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789';
+
+  function randGlyph() {
+    return RAIN_GLYPHS.charAt(Math.floor(Math.random() * RAIN_GLYPHS.length));
+  }
+
+  function buildRain(cfg) {
+    var colWidth = 16;
+    var cols = Math.min(cfg.maxColumns, Math.ceil(window.innerWidth / colWidth));
+    var columns = [];
+
+    for (var i = 0; i < cols; i++) {
+      var col = document.createElement('div');
+      col.className = 'rain-column';
+      col.style.left = (i * colWidth) + 'px';
+      col.style.animationDuration = rand(cfg.duration[0], cfg.duration[1]) + 's';
+      // Negative delays start each column mid-fall, so nothing lines up.
+      col.style.animationDelay = '-' + rand(0, 14) + 's';
+      col.style.opacity = rand(0.3, 0.62);
+
+      var len = randInt(cfg.length[0], cfg.length[1]);
+      var glyphs = [];
+      for (var j = 0; j < len; j++) glyphs.push(randGlyph());
+      col.dataset.len = len;
+      paintColumn(col, glyphs);
+      col._glyphs = glyphs;
+
+      particlesEl.appendChild(col);
+      columns.push(col);
+    }
+
+    // Churn a few glyphs per frame-ish rather than redrawing every column.
+    addTimer(function () {
+      for (var n = 0; n < cfg.churn; n++) {
+        var col = columns[Math.floor(Math.random() * columns.length)];
+        if (!col || !col._glyphs) continue;
+        col._glyphs[Math.floor(Math.random() * col._glyphs.length)] = randGlyph();
+        paintColumn(col, col._glyphs);
+      }
+    }, 120);
+  }
+
+  function paintColumn(col, glyphs) {
+    var body = glyphs.slice(0, -1).join('\n');
+    col.innerHTML = '';
+    col.appendChild(document.createTextNode(body + '\n'));
+    var head = document.createElement('span');
+    head.className = 'rain-head';
+    head.textContent = glyphs[glyphs.length - 1];
+    col.appendChild(head);
+  }
+
+  function buildSynthwave() {
+    var sun = document.createElement('div');
+    sun.className = 'synth-sun';
+    particlesEl.appendChild(sun);
+    var grid = document.createElement('div');
+    grid.className = 'synth-grid';
+    particlesEl.appendChild(grid);
+  }
+
+  function buildCosmos(cfg) {
+    spawnStars(cfg.stars);
+    for (var i = 0; i < 2; i++) {
+      var b = document.createElement('div');
+      b.className = 'aurora-blob';
+      var size = rand(300, 460);
+      b.style.width = size + 'px';
+      b.style.height = size + 'px';
+      b.style.left = rand(-5, 65) + 'vw';
+      b.style.top = rand(-15, 25) + 'vh';
+      b.style.background = i === 0 ? 'var(--accent)' : 'var(--accent-2)';
+      b.style.opacity = 0.22;
+      b.style.animationDuration = rand(20, 30) + 's';
+      b.style.animationDelay = '-' + rand(0, 20) + 's';
+      particlesEl.appendChild(b);
+    }
+    addTimer(function () {
+      var s = document.createElement('div');
+      s.className = 'shooting-star';
+      s.style.left = rand(-10, 45) + 'vw';
+      s.style.top = rand(2, 40) + 'vh';
+      var dur = rand(0.9, 1.6);
+      s.style.animationDuration = dur + 's';
+      particlesEl.appendChild(s);
+      setTimeout(function () { s.remove(); }, dur * 1000);
+    }, cfg.shootInterval);
+  }
+
+  function buildStorm(cfg) {
+    function spawn() {
+      var s = document.createElement('div');
+      s.className = 'rain-streak';
+      var duration = rand(cfg.duration[0], cfg.duration[1]);
+      s.style.left = rand(0, 120) + 'vw';
+      s.style.height = rand(40, 90) + 'px';
+      s.style.setProperty('--drift', rand(-16, -10) + 'vw');
+      s.style.animationDuration = duration + 's';
+      particlesEl.appendChild(s);
+      setTimeout(function () { s.remove(); }, duration * 1000);
+    }
+    for (var i = 0; i < cfg.seed; i++) setTimeout(spawn, i * 60);
+    addTimer(spawn, cfg.interval);
+
+    addTimer(function () {
+      if (Math.random() > cfg.flashChance) return;
+      var f = document.createElement('div');
+      f.className = 'lightning';
+      particlesEl.appendChild(f);
+      setTimeout(function () { f.remove(); }, 260);
+    }, 3000);
+  }
+
+  function buildAbyss(cfg) {
+    for (var r = 0; r < cfg.rays; r++) {
+      var ray = document.createElement('div');
+      ray.className = 'water-ray';
+      ray.style.left = rand(0, 95) + 'vw';
+      ray.style.animationDuration = rand(9, 16) + 's';
+      ray.style.animationDelay = '-' + rand(0, 10) + 's';
+      particlesEl.appendChild(ray);
+    }
+    // A bubble takes up to 18s to cross, so the seeded ones start mid-climb via
+    // a negative delay -- otherwise the water is empty for the first while.
+    function spawn(preroll) {
+      var b = document.createElement('div');
+      b.className = 'bubble';
+      var size = rand(cfg.size[0], cfg.size[1]);
+      var duration = rand(cfg.duration[0], cfg.duration[1]);
+      var offset = preroll === true ? rand(0, duration) : 0;
+      b.style.left = rand(0, 100) + 'vw';
+      b.style.width = size + 'px';
+      b.style.height = size + 'px';
+      b.style.setProperty('--wobble', rand(-28, 28) + 'px');
+      b.style.animationDuration = duration + 's';
+      if (offset) b.style.animationDelay = '-' + offset + 's';
+      particlesEl.appendChild(b);
+      setTimeout(function () { b.remove(); }, (duration - offset) * 1000);
+    }
+    for (var i = 0; i < cfg.seed; i++) spawn(true);
+    addTimer(spawn, cfg.interval);
+  }
+
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  // Builds an orthogonal trace: a few right-angle segments, like a PCB track.
+  function tracePath(w, h) {
+    var x = Math.random() < 0.5 ? 0 : w;
+    var y = rand(0, h);
+    var d = 'M' + x.toFixed(1) + ' ' + y.toFixed(1);
+    var dir = x === 0 ? 1 : -1;
+    var segments = randInt(3, 6);
+    var pts = [];
+    for (var i = 0; i < segments; i++) {
+      x += dir * rand(w * 0.08, w * 0.22);
+      d += ' L' + x.toFixed(1) + ' ' + y.toFixed(1);
+      y += (Math.random() < 0.5 ? -1 : 1) * rand(h * 0.04, h * 0.16);
+      d += ' L' + x.toFixed(1) + ' ' + y.toFixed(1);
+      pts.push([x, y]);
+    }
+    return { d: d, points: pts };
+  }
+
+  function buildCircuit(cfg) {
+    var w = window.innerWidth;
+    var h = window.innerHeight;
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'circuit-svg');
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    var joints = [];
+    var pulses = [];
+
+    for (var i = 0; i < cfg.traces; i++) {
+      var t = tracePath(w, h);
+      joints = joints.concat(t.points);
+
+      var base = document.createElementNS(SVG_NS, 'path');
+      base.setAttribute('class', 'circuit-trace');
+      base.setAttribute('d', t.d);
+      svg.appendChild(base);
+
+      var pulse = document.createElementNS(SVG_NS, 'path');
+      pulse.setAttribute('class', 'circuit-pulse');
+      pulse.setAttribute('d', t.d);
+      svg.appendChild(pulse);
+
+      // getTotalLength needs the node in the document, so measure after append.
+      pulses.push(pulse);
+    }
+
+    particlesEl.appendChild(svg);
+
+    pulses.forEach(function (p) {
+      var len = p.getTotalLength();
+      var dash = 55;
+      p.style.strokeDasharray = dash + ' ' + len;
+      p.style.setProperty('--dash', -(len + dash) + 'px');
+      p.style.animationDuration = rand(3, 8) + 's';
+      p.style.animationDelay = '-' + rand(0, 6) + 's';
+    });
+
+    for (var n = 0; n < cfg.nodes && n < joints.length; n++) {
+      var j = joints[Math.floor(Math.random() * joints.length)];
+      var c = document.createElementNS(SVG_NS, 'circle');
+      c.setAttribute('class', 'circuit-node');
+      c.setAttribute('cx', j[0]);
+      c.setAttribute('cy', j[1]);
+      c.setAttribute('r', rand(2, 3.5));
+      c.style.animationDuration = rand(2, 5) + 's';
+      c.style.animationDelay = '-' + rand(0, 4) + 's';
+      svg.appendChild(c);
+    }
+  }
+
+  function buildCrt() {
+    ['crt-glow', 'crt-scanlines', 'crt-roll', 'crt-vignette'].forEach(function (cls) {
+      var el = document.createElement('div');
+      el.className = cls;
+      particlesEl.appendChild(el);
+    });
+  }
+
+  var FIREWORK_COLORS = ['#ffd166', '#ef476f', '#06d6a0', '#8ecae6', '#c77dff', '#ff9f1c'];
+
+  function buildFireworks(cfg) {
+    function burst(x, y, color) {
+      var flash = document.createElement('div');
+      flash.className = 'burst-flash';
+      flash.style.left = x + 'px';
+      flash.style.top = y + 'px';
+      flash.style.setProperty('--spark-color', color);
+      particlesEl.appendChild(flash);
+      setTimeout(function () { flash.remove(); }, 430);
+
+      for (var i = 0; i < cfg.sparks; i++) {
+        var angle = (Math.PI * 2 * i) / cfg.sparks + rand(-0.12, 0.12);
+        var dist = rand(75, 175);
+        var s = document.createElement('div');
+        s.className = 'spark';
+        s.style.left = x + 'px';
+        s.style.top = y + 'px';
+        s.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+        s.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+        s.style.setProperty('--spark-color', color);
+        var dur = rand(1.1, 1.8);
+        s.style.animationDuration = dur + 's';
+        particlesEl.appendChild(s);
+        (function (el, ms) { setTimeout(function () { el.remove(); }, ms); })(s, dur * 1000);
+      }
+    }
+
+    function launch() {
+      var color = FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)];
+      var x = rand(window.innerWidth * 0.12, window.innerWidth * 0.88);
+      var peak = rand(window.innerHeight * 0.12, window.innerHeight * 0.45);
+      var climb = window.innerHeight - peak;
+      var r = document.createElement('div');
+      r.className = 'rocket';
+      r.style.left = x + 'px';
+      r.style.top = window.innerHeight + 'px';
+      r.style.setProperty('--climb', -climb + 'px');
+      r.style.setProperty('--spark-color', color);
+      var climbMs = rand(900, 1300);
+      r.style.animationDuration = climbMs + 'ms';
+      particlesEl.appendChild(r);
+      setTimeout(function () { r.remove(); burst(x, peak, color); }, climbMs);
+    }
+
+    launch();
+    addTimer(launch, cfg.interval);
+  }
+
+  function buildRipple(cfg) {
+    function drop() {
+      var x = rand(5, 95);
+      var y = rand(8, 92);
+      // Two rings offset in time read as one spreading disturbance.
+      for (var i = 0; i < 2; i++) {
+        var ring = document.createElement('div');
+        ring.className = 'ripple-ring';
+        var size = rand(160, 340);
+        var dur = rand(2.8, 4.4);
+        ring.style.left = x + 'vw';
+        ring.style.top = y + 'vh';
+        ring.style.setProperty('--r', size + 'px');
+        ring.style.animationDuration = dur + 's';
+        ring.style.animationDelay = (i * 0.35) + 's';
+        particlesEl.appendChild(ring);
+        (function (el, ms) { setTimeout(function () { el.remove(); }, ms); })(ring, (dur + i * 0.35) * 1000 + 100);
+      }
+    }
+    drop();
+    addTimer(drop, cfg.interval);
+  }
+
+  function buildLava(cfg) {
+    var defs = document.createElementNS(SVG_NS, 'svg');
+    defs.setAttribute('width', '0');
+    defs.setAttribute('height', '0');
+    defs.style.position = 'absolute';
+    defs.innerHTML =
+      '<defs><filter id="goo">' +
+      '<feGaussianBlur in="SourceGraphic" stdDeviation="16" result="blur"/>' +
+      '<feColorMatrix in="blur" mode="matrix" ' +
+      'values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="goo"/>' +
+      '<feBlend in="SourceGraphic" in2="goo"/>' +
+      '</filter></defs>';
+    particlesEl.appendChild(defs);
+
+    var field = document.createElement('div');
+    field.className = 'lava-field';
+    for (var i = 0; i < cfg.blobs; i++) {
+      var b = document.createElement('div');
+      b.className = 'lava-blob';
+      var size = rand(90, 190);
+      b.style.width = size + 'px';
+      b.style.height = size + 'px';
+      b.style.left = rand(2, 88) + 'vw';
+      b.style.bottom = rand(-20, 10) + 'vh';
+      b.style.background = i % 2 ? 'var(--accent-2)' : 'var(--accent)';
+      b.style.animationDuration = rand(14, 26) + 's';
+      b.style.animationDelay = '-' + rand(0, 14) + 's';
+      field.appendChild(b);
+    }
+    particlesEl.appendChild(field);
+  }
+
   function renderParticles(theme) {
     clearParticles();
     var cfg = THEME_ANIM[theme];
@@ -1475,6 +2517,16 @@
     else if (cfg.type === 'firefly') spawnFireflies(cfg);
     else if (cfg.type === 'clouds') buildClouds();
     else if (cfg.type === 'aurora') { buildAurora(); spawnStars(cfg.stars); }
+    else if (cfg.type === 'rain') buildRain(cfg);
+    else if (cfg.type === 'synth') buildSynthwave();
+    else if (cfg.type === 'cosmos') buildCosmos(cfg);
+    else if (cfg.type === 'storm') buildStorm(cfg);
+    else if (cfg.type === 'bubbles') buildAbyss(cfg);
+    else if (cfg.type === 'circuit') buildCircuit(cfg);
+    else if (cfg.type === 'crt') buildCrt();
+    else if (cfg.type === 'fireworks') buildFireworks(cfg);
+    else if (cfg.type === 'ripple') buildRipple(cfg);
+    else if (cfg.type === 'lava') buildLava(cfg);
   }
 
   function greetingFor(hour) {
@@ -1484,19 +2536,84 @@
     return 'Good night';
   }
 
+  // Set to false for a 12-hour clock with an AM/PM suffix.
+  var CLOCK_24H = true;
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  // ISO-8601 week number: week 1 is the one holding the year's first Thursday.
+  function isoWeek(d) {
+    var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+    var yearStart = Date.UTC(t.getUTCFullYear(), 0, 1);
+    return Math.ceil(((t - yearStart) / 86400000 + 1) / 7);
+  }
+
+  function dayOfYear(d) {
+    return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+  }
+
+  function utcOffset(d) {
+    var mins = -d.getTimezoneOffset();
+    var sign = mins < 0 ? '-' : '+';
+    mins = Math.abs(mins);
+    return sign + pad2(Math.floor(mins / 60)) + ':' + pad2(mins % 60);
+  }
+
+  var clockH = document.getElementById('clockH');
+  var clockM = document.getElementById('clockM');
+  var clockS = document.getElementById('clockS');
+  var clockMeter = document.getElementById('clockMeter');
+  var clockGhost = document.querySelector('.clock-ghost');
+  var lastDateKey = '';
+  var lastGreeting = '';
+
   function tick() {
     var now = new Date();
     var h = now.getHours();
     var m = now.getMinutes();
-    var clockStr = (h % 12 === 0 ? 12 : h % 12) + ':' + (m < 10 ? '0' : '') + m + (h < 12 ? ' AM' : ' PM');
-    document.getElementById('clock').textContent = clockStr;
-    document.getElementById('greeting').textContent = greetingFor(h);
+    var s = now.getSeconds();
+
+    var shown = CLOCK_24H ? h : (h % 12 === 0 ? 12 : h % 12);
+    clockH.textContent = CLOCK_24H ? pad2(shown) : String(shown);
+    clockM.textContent = pad2(m);
+    clockS.textContent = pad2(s) + (CLOCK_24H ? '' : (h < 12 ? ' AM' : ' PM'));
+    clockGhost.textContent = (CLOCK_24H || shown >= 10) ? '88:88' : '8:88';
+
+    // Skip the sweep animation across the :59 -> :00 wrap so it doesn't run backwards.
+    clockMeter.classList.toggle('no-anim', s === 0);
+    clockMeter.style.width = (s / 60 * 100) + '%';
+
+    var greeting = greetingFor(h);
+    if (greeting !== lastGreeting) {
+      lastGreeting = greeting;
+      document.getElementById('greeting').textContent = greeting;
+    }
+
+    var dateKey = now.toDateString();
+    if (dateKey === lastDateKey) return;
+    lastDateKey = dateKey;
+
     var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     document.getElementById('date').textContent = days[now.getDay()] + ', ' + months[now.getMonth()] + ' ' + now.getDate();
+
+    document.getElementById('metaIso').textContent =
+      now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate());
+    document.getElementById('metaWeek').textContent = pad2(isoWeek(now));
+    document.getElementById('metaDoy').textContent = dayOfYear(now);
+    document.getElementById('metaTz').textContent = 'UTC' + utcOffset(now);
   }
-  tick();
-  setInterval(tick, 1000 * 15);
+
+  var clockTimer = null;
+  function startClock() {
+    tick();
+    if (!clockTimer) clockTimer = setInterval(tick, 1000);
+  }
+  function stopClock() {
+    if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+  }
+  startClock();
 
   var savedEngine = localStorage.getItem(STORAGE_ENGINE);
   if (savedEngine) engineSelect.value = savedEngine;
@@ -1740,15 +2857,28 @@
     document.body.classList.remove('show-hotkeys');
   });
 
-  // ---- Pause background animation when the tab isn't visible ----
+  // Column-based effects size themselves to the viewport at build time, so a
+  // resize needs a rebuild or the new width stays empty.
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      if (document.hidden) return;
+      renderParticles(document.documentElement.getAttribute('data-theme'));
+    }, 250);
+  });
+
+  // ---- Pause background animation and the clock when the tab isn't visible ----
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
-      if (particleTimer) { clearInterval(particleTimer); particleTimer = null; }
+      stopClock();
+      stopTimers();
       particlesEl.style.animationPlayState = 'paused';
       particlesEl.querySelectorAll('*').forEach(function (el) {
         el.style.animationPlayState = 'paused';
       });
     } else {
+      startClock();
       renderParticles(document.documentElement.getAttribute('data-theme'));
     }
   });
