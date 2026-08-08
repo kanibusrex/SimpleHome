@@ -2219,8 +2219,8 @@
     frost:    { type: 'fall',    color: '#ffffff',         size: [2, 4], duration: [8, 15],  interval: 750, seed: 6 },
     sunset:   { type: 'clouds' },
     bloom:    { type: 'fall',    color: 'var(--accent-2)', size: [6, 10], duration: [9, 16],  interval: 1000, seed: 5, petal: true },
-    matrix:    { type: 'rain',   maxColumns: 400, length: [8, 26], duration: [6, 16], churn: 3 },
-    embermatrix: { type: 'rain', maxColumns: 400, length: [8, 26], duration: [6, 16], churn: 3 },
+    matrix:    { type: 'rain',   maxColumns: 600, length: [8, 26], duration: [6, 16], churn: 5 },
+    embermatrix: { type: 'rain', maxColumns: 600, length: [8, 26], duration: [6, 16], churn: 5 },
     synthwave: { type: 'synth' },
     cosmos:    { type: 'cosmos', stars: 60, shootInterval: 5200 },
     storm:     { type: 'storm',  duration: [0.7, 1.4], interval: 60, seed: 30, flashChance: 0.45 },
@@ -2339,7 +2339,7 @@
   }
 
   function buildRain(cfg) {
-    var colWidth = 16;
+    var colWidth = 10;
     var cols = Math.min(cfg.maxColumns, Math.ceil(window.innerWidth / colWidth));
     var columns = [];
 
