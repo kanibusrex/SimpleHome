@@ -1261,6 +1261,7 @@
   }
 
   .today {
+    position: relative;
     width: 100%;
     max-width: 480px;
     margin: 26px auto 0;
@@ -1270,6 +1271,31 @@
     padding: 18px 24px;
   }
   .today.hidden { display: none; }
+
+  .today::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: calc(var(--radius) + 1px);
+    padding: 2px;
+    background: conic-gradient(
+      from var(--glow-angle),
+      #0a0a0a 0deg,
+      #0a0a0a 40deg,
+      var(--accent) 85deg,
+      var(--accent-2) 110deg,
+      var(--accent) 135deg,
+      #0a0a0a 180deg,
+      #0a0a0a 360deg
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    filter: drop-shadow(0 0 4px var(--accent)) drop-shadow(0 0 9px var(--accent));
+    pointer-events: none;
+    animation: travel-glow 2.6s linear infinite;
+  }
   .today-head {
     font-size: 12px;
     letter-spacing: 2.5px;
