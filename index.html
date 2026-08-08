@@ -1153,6 +1153,7 @@
     letter-spacing: 2px;
     color: var(--accent);
     -webkit-text-fill-color: var(--accent);
+    text-shadow: 0 0 10px var(--shadow);
   }
 
   /* Sweeps once per minute, spanning the width of the readout. */
@@ -1699,7 +1700,7 @@
     <div class="greeting" id="greeting"></div>
     <div class="clock" id="clock" role="timer">
       <span class="clock-ghost" aria-hidden="true">88:88</span>
-      <span class="clock-face"><span id="clockH">--</span><span class="clock-sep">:</span><span id="clockM">--</span><span class="clock-secs" id="clockS">--</span></span>
+      <span class="clock-face"><span id="clockH">--</span><span class="clock-sep">:</span><span id="clockM">--</span></span><span class="clock-secs" id="clockS">--</span>
       <span class="clock-meter" aria-hidden="true"><i id="clockMeter"></i></span>
     </div>
     <div class="date" id="date"></div>
