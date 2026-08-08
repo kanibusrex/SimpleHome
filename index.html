@@ -782,6 +782,24 @@
     align-items: center;
   }
 
+  /* Zen mode: strip everything but the clock and search bar, dead-centered. */
+  body.zen .scratch-btn,
+  body.zen .edit-btn,
+  body.zen .settings-btn,
+  body.zen .greeting,
+  body.zen .date,
+  body.zen .clock-meta,
+  body.zen .shortcuts-wrap {
+    display: none;
+  }
+  body.zen .app {
+    min-height: 100vh;
+    justify-content: center;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  body.zen .search-wrap { margin-bottom: 0; }
+
   .icon-btn {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -1037,30 +1055,33 @@
     padding: 0;
   }
 
-  .settings-btn {
+  .zen-btn {
     position: fixed;
     top: 20px;
     right: 20px;
     z-index: 5;
   }
-  .edit-btn {
+  .settings-btn {
     position: fixed;
     top: 20px;
     right: 72px;
     z-index: 5;
   }
-  .scratch-btn {
+  .edit-btn {
     position: fixed;
     top: 20px;
     right: 124px;
     z-index: 5;
   }
-  .scratch-btn.active {
-    color: var(--bg);
-    background: var(--accent);
-    border-color: var(--accent);
+  .scratch-btn {
+    position: fixed;
+    top: 20px;
+    right: 176px;
+    z-index: 5;
   }
-  .edit-btn.active {
+  .scratch-btn.active,
+  .edit-btn.active,
+  .zen-btn.active {
     color: var(--bg);
     background: var(--accent);
     border-color: var(--accent);
@@ -1389,6 +1410,49 @@
 
   .shortcuts-wrap { width: 100%; }
 
+  .group-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 22px;
+  }
+  .group-tabs.hidden { display: none; }
+
+  .group-tab {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-dim);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  }
+  .group-tab:hover { color: var(--text); border-color: var(--accent); }
+  .group-tab.active {
+    color: var(--bg);
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .group-tab-remove {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    font-size: 12px;
+    line-height: 1;
+  }
+  body.editing .group-tab-remove { display: flex; }
+  .group-tab-remove:hover { background: rgba(0, 0, 0, 0.2); }
+  .group-tab-add { border-style: dashed; }
+
   .shortcuts-grid {
     display: flex;
     flex-wrap: wrap;
@@ -1677,7 +1741,8 @@
     margin-bottom: 6px;
     margin-top: 14px;
   }
-  .modal input {
+  .modal input,
+  .modal select {
     width: 100%;
     background: var(--bg);
     border: 1px solid var(--border);
@@ -1688,7 +1753,8 @@
     font-size: 16px;
     outline: none;
   }
-  .modal input:focus { border-color: var(--accent); }
+  .modal select { cursor: pointer; }
+  .modal input:focus, .modal select:focus { border-color: var(--accent); }
 
   .modal-actions {
     display: flex;
@@ -1711,8 +1777,9 @@
   .modal-actions .hidden { display: none; }
 
   @media (max-width: 480px) {
-    .edit-btn { right: 66px; }
-    .scratch-btn { right: 112px; }
+    .settings-btn { right: 66px; }
+    .edit-btn { right: 112px; }
+    .scratch-btn { right: 158px; }
     .tile { width: 72px; }
     .search { padding-right: 8px; }
     .search button { display: none; }
@@ -1723,6 +1790,7 @@
 
 <div class="particles" id="particles"></div>
 
+<button class="icon-btn zen-btn" id="zenBtn" aria-label="Zen mode" title="Zen mode (Z)">&#9678;</button>
 <button class="icon-btn scratch-btn" id="scratchBtn" aria-label="Scratchpad" title="Scratchpad (Shift+S)">&#9636;</button>
 <button class="icon-btn edit-btn" id="editBtn" aria-label="Edit shortcuts" title="Edit shortcuts">&#9998;</button>
 <button class="icon-btn settings-btn" id="settingsBtn" aria-label="Settings" title="Settings">&#9881;</button>
@@ -1763,6 +1831,7 @@
   </div>
 
   <main class="shortcuts-wrap">
+    <div class="group-tabs hidden" id="groupTabs"></div>
     <div class="shortcuts-grid" id="shortcutsGrid"></div>
   </main>
 </div>
@@ -1822,6 +1891,7 @@
       <kbd class="k">&#8593;</kbd><kbd class="k">&#8595;</kbd> pick a result &nbsp;·&nbsp;
       <kbd class="k">Alt</kbd>+<kbd class="k">1</kbd>–<kbd class="k">9</kbd> open a tile &nbsp;·&nbsp;
       <kbd class="k">Shift</kbd>+<kbd class="k">S</kbd> scratchpad &nbsp;·&nbsp;
+      <kbd class="k">Z</kbd> zen mode &nbsp;·&nbsp;
       <kbd class="k">Esc</kbd> close
     </p>
   </div>
@@ -1860,6 +1930,10 @@
     <input id="tileName" placeholder="e.g. GitHub">
     <label for="tileUrl">URL</label>
     <input id="tileUrl" placeholder="e.g. github.com">
+    <label for="tileGroup">Group</label>
+    <select id="tileGroup">
+      <option value="">No group</option>
+    </select>
     <div class="modal-actions">
       <button id="modalCancel">Cancel</button>
       <button id="modalDelete" class="danger hidden">Delete</button>
@@ -1874,6 +1948,8 @@
   var STORAGE_THEME = 'homepage.theme';
   var STORAGE_ENGINE = 'homepage.engine';
   var STORAGE_COLORS = 'homepage.themeColors';
+  var STORAGE_GROUPS = 'homepage.groups';
+  var STORAGE_ACTIVE_GROUP = 'homepage.activeGroup';
 
   var defaultShortcuts = [
     { name: 'GitHub', url: 'https://github.com' },
@@ -1887,6 +1963,7 @@
   var dragIndex = null;
 
   var grid = document.getElementById('shortcutsGrid');
+  var groupTabsEl = document.getElementById('groupTabs');
   var editBtn = document.getElementById('editBtn');
   var settingsBtn = document.getElementById('settingsBtn');
   var settingsPanel = document.getElementById('settingsPanel');
@@ -1896,6 +1973,7 @@
   var modalTitle = document.getElementById('modalTitle');
   var tileNameInput = document.getElementById('tileName');
   var tileUrlInput = document.getElementById('tileUrl');
+  var tileGroupSelect = document.getElementById('tileGroup');
   var modalSave = document.getElementById('modalSave');
   var modalCancel = document.getElementById('modalCancel');
   var modalDelete = document.getElementById('modalDelete');
@@ -1915,6 +1993,22 @@
   function saveShortcuts(list) {
     localStorage.setItem(STORAGE_SHORTCUTS, JSON.stringify(list));
   }
+
+  function loadGroups() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(STORAGE_GROUPS));
+      if (Array.isArray(raw)) return raw;
+    } catch (e) {}
+    return [];
+  }
+
+  function saveGroups(list) {
+    localStorage.setItem(STORAGE_GROUPS, JSON.stringify(list));
+  }
+
+  var groups = loadGroups();
+  var activeGroup = localStorage.getItem(STORAGE_ACTIVE_GROUP) || 'all';
+  if (activeGroup !== 'all' && groups.indexOf(activeGroup) === -1) activeGroup = 'all';
 
   var shortcuts = loadShortcuts();
 
@@ -1972,9 +2066,74 @@
     });
   }
 
+  function visibleShortcuts() {
+    return shortcuts
+      .map(function (s, i) { return { s: s, i: i }; })
+      .filter(function (e) { return activeGroup === 'all' || (e.s.group || '') === activeGroup; });
+  }
+
+  function renderGroupTabs() {
+    groupTabsEl.innerHTML = '';
+    groupTabsEl.classList.toggle('hidden', groups.length === 0 && !editing);
+
+    function setActiveGroup(id) {
+      activeGroup = id;
+      localStorage.setItem(STORAGE_ACTIVE_GROUP, activeGroup);
+      renderShortcuts();
+    }
+
+    function makeTab(id, label, removable) {
+      var btn = document.createElement('button');
+      btn.className = 'group-tab' + (activeGroup === id ? ' active' : '');
+      var text = document.createElement('span');
+      text.textContent = label;
+      btn.appendChild(text);
+
+      if (removable) {
+        var rm = document.createElement('span');
+        rm.className = 'group-tab-remove';
+        rm.textContent = '×';
+        rm.setAttribute('aria-label', 'Delete group ' + label);
+        rm.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (!confirm('Delete group "' + label + '"? Its shortcuts will become ungrouped.')) return;
+          groups = groups.filter(function (g) { return g !== id; });
+          shortcuts.forEach(function (s) { if (s.group === id) s.group = ''; });
+          saveShortcuts(shortcuts);
+          saveGroups(groups);
+          setActiveGroup(activeGroup === id ? 'all' : activeGroup);
+        });
+        btn.appendChild(rm);
+      }
+
+      btn.addEventListener('click', function () { setActiveGroup(id); });
+      return btn;
+    }
+
+    groupTabsEl.appendChild(makeTab('all', 'All', false));
+    groups.forEach(function (g) { groupTabsEl.appendChild(makeTab(g, g, true)); });
+
+    var addTab = document.createElement('button');
+    addTab.className = 'group-tab group-tab-add';
+    addTab.textContent = '+';
+    addTab.setAttribute('aria-label', 'Add group');
+    addTab.addEventListener('click', function () {
+      var name = prompt('New group name');
+      if (!name) return;
+      name = name.trim();
+      if (!name || name === 'all' || groups.indexOf(name) > -1) return;
+      groups.push(name);
+      saveGroups(groups);
+      setActiveGroup(name);
+    });
+    groupTabsEl.appendChild(addTab);
+  }
+
   function renderShortcuts() {
+    renderGroupTabs();
     grid.innerHTML = '';
-    shortcuts.forEach(function (s, i) {
+    visibleShortcuts().forEach(function (entry, viewIdx) {
+      var s = entry.s, i = entry.i;
       var tile = document.createElement(editing ? 'div' : 'a');
       tile.className = 'tile';
       if (!editing) {
@@ -2008,10 +2167,10 @@
       tile.appendChild(icon);
       tile.appendChild(label);
 
-      if (i < 9) {
+      if (viewIdx < 9) {
         var hk = document.createElement('div');
         hk.className = 'tile-hotkey';
-        hk.textContent = i + 1;
+        hk.textContent = viewIdx + 1;
         tile.appendChild(hk);
       }
 
@@ -2068,17 +2227,30 @@
     grid.appendChild(addTile);
   }
 
+  function populateGroupSelect(selected) {
+    tileGroupSelect.innerHTML = '<option value="">No group</option>';
+    groups.forEach(function (g) {
+      var opt = document.createElement('option');
+      opt.value = g;
+      opt.textContent = g;
+      tileGroupSelect.appendChild(opt);
+    });
+    tileGroupSelect.value = selected || '';
+  }
+
   function openModal(index) {
     editingIndex = index;
     if (index === null) {
       modalTitle.textContent = 'Add shortcut';
       tileNameInput.value = '';
       tileUrlInput.value = '';
+      populateGroupSelect(activeGroup === 'all' ? '' : activeGroup);
       modalDelete.classList.add('hidden');
     } else {
       modalTitle.textContent = 'Edit shortcut';
       tileNameInput.value = shortcuts[index].name;
       tileUrlInput.value = shortcuts[index].url;
+      populateGroupSelect(shortcuts[index].group || '');
       modalDelete.classList.remove('hidden');
     }
     modalOverlay.classList.remove('hidden');
@@ -2108,10 +2280,11 @@
       if (!confirm(shortcuts[dupe].name + ' already points to ' + host + '. Add this anyway?')) return;
     }
 
+    var group = tileGroupSelect.value;
     if (editingIndex === null) {
-      shortcuts.push({ name: name, url: url });
+      shortcuts.push({ name: name, url: url, group: group });
     } else {
-      shortcuts[editingIndex] = { name: name, url: url };
+      shortcuts[editingIndex] = { name: name, url: url, group: group };
     }
     saveShortcuts(shortcuts);
     closeModal();
@@ -2891,6 +3064,202 @@
     return /^https?:\/\//i.test(v) || /^[\w-]+(\.[\w-]+)+(\/.*)?$/.test(v);
   }
 
+  // ---- Inline calculator & unit conversion ----
+  // A small hand-rolled recursive-descent parser rather than eval(), so a
+  // typo can't run arbitrary script and behavior stays fully predictable.
+  function evalMath(expr) {
+    var pos = 0;
+    function skipWs() { while (expr.charAt(pos) === ' ') pos++; }
+    function parseNumber() {
+      skipWs();
+      var start = pos;
+      var hasDigits = false;
+      while (/[0-9]/.test(expr.charAt(pos))) { pos++; hasDigits = true; }
+      if (expr.charAt(pos) === '.') {
+        pos++;
+        while (/[0-9]/.test(expr.charAt(pos))) { pos++; hasDigits = true; }
+      }
+      if (!hasDigits) throw new Error('bad number');
+      return parseFloat(expr.slice(start, pos));
+    }
+    function parseAtom() {
+      skipWs();
+      var ch = expr.charAt(pos);
+      if (ch === '(') {
+        pos++;
+        var v = parseExpr();
+        skipWs();
+        if (expr.charAt(pos) !== ')') throw new Error('expected )');
+        pos++;
+        return v;
+      }
+      if (ch === '-' || ch === '+') {
+        pos++;
+        var v2 = parseAtom();
+        return ch === '-' ? -v2 : v2;
+      }
+      return parseNumber();
+    }
+    function parsePow() {
+      var base = parseAtom();
+      skipWs();
+      if (expr.charAt(pos) === '^') {
+        pos++;
+        return Math.pow(base, parsePow());
+      }
+      return base;
+    }
+    function parseTerm() {
+      var v = parsePow();
+      for (;;) {
+        skipWs();
+        var op = expr.charAt(pos);
+        if (op === '*' || op === '/' || op === '%') {
+          pos++;
+          var rhs = parsePow();
+          if (op === '*') v *= rhs;
+          else if (op === '/') v /= rhs;
+          else v = v % rhs;
+        } else break;
+      }
+      return v;
+    }
+    function parseExpr() {
+      var v = parseTerm();
+      for (;;) {
+        skipWs();
+        var op = expr.charAt(pos);
+        if (op === '+' || op === '-') {
+          pos++;
+          var rhs = parseTerm();
+          v = op === '+' ? v + rhs : v - rhs;
+        } else break;
+      }
+      return v;
+    }
+    var result = parseExpr();
+    skipWs();
+    if (pos !== expr.length) throw new Error('trailing input');
+    if (!isFinite(result)) throw new Error('not finite');
+    return result;
+  }
+
+  function looksLikeMath(q) {
+    var v = q.trim();
+    if (!v) return false;
+    if (!/^[-+*/^%().\d\s]+$/.test(v)) return false;
+    if (!/\d/.test(v)) return false;
+    // Bare digit-hyphen-digit is far more likely a phone number or a date
+    // (555-1234, 2026-08-08) than subtraction, so don't treat it as math.
+    if (/^\d+(-\d+)+$/.test(v)) return false;
+    if (!/[-+*/^%]/.test(v.replace(/^-/, ''))) return false;
+    return true;
+  }
+
+  function formatNum(n, decimals) {
+    var factor = Math.pow(10, decimals == null ? 6 : decimals);
+    if (Math.abs(n) < 1e-9) n = 0;
+    var rounded = Math.round(n * factor) / factor;
+    return rounded.toString();
+  }
+
+  var UNIT_ALIASES = {
+    mm: 'mm', millimeter: 'mm', millimeters: 'mm', millimetre: 'mm', millimetres: 'mm',
+    cm: 'cm', centimeter: 'cm', centimeters: 'cm', centimetre: 'cm', centimetres: 'cm',
+    m: 'm', meter: 'm', meters: 'm', metre: 'm', metres: 'm',
+    km: 'km', kilometer: 'km', kilometers: 'km', kilometre: 'km', kilometres: 'km',
+    in: 'in', inch: 'in', inches: 'in',
+    ft: 'ft', foot: 'ft', feet: 'ft',
+    yd: 'yd', yard: 'yd', yards: 'yd',
+    mi: 'mi', mile: 'mi', miles: 'mi',
+    mg: 'mg', milligram: 'mg', milligrams: 'mg',
+    g: 'g', gram: 'g', grams: 'g',
+    kg: 'kg', kilogram: 'kg', kilograms: 'kg',
+    oz: 'oz', ounce: 'oz', ounces: 'oz',
+    lb: 'lb', lbs: 'lb', pound: 'lb', pounds: 'lb',
+    st: 'st', stone: 'st', stones: 'st',
+    ml: 'ml', milliliter: 'ml', milliliters: 'ml', millilitre: 'ml', millilitres: 'ml',
+    l: 'l', liter: 'l', liters: 'l', litre: 'l', litres: 'l',
+    cup: 'cup', cups: 'cup',
+    tbsp: 'tbsp', tablespoon: 'tbsp', tablespoons: 'tbsp',
+    tsp: 'tsp', teaspoon: 'tsp', teaspoons: 'tsp',
+    floz: 'floz',
+    gal: 'gal', gallon: 'gal', gallons: 'gal',
+    qt: 'qt', quart: 'qt', quarts: 'qt',
+    pt: 'pt', pint: 'pt', pints: 'pt',
+    c: 'c', celsius: 'c',
+    f: 'f', fahrenheit: 'f',
+    k: 'k', kelvin: 'k'
+  };
+  var UNIT_TO_BASE = {
+    mm: 0.001, cm: 0.01, m: 1, km: 1000, in: 0.0254, ft: 0.3048, yd: 0.9144, mi: 1609.344,
+    mg: 0.001, g: 1, kg: 1000, oz: 28.3495, lb: 453.592, st: 6350.29,
+    ml: 1, l: 1000, cup: 236.588, tbsp: 14.7868, tsp: 4.92892, floz: 29.5735, gal: 3785.41, qt: 946.353, pt: 473.176
+  };
+  var UNIT_CATEGORY = {
+    mm: 'length', cm: 'length', m: 'length', km: 'length', in: 'length', ft: 'length', yd: 'length', mi: 'length',
+    mg: 'weight', g: 'weight', kg: 'weight', oz: 'weight', lb: 'weight', st: 'weight',
+    ml: 'volume', l: 'volume', cup: 'volume', tbsp: 'volume', tsp: 'volume', floz: 'volume', gal: 'volume', qt: 'volume', pt: 'volume',
+    c: 'temp', f: 'temp', k: 'temp'
+  };
+
+  function convertTemp(v, from, to) {
+    var celsius = from === 'c' ? v : from === 'f' ? (v - 32) * 5 / 9 : v - 273.15;
+    if (to === 'c') return celsius;
+    if (to === 'f') return celsius * 9 / 5 + 32;
+    return celsius + 273.15;
+  }
+
+  function tryConvert(q) {
+    var m = q.trim().match(/^(-?[\d.]+)\s*°?([a-zA-Z]+)\s+(?:to|in|as)\s+°?([a-zA-Z]+)\s*$/i);
+    if (!m) return null;
+    var value = parseFloat(m[1]);
+    var from = UNIT_ALIASES[m[2].toLowerCase()];
+    var to = UNIT_ALIASES[m[3].toLowerCase()];
+    if (!from || !to) return null;
+    var cat = UNIT_CATEGORY[from];
+    if (cat !== UNIT_CATEGORY[to]) return null;
+    var result = cat === 'temp' ? convertTemp(value, from, to) : value * UNIT_TO_BASE[from] / UNIT_TO_BASE[to];
+    if (!isFinite(result)) return null;
+    return { value: result, to: to };
+  }
+
+  function tryPercentOf(q) {
+    var m = q.trim().match(/^(-?[\d.]+)\s*%\s+of\s+(-?[\d.]+)$/i);
+    if (!m) return null;
+    var result = (parseFloat(m[1]) / 100) * parseFloat(m[2]);
+    return isFinite(result) ? result : null;
+  }
+
+  function computeCalc(q) {
+    var pct = tryPercentOf(q);
+    if (pct !== null) return { display: formatNum(pct) };
+    if (looksLikeMath(q)) {
+      try { return { display: formatNum(evalMath(q.trim())) }; } catch (e) { return null; }
+    }
+    var conv = tryConvert(q);
+    if (conv) return { display: formatNum(conv.value, 2) + ' ' + conv.to };
+    return null;
+  }
+
+  function copyText(str) {
+    function legacyCopy() {
+      var ta = document.createElement('textarea');
+      ta.value = str;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(str).catch(legacyCopy);
+    } else {
+      legacyCopy();
+    }
+  }
+
   function renderResults() {
     var q = searchInput.value;
     resultsEl.innerHTML = '';
@@ -2904,6 +3273,11 @@
 
     var rows = [];
     var parsed = parseCommand(q);
+
+    if (!parsed) {
+      var calc = computeCalc(q);
+      if (calc) rows.push({ kind: 'calc', label: calc.display, sub: q.trim(), copyValue: calc.display });
+    }
 
     if (parsed) {
       rows.push({
@@ -2956,7 +3330,7 @@
       } else {
         var glyph = document.createElement('div');
         glyph.className = 'result-fallback';
-        glyph.textContent = row.kind === 'open' ? '\u2197' : '\u2315';
+        glyph.textContent = row.kind === 'open' ? '\u2197' : row.kind === 'calc' ? '=' : '\u2315';
         el.appendChild(glyph);
       }
 
@@ -2984,6 +3358,7 @@
         : row.kind === 'open' ? 'Open'
         : row.kind === 'hint' ? 'Command'
         : row.kind === 'command' ? 'Go'
+        : row.kind === 'calc' ? 'Copy'
         : 'Search';
       el.appendChild(kind);
 
@@ -3000,6 +3375,9 @@
           selectedIdx = 0;
           searchInput.focus();
           renderResults();
+        } else if (row.kind === 'calc') {
+          copyText(row.copyValue);
+          showToast('Copied ' + row.copyValue);
         } else {
           go(row.url);
         }
@@ -3181,6 +3559,28 @@
   scratchBtn.addEventListener('click', toggleScratch);
   scratchClose.addEventListener('click', closeScratch);
 
+  // ---- Zen mode ----
+  var STORAGE_ZEN = 'homepage.zen';
+  var zenBtn = document.getElementById('zenBtn');
+  var zenActive = localStorage.getItem(STORAGE_ZEN) === '1';
+
+  function applyZen() {
+    document.body.classList.toggle('zen', zenActive);
+    zenBtn.classList.toggle('active', zenActive);
+    var label = zenActive ? 'Exit zen mode (Z)' : 'Zen mode (Z)';
+    zenBtn.title = label;
+    zenBtn.setAttribute('aria-label', label);
+  }
+
+  function toggleZen() {
+    zenActive = !zenActive;
+    localStorage.setItem(STORAGE_ZEN, zenActive ? '1' : '0');
+    applyZen();
+  }
+
+  zenBtn.addEventListener('click', toggleZen);
+  applyZen();
+
   // ---- Export / import ----
   var exportBtn = document.getElementById('exportBtn');
   var importBtn = document.getElementById('importBtn');
@@ -3198,6 +3598,7 @@
       version: 1,
       exportedAt: new Date().toISOString(),
       shortcuts: shortcuts,
+      groups: groups,
       theme: localStorage.getItem(STORAGE_THEME) || 'ember',
       colors: colorOverrides,
       engine: engineSelect.value,
@@ -3224,11 +3625,19 @@
         var data = JSON.parse(reader.result);
         if (!data || typeof data !== 'object') throw new Error('bad file');
 
+        if (Array.isArray(data.groups)) {
+          groups = data.groups.filter(function (g) { return typeof g === 'string' && g.trim(); });
+          saveGroups(groups);
+          activeGroup = 'all';
+          localStorage.setItem(STORAGE_ACTIVE_GROUP, activeGroup);
+          renderShortcuts();
+        }
+
         if (Array.isArray(data.shortcuts)) {
           var clean = data.shortcuts.filter(function (s) {
             return s && typeof s.name === 'string' && typeof s.url === 'string';
           }).map(function (s) {
-            return { name: s.name, url: s.url };
+            return { name: s.name, url: s.url, group: typeof s.group === 'string' ? s.group : '' };
           });
           if (!confirm('Replace your ' + shortcuts.length + ' shortcuts with ' + clean.length + ' from this file?')) {
             importFile.value = '';
@@ -3291,11 +3700,18 @@
       return;
     }
 
+    if ((e.key === 'z' || e.key === 'Z') && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      toggleZen();
+      return;
+    }
+
     if (e.altKey && !e.metaKey && !e.ctrlKey && /^[1-9]$/.test(e.key)) {
       var idx = parseInt(e.key, 10) - 1;
-      if (shortcuts[idx]) {
+      var vis = visibleShortcuts();
+      if (vis[idx]) {
         e.preventDefault();
-        window.open(shortcuts[idx].url, '_blank', 'noopener');
+        window.open(vis[idx].s.url, '_blank', 'noopener');
       }
       return;
     }
@@ -3316,6 +3732,8 @@
           resultsEl.classList.add('hidden');
           searchInput.blur();
         }
+      } else if (zenActive) {
+        toggleZen();
       }
     }
   });
