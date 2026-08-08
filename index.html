@@ -3289,6 +3289,13 @@
     });
   }
 
+  // On a cold page load, the GIS script has just finished loading and its
+  // first silent token request sometimes fails before its internal state
+  // (session iframe, etc.) has caught up — the identical request a moment
+  // later succeeds, which is why a manual "Retry" click always works. Redo
+  // that automatically once instead of making the user click it.
+  var gcalStartupRetryLeft = 1;
+
   function refreshCalendarToday() {
     if (!gcalClientId) { todaySection.classList.add('hidden'); return; }
     renderTodayState('loading');
@@ -3297,12 +3304,18 @@
       : requestGcalToken(false);
 
     tokenPromise.then(fetchTodayEvents).then(function (events) {
+      gcalStartupRetryLeft = 0;
       gcalWasConnected = true;
       localStorage.setItem(STORAGE_GCAL_CONNECTED, '1');
       gcalStatus.textContent = 'Connected.';
       updateGcalConnectBtn();
       renderTodayState(events.length ? 'events' : 'empty', events);
     }).catch(function () {
+      if (gcalStartupRetryLeft > 0 && gcalWasConnected) {
+        gcalStartupRetryLeft--;
+        setTimeout(refreshCalendarToday, 800);
+        return;
+      }
       renderTodayState(gcalWasConnected ? 'error' : 'connect');
     });
   }
