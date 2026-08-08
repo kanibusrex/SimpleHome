@@ -54,7 +54,7 @@
     --surface-hover: #fdf2df;
     --border: #e8ddc7;
     --text: #2b2620;
-    --text-dim: #8a7f6c;
+    --text-dim: #7d7362;
     --accent: #b8842c;
     --accent-2: #d9a441;
     --shadow: rgba(184, 132, 44, 0.18);
@@ -69,7 +69,7 @@
     --surface-hover: #eaf1f7;
     --border: #dbe4ec;
     --text: #1d2733;
-    --text-dim: #71808f;
+    --text-dim: #677583;
     --accent: #2563eb;
     --accent-2: #0891b2;
     --shadow: rgba(37, 99, 235, 0.15);
@@ -114,7 +114,7 @@
     --surface-hover: #ffece0;
     --border: #f3d9c4;
     --text: #3a2a22;
-    --text-dim: #9c8172;
+    --text-dim: #846d60;
     --accent: #e2596b;
     --accent-2: #f4a259;
     --shadow: rgba(226, 89, 107, 0.18);
@@ -129,7 +129,7 @@
     --surface-hover: #f7e9f5;
     --border: #e9d5e8;
     --text: #332638;
-    --text-dim: #8c7793;
+    --text-dim: #826e88;
     --accent: #b565a7;
     --accent-2: #f2a6c9;
     --shadow: rgba(181, 101, 167, 0.18);
@@ -279,7 +279,7 @@
     --surface-hover: #e6eff6;
     --border: #d5e3ee;
     --text: #172733;
-    --text-dim: #6c8398;
+    --text-dim: #62778a;
     --accent: #0e7490;
     --accent-2: #38bdf8;
     --shadow: rgba(14, 116, 144, 0.15);
@@ -3408,10 +3408,21 @@
     else connectGcal(true);
   });
 
+  // Only polls while the tab is actually visible — a background tab has no
+  // reason to keep hitting the Calendar API every 15 minutes. Paused/resumed
+  // alongside the clock in the visibilitychange handler below.
+  var gcalPollTimer = null;
+  function startGcalPolling() {
+    if (!gcalPollTimer && gcalClientId) gcalPollTimer = setInterval(refreshCalendarToday, 15 * 60 * 1000);
+  }
+  function stopGcalPolling() {
+    if (gcalPollTimer) { clearInterval(gcalPollTimer); gcalPollTimer = null; }
+  }
+
   updateGcalConnectBtn();
   if (gcalClientId) {
     gcalStatus.textContent = gcalWasConnected ? 'Reconnecting…' : 'Not connected.';
-    setInterval(refreshCalendarToday, 15 * 60 * 1000);
+    startGcalPolling();
   }
 
   // startClock() fires tick() immediately, which calls refreshCalendarToday()
@@ -3891,6 +3902,7 @@
     if (document.hidden) {
       stopClock();
       stopTimers();
+      stopGcalPolling();
       particlesEl.style.animationPlayState = 'paused';
       particlesEl.querySelectorAll('*').forEach(function (el) {
         el.style.animationPlayState = 'paused';
@@ -3898,6 +3910,8 @@
     } else {
       startClock();
       renderParticles(document.documentElement.getAttribute('data-theme'));
+      if (gcalClientId) refreshCalendarToday();
+      startGcalPolling();
     }
   });
 
