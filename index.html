@@ -1319,7 +1319,26 @@
     user-select: none;
     transition: opacity 0.2s ease;
   }
-  .search:focus-within .key-hint { opacity: 0; }
+  .search:focus-within .key-hint, .search.has-value .key-hint { opacity: 0; }
+
+  .search .search-clear {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+  .search.has-value .search-clear { display: flex; }
+  .search .search-clear:hover { color: var(--text); background: var(--surface-hover); border-radius: 50%; transform: none; }
 
   .search button {
     background: var(--surface);
@@ -1700,6 +1719,7 @@
         <option value="https://www.bing.com/search?q=">Bing</option>
       </select>
       <input type="text" id="searchInput" placeholder="Search or jump to a site…" autocomplete="off">
+      <button type="button" class="search-clear" id="searchClear" aria-label="Clear search">&times;</button>
       <kbd class="key-hint" id="keyHint">/</kbd>
       <button type="submit" aria-label="Search">&#8594;</button>
     </form>
@@ -1845,6 +1865,7 @@
   var modalDelete = document.getElementById('modalDelete');
   var searchForm = document.getElementById('searchForm');
   var searchInput = document.getElementById('searchInput');
+  var searchClear = document.getElementById('searchClear');
   var engineSelect = document.getElementById('engineSelect');
 
   function loadShortcuts() {
@@ -2837,6 +2858,7 @@
   function renderResults() {
     var q = searchInput.value;
     resultsEl.innerHTML = '';
+    searchForm.classList.toggle('has-value', !!q);
 
     if (!q.trim()) {
       resultsEl.classList.add('hidden');
@@ -2982,6 +3004,15 @@
     selectedIdx = 0;
     renderResults();
   });
+
+  function clearSearch() {
+    searchInput.value = '';
+    selectedIdx = 0;
+    renderResults();
+    searchInput.focus();
+  }
+
+  searchClear.addEventListener('click', clearSearch);
 
   searchInput.addEventListener('keydown', function (e) {
     if (e.key === 'ArrowDown') { e.preventDefault(); moveSelection(1); }
@@ -3243,8 +3274,12 @@
       } else if (!settingsPanel.classList.contains('hidden')) {
         settingsPanel.classList.add('hidden');
       } else if (document.activeElement === searchInput) {
-        resultsEl.classList.add('hidden');
-        searchInput.blur();
+        if (searchInput.value) {
+          clearSearch();
+        } else {
+          resultsEl.classList.add('hidden');
+          searchInput.blur();
+        }
       }
     }
   });
