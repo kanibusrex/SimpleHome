@@ -18,7 +18,7 @@ A custom browser home page. One HTML file, no build step, no dependencies, no tr
 
 **Zen mode.** `Z` (or the ◎ button) strips everything down to just the clock and search bar, dead-centered, with the theme's background animation still running as ambience. `Esc` or `Z` again brings everything back. The state is remembered across reloads.
 
-**Scratchpad.** A persistent notes panel that saves as you type. `Shift+S` from anywhere.
+**Scratchpad.** A persistent notes panel that saves as you type. `Shift+S` from anywhere. Lines starting with `- [ ]` are checklist items — click the brackets to check them off (toggles to `- [x]`); clicking anywhere else on the line just places the cursor like normal text.
 
 **Custom accent colors.** Settings → Theme has two color pickers — Accent and Accent 2 — that recolor the active theme's glow, particles, and clock digits live. Each theme remembers its own override independently, so switching themes never clobbers another theme's custom colors, and "Reset colors" drops back to that theme's defaults. Overrides travel with the export/import backup.
 
@@ -52,7 +52,7 @@ Shortcut tiles, the search bar, and the scratchpad share a hover/focus treatment
 
 **Time-of-day greeting** above the clock, switching between morning, afternoon, evening, and night.
 
-**Today (Google Calendar).** An optional agenda strip below the date, listing today's events in order. Off by default and invisible until you connect it in Settings — see [Google Calendar setup](#google-calendar-setup) below, since it needs a one-time OAuth client of your own. Refreshes every 15 minutes and on a new day; a stale or expired connection shows a quiet "Couldn't load your calendar" with a retry rather than breaking anything else on the page.
+**Today (Google Calendar).** An optional agenda strip below the date, listing today's events in order. Off by default and invisible until you connect it in Settings — see [Google Calendar setup](#google-calendar-setup) below, since it needs a one-time OAuth client of your own. Refreshes every 15 minutes and on a new day; a stale or expired connection shows a quiet "Couldn't load your calendar" with a retry rather than breaking anything else on the page. Events dim once their start time passes, rechecked every minute, so the card reads as "what's left today" rather than the whole day at once.
 
 **Export / import.** Everything lives in `localStorage`, which is per-browser and one "clear browsing data" away from gone. Settings → Backup writes a JSON file with your shortcuts, groups, theme, custom accent colors, engine, notes, and Google Calendar client ID, and reads it back on another machine. (It carries the client ID, not a live connection — you'll still click Connect once per browser.)
 

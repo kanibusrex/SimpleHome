@@ -1045,6 +1045,7 @@
     font-size: 11px;
     color: var(--text-dim);
   }
+  .scratch-hint { margin-top: 10px; }
 
   .link-btn {
     background: none;
@@ -1315,7 +1316,10 @@
     gap: 16px;
     font-family: 'IBM Plex Mono', monospace;
     font-size: 16px;
+    opacity: 1;
+    transition: opacity 0.3s ease;
   }
+  .today-item.past { opacity: 0.4; }
   .today-time {
     flex-shrink: 0;
     min-width: 78px;
@@ -2035,6 +2039,7 @@
     <span id="scratchStatus">Saved automatically</span>
     <button class="link-btn" id="scratchClear">Clear</button>
   </div>
+  <p class="hint scratch-hint">Lines starting with <kbd class="k">- [ ]</kbd> are checklist items — click the brackets to check them off.</p>
 </div>
 
 <div class="toast" id="toast">
@@ -3084,6 +3089,8 @@
     clockMeter.classList.toggle('no-anim', s === 0);
     clockMeter.style.width = (s / 60 * 100) + '%';
 
+    if (s === 0) updateTodayPastState();
+
     var greeting = greetingFor(h);
     if (greeting !== lastGreeting) {
       lastGreeting = greeting;
@@ -3217,9 +3224,11 @@
         .filter(function (ev) { return ev.status !== 'cancelled'; })
         .map(function (ev) {
           var allDay = !ev.start.dateTime;
+          var startDate = allDay ? null : new Date(ev.start.dateTime);
           return {
             title: ev.summary || '(untitled)',
-            time: allDay ? 'All day' : formatEventTime(new Date(ev.start.dateTime))
+            time: allDay ? 'All day' : formatEventTime(startDate),
+            startMs: allDay ? null : startDate.getTime()
           };
         });
     });
@@ -3256,7 +3265,9 @@
       todayList.innerHTML = '';
       events.forEach(function (ev) {
         var row = document.createElement('div');
-        row.className = 'today-item';
+        var isPast = ev.startMs != null && ev.startMs <= Date.now();
+        row.className = 'today-item' + (isPast ? ' past' : '');
+        if (ev.startMs != null) row.dataset.start = ev.startMs;
         var time = document.createElement('div');
         time.className = 'today-time';
         time.textContent = ev.time;
@@ -3268,6 +3279,14 @@
         todayList.appendChild(row);
       });
     }
+  }
+
+  // Dims events once their start time passes, without waiting for the next
+  // 15-minute calendar refetch — just re-checks timestamps already in hand.
+  function updateTodayPastState() {
+    Array.prototype.forEach.call(todayList.querySelectorAll('.today-item[data-start]'), function (el) {
+      el.classList.toggle('past', Number(el.dataset.start) <= Date.now());
+    });
   }
 
   function refreshCalendarToday() {
@@ -3875,6 +3894,24 @@
     scratchStatus.textContent = 'Saving…';
     clearTimeout(scratchTimer);
     scratchTimer = setTimeout(saveScratch, 400);
+  });
+
+  // Checklist syntax: a line starting with "- [ ]" or "- [x]" toggles when
+  // clicked near the brackets, since a plain textarea can't host a real
+  // checkbox widget. Clicks elsewhere on the line just place the cursor.
+  scratchText.addEventListener('click', function () {
+    var pos = scratchText.selectionStart;
+    var value = scratchText.value;
+    var lineStart = value.lastIndexOf('\n', pos - 1) + 1;
+    var lineEnd = value.indexOf('\n', lineStart);
+    if (lineEnd === -1) lineEnd = value.length;
+    var line = value.slice(lineStart, lineEnd);
+    var m = line.match(/^- \[([ xX])\]/);
+    if (!m || pos - lineStart > 5) return;
+    var toggled = (m[1] === ' ' ? '- [x]' : '- [ ]') + line.slice(5);
+    scratchText.value = value.slice(0, lineStart) + toggled + value.slice(lineEnd);
+    scratchText.selectionStart = scratchText.selectionEnd = pos;
+    scratchText.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
   scratchClear.addEventListener('click', function () {
