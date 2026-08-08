@@ -1323,14 +1323,16 @@
   .shortcuts-wrap { width: 100%; }
 
   .shortcuts-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 18px;
     width: 100%;
   }
 
   .tile {
     position: relative;
+    width: 84px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -1615,7 +1617,7 @@
   @media (max-width: 480px) {
     .edit-btn { right: 66px; }
     .scratch-btn { right: 112px; }
-    .shortcuts-grid { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+    .tile { width: 72px; }
   }
 </style>
 </head>
@@ -2069,7 +2071,7 @@
     frost:    { type: 'fall',    color: '#ffffff',         size: [2, 4], duration: [8, 15],  interval: 750, seed: 6 },
     sunset:   { type: 'clouds' },
     bloom:    { type: 'fall',    color: 'var(--accent-2)', size: [6, 10], duration: [9, 16],  interval: 1000, seed: 5, petal: true },
-    matrix:    { type: 'rain',   maxColumns: 64, length: [8, 26], duration: [6, 16], churn: 3 },
+    matrix:    { type: 'rain',   maxColumns: 400, length: [8, 26], duration: [6, 16], churn: 3 },
     synthwave: { type: 'synth' },
     cosmos:    { type: 'cosmos', stars: 60, shootInterval: 5200 },
     storm:     { type: 'storm',  duration: [0.7, 1.4], interval: 60, seed: 30, flashChance: 0.45 },
