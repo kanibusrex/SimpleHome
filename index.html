@@ -1089,6 +1089,7 @@
   }
 
   .hero {
+    width: 100%;
     text-align: center;
     margin-bottom: 40px;
     user-select: none;
@@ -1261,38 +1262,44 @@
 
   .today {
     width: 100%;
-    max-width: 340px;
-    margin: 22px auto 0;
+    max-width: 480px;
+    margin: 26px auto 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 24px;
   }
   .today.hidden { display: none; }
   .today-head {
-    font-size: 11px;
-    letter-spacing: 2px;
+    font-size: 12px;
+    letter-spacing: 2.5px;
     text-transform: uppercase;
     color: var(--text-dim);
     text-align: center;
-    margin-bottom: 10px;
+    margin-bottom: 14px;
   }
   .today-list {
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: 12px;
   }
   .today-item {
     display: flex;
     align-items: baseline;
-    gap: 12px;
+    gap: 16px;
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 12.5px;
+    font-size: 16px;
   }
   .today-time {
     flex-shrink: 0;
-    min-width: 60px;
+    min-width: 78px;
     text-align: right;
     color: var(--accent);
     font-variant-numeric: tabular-nums;
   }
   .today-title {
+    flex: 1;
+    min-width: 0;
     color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1302,16 +1309,17 @@
   .today-connect,
   .today-error {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px;
+    font-size: 14.5px;
     color: var(--text-dim);
     text-align: center;
+    padding: 4px 0;
   }
   .today-connect-btn {
     background: none;
     border: none;
     color: var(--accent);
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px;
+    font-size: 14.5px;
     cursor: pointer;
     text-decoration: underline;
     padding: 0;
