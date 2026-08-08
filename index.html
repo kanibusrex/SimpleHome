@@ -3130,6 +3130,8 @@
   // browser, refreshed silently while it can be, never persisted.
   var STORAGE_GCAL_CLIENT_ID = 'homepage.gcalClientId';
   var STORAGE_GCAL_CONNECTED = 'homepage.gcalConnected';
+  var STORAGE_GCAL_TOKEN = 'homepage.gcalToken';
+  var STORAGE_GCAL_TOKEN_EXPIRY = 'homepage.gcalTokenExpiry';
   var GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events.readonly';
 
   var todaySection = document.getElementById('todaySection');
@@ -3144,6 +3146,24 @@
   var gcalAccessToken = null;
   var gcalTokenExpiry = 0;
   var gcalGisLoading = null;
+
+  // Google's token popup only opens when triggered by a real click — an
+  // automatic request on page load gets silently blocked by the browser's
+  // popup blocker. Caching the token across reloads means most refreshes
+  // (within its ~1hr life) need no Google call, and thus no popup, at all.
+  (function loadCachedGcalToken() {
+    var expiry = Number(sessionStorage.getItem(STORAGE_GCAL_TOKEN_EXPIRY) || 0);
+    var token = sessionStorage.getItem(STORAGE_GCAL_TOKEN);
+    if (token && expiry > Date.now()) {
+      gcalAccessToken = token;
+      gcalTokenExpiry = expiry;
+    }
+  })();
+
+  function cacheGcalToken(token, expiry) {
+    sessionStorage.setItem(STORAGE_GCAL_TOKEN, token);
+    sessionStorage.setItem(STORAGE_GCAL_TOKEN_EXPIRY, String(expiry));
+  }
 
   gcalClientIdInput.value = gcalClientId;
 
@@ -3181,6 +3201,7 @@
           if (resp && resp.access_token) {
             gcalAccessToken = resp.access_token;
             gcalTokenExpiry = Date.now() + (resp.expires_in || 3600) * 1000;
+            cacheGcalToken(gcalAccessToken, gcalTokenExpiry);
             resolve(gcalAccessToken);
           } else {
             reject(new Error('no access token'));
@@ -3289,34 +3310,52 @@
     });
   }
 
-  // On a cold page load, the GIS script has just finished loading and its
-  // first silent token request sometimes fails before its internal state
-  // (session iframe, etc.) has caught up — the identical request a moment
-  // later succeeds, which is why a manual "Retry" click always works. Redo
-  // that automatically once instead of making the user click it.
-  var gcalStartupRetryLeft = 1;
+  // Google's silent token request opens a popup under the hood, so a call
+  // that isn't itself inside a user gesture (page load, the 15-minute
+  // timer) gets blocked by the browser and always fails — confirmed via
+  // "Failed to open popup window ... Maybe blocked by the browser?" in the
+  // console. Rather than making the user hunt down the visible Retry
+  // button, arm a one-time listener that retries on the user's very next
+  // click or keypress anywhere on the page, since that click carries the
+  // activation the popup needs.
+  var gcalGestureArmed = false;
+  function armGcalGestureRetry() {
+    if (gcalGestureArmed) return;
+    gcalGestureArmed = true;
+    var handler = function () {
+      document.removeEventListener('click', handler, true);
+      document.removeEventListener('keydown', handler, true);
+      gcalGestureArmed = false;
+      refreshCalendarToday();
+    };
+    document.addEventListener('click', handler, true);
+    document.addEventListener('keydown', handler, true);
+  }
+
+  // Guards against the retry button's own click and the armed gesture
+  // listener both firing for the same click and racing two requests.
+  var gcalRefreshInFlight = false;
 
   function refreshCalendarToday() {
     if (!gcalClientId) { todaySection.classList.add('hidden'); return; }
+    if (gcalRefreshInFlight) return;
+    gcalRefreshInFlight = true;
     renderTodayState('loading');
     var tokenPromise = (gcalAccessToken && Date.now() < gcalTokenExpiry - 60000)
       ? Promise.resolve(gcalAccessToken)
       : requestGcalToken(false);
 
     tokenPromise.then(fetchTodayEvents).then(function (events) {
-      gcalStartupRetryLeft = 0;
+      gcalRefreshInFlight = false;
       gcalWasConnected = true;
       localStorage.setItem(STORAGE_GCAL_CONNECTED, '1');
       gcalStatus.textContent = 'Connected.';
       updateGcalConnectBtn();
       renderTodayState(events.length ? 'events' : 'empty', events);
     }).catch(function () {
-      if (gcalStartupRetryLeft > 0 && gcalWasConnected) {
-        gcalStartupRetryLeft--;
-        setTimeout(refreshCalendarToday, 800);
-        return;
-      }
+      gcalRefreshInFlight = false;
       renderTodayState(gcalWasConnected ? 'error' : 'connect');
+      if (gcalWasConnected) armGcalGestureRetry();
     });
   }
 
@@ -3345,6 +3384,8 @@
     gcalTokenExpiry = 0;
     gcalWasConnected = false;
     localStorage.removeItem(STORAGE_GCAL_CONNECTED);
+    sessionStorage.removeItem(STORAGE_GCAL_TOKEN);
+    sessionStorage.removeItem(STORAGE_GCAL_TOKEN_EXPIRY);
     gcalStatus.textContent = 'Not connected.';
     updateGcalConnectBtn();
     renderTodayState('connect');
@@ -3356,6 +3397,8 @@
     gcalTokenClient = null;
     gcalAccessToken = null;
     gcalTokenExpiry = 0;
+    sessionStorage.removeItem(STORAGE_GCAL_TOKEN);
+    sessionStorage.removeItem(STORAGE_GCAL_TOKEN_EXPIRY);
     if (gcalClientId) refreshCalendarToday();
     else todaySection.classList.add('hidden');
   });
