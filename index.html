@@ -152,6 +152,21 @@
     --clock-2: #00c62f;
   }
 
+  html[data-theme="embermatrix"] {
+    --bg: #0a0300;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #2c0d02, #0a0300 65%);
+    --surface: #170a03;
+    --surface-hover: #221105;
+    --border: #3d1a08;
+    --text: #ffe3c9;
+    --text-dim: #b3805f;
+    --accent: #ff5a1f;
+    --accent-2: #ffb347;
+    --shadow: rgba(255, 90, 31, 0.32);
+    --clock: #ffb347;
+    --clock-2: #ff6a1f;
+  }
+
   html[data-theme="synthwave"] {
     --bg: #12002e;
     --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #330a5c, #12002e 65%);
@@ -1307,18 +1322,18 @@
   .search:focus-within .key-hint { opacity: 0; }
 
   .search button {
-    background: var(--accent);
-    color: var(--bg);
-    border: none;
+    background: var(--surface);
+    color: var(--accent);
+    border: 1px solid var(--border);
     border-radius: 999px;
     width: 38px;
     height: 38px;
     font-size: 15px;
     cursor: pointer;
     flex-shrink: 0;
-    transition: transform 0.15s ease, opacity 0.15s ease;
+    transition: transform 0.15s ease, opacity 0.15s ease, border-color 0.15s ease;
   }
-  .search button:hover { transform: scale(1.06); }
+  .search button:hover { transform: scale(1.06); border-color: var(--accent); }
 
   .shortcuts-wrap { width: 100%; }
 
@@ -1509,6 +1524,33 @@
     border-radius: 6px;
     margin-bottom: 8px;
   }
+
+  .color-custom {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .color-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--text-dim);
+  }
+  .color-field input[type="color"] {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: none;
+    cursor: pointer;
+  }
+  .color-field input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+  .color-field input[type="color"]::-webkit-color-swatch { border: none; border-radius: 6px; }
+  .color-field input[type="color"]::-moz-color-swatch { border: none; border-radius: 6px; }
   .swatch[data-swatch="ember"] { background: #160b0b; }
   .swatch[data-swatch="ember"] .swatch-preview { background: linear-gradient(135deg, #e0362b, #0a0606); }
   .swatch[data-swatch="noir"] { background: #17181b; }
@@ -1527,6 +1569,8 @@
   .swatch[data-swatch="bloom"] .swatch-preview { background: linear-gradient(135deg, #b565a7, #f2a6c9); }
   .swatch[data-swatch="matrix"] { background: #04140a; }
   .swatch[data-swatch="matrix"] .swatch-preview { background: linear-gradient(135deg, #00ff41, #000500); }
+  .swatch[data-swatch="embermatrix"] { background: #170a03; }
+  .swatch[data-swatch="embermatrix"] .swatch-preview { background: linear-gradient(135deg, #ff5a1f, #0a0300); }
   .swatch[data-swatch="synthwave"] { background: #1c0640; }
   .swatch[data-swatch="synthwave"] .swatch-preview { background: linear-gradient(135deg, #ff2e97, #00e5ff); }
   .swatch[data-swatch="cosmos"] { background: #0d1024; }
@@ -1618,6 +1662,8 @@
     .edit-btn { right: 66px; }
     .scratch-btn { right: 112px; }
     .tile { width: 72px; }
+    .search { padding-right: 8px; }
+    .search button { display: none; }
   }
 </style>
 </head>
@@ -1680,6 +1726,7 @@
       <button class="swatch" data-swatch="sunset"><div class="swatch-preview"></div>Sunset</button>
       <button class="swatch" data-swatch="bloom"><div class="swatch-preview"></div>Bloom</button>
       <button class="swatch" data-swatch="matrix"><div class="swatch-preview"></div>Matrix</button>
+      <button class="swatch" data-swatch="embermatrix"><div class="swatch-preview"></div>Ember Matrix</button>
       <button class="swatch" data-swatch="synthwave"><div class="swatch-preview"></div>Synthwave</button>
       <button class="swatch" data-swatch="cosmos"><div class="swatch-preview"></div>Cosmos</button>
       <button class="swatch" data-swatch="storm"><div class="swatch-preview"></div>Storm</button>
@@ -1690,6 +1737,18 @@
       <button class="swatch" data-swatch="ripple"><div class="swatch-preview"></div>Ripple</button>
       <button class="swatch" data-swatch="lava"><div class="swatch-preview"></div>Lava</button>
     </div>
+    <div class="color-custom">
+      <div class="color-field">
+        <label for="colorAccent">Accent</label>
+        <input type="color" id="colorAccent">
+      </div>
+      <div class="color-field">
+        <label for="colorAccent2">Accent 2</label>
+        <input type="color" id="colorAccent2">
+      </div>
+      <button class="link-btn" id="colorReset">Reset colors</button>
+    </div>
+    <p class="hint">Recolors the current theme's accents, glow, and clock. Saved per theme.</p>
   </div>
   <div class="panel-section">
     <h3>Backup</h3>
@@ -1758,6 +1817,7 @@
   var STORAGE_SHORTCUTS = 'homepage.shortcuts';
   var STORAGE_THEME = 'homepage.theme';
   var STORAGE_ENGINE = 'homepage.engine';
+  var STORAGE_COLORS = 'homepage.themeColors';
 
   var defaultShortcuts = [
     { name: 'GitHub', url: 'https://github.com' },
@@ -1860,7 +1920,11 @@
     shortcuts.forEach(function (s, i) {
       var tile = document.createElement(editing ? 'div' : 'a');
       tile.className = 'tile';
-      if (!editing) { tile.href = s.url; }
+      if (!editing) {
+        tile.href = s.url;
+        tile.target = '_blank';
+        tile.rel = 'noopener noreferrer';
+      }
       tile.draggable = editing;
       tile.dataset.index = i;
 
@@ -2020,12 +2084,62 @@
     settingsPanel.classList.add('hidden');
   });
 
-  function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem(STORAGE_THEME, theme);
-    Array.prototype.forEach.call(themeGrid.children, function (btn) {
-      btn.classList.toggle('active', btn.dataset.swatch === theme);
-    });
+  // ---- Custom accent colors ----
+  // Overrides are stored per theme, keyed by theme name, so switching
+  // themes remembers whatever custom accents were set for each one.
+  var isHexColor = function (v) { return typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v); };
+
+  function loadColorOverrides() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(STORAGE_COLORS));
+      return (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch (e) { return {}; }
+  }
+  var colorOverrides = loadColorOverrides();
+  function saveColorOverrides() {
+    localStorage.setItem(STORAGE_COLORS, JSON.stringify(colorOverrides));
+  }
+
+  function hexToRgba(hex, alpha) {
+    var v = hex.replace('#', '');
+    var num = parseInt(v, 16);
+    return 'rgba(' + ((num >> 16) & 255) + ',' + ((num >> 8) & 255) + ',' + (num & 255) + ',' + alpha + ')';
+  }
+
+  // Accent doubles as --clock-2 and accent-2 as --clock in every built-in
+  // theme, so a custom accent recolors the clock too instead of leaving it stale.
+  function applyColorOverrides(theme) {
+    var root = document.documentElement.style;
+    var ov = colorOverrides[theme];
+    if (ov && isHexColor(ov.accent)) {
+      root.setProperty('--accent', ov.accent);
+      root.setProperty('--clock-2', ov.accent);
+      root.setProperty('--shadow', hexToRgba(ov.accent, 0.3));
+    } else {
+      root.removeProperty('--accent');
+      root.removeProperty('--clock-2');
+      root.removeProperty('--shadow');
+    }
+    if (ov && isHexColor(ov.accent2)) {
+      root.setProperty('--accent-2', ov.accent2);
+      root.setProperty('--clock', ov.accent2);
+    } else {
+      root.removeProperty('--accent-2');
+      root.removeProperty('--clock');
+    }
+  }
+
+  var colorAccentInput = document.getElementById('colorAccent');
+  var colorAccent2Input = document.getElementById('colorAccent2');
+  var colorResetBtn = document.getElementById('colorReset');
+
+  function updateColorInputs() {
+    var cs = getComputedStyle(document.documentElement);
+    colorAccentInput.value = cs.getPropertyValue('--accent').trim();
+    colorAccent2Input.value = cs.getPropertyValue('--accent-2').trim();
+  }
+
+  function updateFaviconAndMeta() {
     var cs = getComputedStyle(document.documentElement);
     var bg = cs.getPropertyValue('--bg').trim();
     var accent = cs.getPropertyValue('--accent').trim();
@@ -2039,6 +2153,17 @@
         + encodeURIComponent(accent)
         + "'/%3E%3C/svg%3E";
     }
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(STORAGE_THEME, theme);
+    Array.prototype.forEach.call(themeGrid.children, function (btn) {
+      btn.classList.toggle('active', btn.dataset.swatch === theme);
+    });
+    applyColorOverrides(theme);
+    updateColorInputs();
+    updateFaviconAndMeta();
     renderParticles(theme);
   }
 
@@ -2046,6 +2171,29 @@
     var btn = e.target.closest('.swatch');
     if (!btn) return;
     applyTheme(btn.dataset.swatch);
+  });
+
+  function onColorInputChange(key, input) {
+    return function () {
+      if (!isHexColor(input.value)) return;
+      var theme = document.documentElement.getAttribute('data-theme');
+      colorOverrides[theme] = colorOverrides[theme] || {};
+      colorOverrides[theme][key] = input.value;
+      saveColorOverrides();
+      applyColorOverrides(theme);
+      updateFaviconAndMeta();
+    };
+  }
+  colorAccentInput.addEventListener('input', onColorInputChange('accent', colorAccentInput));
+  colorAccent2Input.addEventListener('input', onColorInputChange('accent2', colorAccent2Input));
+
+  colorResetBtn.addEventListener('click', function () {
+    var theme = document.documentElement.getAttribute('data-theme');
+    delete colorOverrides[theme];
+    saveColorOverrides();
+    applyColorOverrides(theme);
+    updateColorInputs();
+    updateFaviconAndMeta();
   });
 
   var particlesEl = document.getElementById('particles');
@@ -2072,6 +2220,7 @@
     sunset:   { type: 'clouds' },
     bloom:    { type: 'fall',    color: 'var(--accent-2)', size: [6, 10], duration: [9, 16],  interval: 1000, seed: 5, petal: true },
     matrix:    { type: 'rain',   maxColumns: 400, length: [8, 26], duration: [6, 16], churn: 3 },
+    embermatrix: { type: 'rain', maxColumns: 400, length: [8, 26], duration: [6, 16], churn: 3 },
     synthwave: { type: 'synth' },
     cosmos:    { type: 'cosmos', stars: 60, shootInterval: 5200 },
     storm:     { type: 'storm',  duration: [0.7, 1.4], interval: 60, seed: 30, flashChance: 0.45 },
@@ -2805,7 +2954,7 @@
   }
 
   function go(url) {
-    window.location.href = url;
+    window.open(url, '_blank', 'noopener');
   }
 
   function activateSelection() {
@@ -2983,6 +3132,7 @@
       exportedAt: new Date().toISOString(),
       shortcuts: shortcuts,
       theme: localStorage.getItem(STORAGE_THEME) || 'ember',
+      colors: colorOverrides,
       engine: engineSelect.value,
       scratch: scratchText.value
     };
@@ -3022,7 +3172,18 @@
           renderShortcuts();
         }
 
-        if (typeof data.theme === 'string' && THEME_ANIM[data.theme]) applyTheme(data.theme);
+        if (data.colors && typeof data.colors === 'object' && !Array.isArray(data.colors)) {
+          colorOverrides = data.colors;
+          saveColorOverrides();
+        }
+
+        if (typeof data.theme === 'string' && THEME_ANIM[data.theme]) {
+          applyTheme(data.theme);
+        } else {
+          applyColorOverrides(document.documentElement.getAttribute('data-theme'));
+          updateColorInputs();
+          updateFaviconAndMeta();
+        }
 
         if (typeof data.engine === 'string') {
           var found = Array.prototype.some.call(engineSelect.options, function (o) { return o.value === data.engine; });
@@ -3067,7 +3228,7 @@
       var idx = parseInt(e.key, 10) - 1;
       if (shortcuts[idx]) {
         e.preventDefault();
-        window.location.href = shortcuts[idx].url;
+        window.open(shortcuts[idx].url, '_blank', 'noopener');
       }
       return;
     }
