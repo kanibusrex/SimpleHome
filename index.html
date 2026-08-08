@@ -1297,9 +1297,16 @@
   }
   .search select option { background: var(--surface); color: var(--text); }
 
-  .search input {
+  .search-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
     flex: 1;
     min-width: 0;
+  }
+
+  .search input {
+    width: 100%;
     background: transparent;
     border: none;
     outline: none;
@@ -1309,6 +1316,30 @@
     padding: 10px 4px;
   }
   .search input::placeholder { color: var(--text-dim); }
+
+  /* Stands in for placeholder text: a blinking, glowing cursor that steps
+     aside the instant real input starts (typing or focus takes over). */
+  .search-cursor {
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    width: 2px;
+    height: 1.15em;
+    transform: translateY(-50%);
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent), 0 0 12px var(--accent);
+    pointer-events: none;
+    animation: cursor-blink 1.1s steps(1, end) infinite;
+  }
+  .search-input-wrap:focus-within .search-cursor,
+  .search.has-value .search-cursor {
+    display: none;
+  }
+
+  @keyframes cursor-blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+  }
 
   .key-hint {
     font-family: 'IBM Plex Mono', monospace;
@@ -1720,7 +1751,10 @@
         <option value="https://duckduckgo.com/?q=">DuckDuckGo</option>
         <option value="https://www.bing.com/search?q=">Bing</option>
       </select>
-      <input type="text" id="searchInput" placeholder="Search or jump to a site…" autocomplete="off">
+      <span class="search-input-wrap">
+        <input type="text" id="searchInput" autocomplete="off" aria-label="Search or jump to a site">
+        <span class="search-cursor" aria-hidden="true"></span>
+      </span>
       <button type="button" class="search-clear" id="searchClear" aria-label="Clear search">&times;</button>
       <kbd class="key-hint" id="keyHint">/</kbd>
       <button type="submit" aria-label="Search">&#8594;</button>
