@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SimpleHome</title>
+<style>
+  :root {
+    --bg: #0a0606;
+    --surface: #160b0b;
+    --surface-hover: #220f0f;
+    --border: #3a1414;
+    --text: #f3e6e0;
+    --text-dim: #b3897f;
+    --accent: #e0362b;
+    --accent-2: #ff8552;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    width: 320px;
+    margin: 0;
+    padding: 16px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin: 0;
+    flex: 1;
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 14px;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 7px 1px var(--accent);
+    flex-shrink: 0;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+  }
+  .dot.off {
+    background: #5a4a46;
+    box-shadow: none;
+  }
+
+  /* Toggle switch */
+  .switch { position: relative; width: 38px; height: 21px; flex-shrink: 0; }
+  .switch input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    margin: 0;
+    cursor: pointer;
+    z-index: 1;
+  }
+  .switch .track {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: #33201e;
+    border: 1px solid var(--border);
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+  .switch .track::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+  .switch input:checked + .track {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .switch input:checked + .track::after {
+    transform: translateX(17px);
+    background: var(--bg);
+  }
+  .switch input:focus-visible + .track { box-shadow: 0 0 0 3px rgba(224, 54, 43, 0.35); }
+
+  .stats {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .stat {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 9px 11px;
+  }
+  .stat-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent-2);
+  }
+  .stat-label {
+    font-size: 9.5px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-top: 3px;
+  }
+
+  section { margin-bottom: 14px; }
+
+  h2 {
+    font-size: 9.5px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    font-weight: 500;
+    margin: 0 0 8px;
+  }
+
+  .site {
+    font-size: 12.5px;
+    color: var(--text);
+    margin-bottom: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  button {
+    width: 100%;
+    padding: 9px 10px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+  }
+  button:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: var(--surface-hover);
+  }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+  }
+
+  .list-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--surface);
+    cursor: pointer;
+    margin-bottom: 6px;
+  }
+  .list-option:hover { background: var(--surface-hover); }
+  .list-option input {
+    margin: 1px 0 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .lo-name { font-size: 12px; }
+  .lo-desc { font-size: 10.5px; color: var(--text-dim); margin-top: 2px; }
+
+  .allowed-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 5px;
+    font-size: 11.5px;
+  }
+  .allowed-item span {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-dim);
+  }
+  .allowed-item button {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .allowed-item button:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .note {
+    font-size: 10.5px;
+    line-height: 1.5;
+    color: var(--text-dim);
+    min-height: 15px;
+    margin-top: 10px;
+  }
+  .note.error { color: var(--accent-2); }
+
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="head">
+  <div class="dot" id="statusDot"></div>
+  <h1>SimpleHome</h1>
+  <label class="switch" title="Blocking on / off">
+    <input type="checkbox" id="enabledToggle" aria-label="Blocking on or off">
+    <span class="track"></span>
+  </label>
+</div>
+
+<div class="stats">
+  <div class="stat">
+    <div class="stat-value" id="ruleCount">—</div>
+    <div class="stat-label">Rules</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value" id="updatedAt">—</div>
+    <div class="stat-label">Updated</div>
+  </div>
+</div>
+
+<section>
+  <h2>This site</h2>
+  <div class="site" id="siteHost">—</div>
+  <button id="allowBtn">Allow ads on this site</button>
+</section>
+
+<section>
+  <h2>Filter lists</h2>
+  <div id="listOptions"></div>
+  <button id="updateBtn">Update now</button>
+</section>
+
+<section id="allowedSection" hidden>
+  <h2>Allowed sites</h2>
+  <div id="allowedList"></div>
+</section>
+
+<div class="note" id="note"></div>
+
+<script src="popup.js"></script>
+</body>
+</html>

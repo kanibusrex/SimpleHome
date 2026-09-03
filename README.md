@@ -87,7 +87,9 @@ The extension downloads EasyList and converts it into Chrome `declarativeNetRequ
 - **Network blocking** stops ad and tracker requests before they leave your browser
 - **Cosmetic filtering** hides the leftover empty containers that would otherwise sit as blank gaps
 
-From current EasyList + EasyPrivacy that works out to roughly 6,800 network rules and 13,000 element-hiding selectors, converted from about 29,000 filter lines with a ~99.9% conversion rate.
+From current EasyList + EasyPrivacy that works out to roughly 12,800 network rules and 28,000 element-hiding selectors, converted from about 85,000 filter lines at a 99.4% conversion rate. `node validate-rules.mjs` prints the current figures for whichever lists you point it at.
+
+Most of EasyList is `||domain^` and nothing else — the adserver section alone is some 47,000 lines of it. Those fold into one rule per thousand domains using DNR's `requestDomains`, which matches subdomains the same way `||domain^` does. Without that the lists would overrun Chrome's rule ceiling twice over; with it they fit inside half of it.
 
 Three lists are selectable in the popup: **EasyList** (ads), **EasyPrivacy** (trackers), and **Annoyances** (cookie notices, social widgets — off by default, since it's the most likely to break a page). The popup also has a global on/off switch and a per-site allowlist for when blocking breaks something.
 
@@ -95,10 +97,11 @@ Three lists are selectable in the popup: **EasyList** (ads), **EasyPrivacy** (tr
 
 This is not a uBlock Origin replacement, and you should use uBlock instead if pure blocking quality is what you're after. Specifically:
 
-- Chrome's `declarativeNetRequest` caps dynamic rules at 30,000, so very large list combinations get truncated
+- Chrome's `declarativeNetRequest` caps dynamic rules at 30,000. The three lists together currently land around 12,800, but a big enough combination still gets truncated — exceptions are installed first, since losing a block costs you an ad while losing an exception breaks a working page
 - Regex rules are capped at 1,000 by Chrome, separately from that total
 - Filters using options DNR can't express (`$csp`, `$redirect`, `$removeparam`, `$popup`) are skipped rather than approximated — a wrong rule breaks pages in ways that are hard to trace
 - Procedural cosmetic filters (`:has-text`, `:-abp-has`, ABP snippets) are skipped; only plain CSS selectors are applied
+- `$badfilter`, which retracts another list's filter, is skipped rather than honoured, so a handful of filters stay live that a full engine would drop
 - There's no anti-adblock circumvention, so sites that detect blockers will still detect this
 
 ### Developing
@@ -111,12 +114,24 @@ node test-parser.mjs      # unit tests for the ABP -> DNR converter
 node validate-rules.mjs   # checks generated rules against Chrome's DNR constraints
 ```
 
-`validate-rules.mjs` expects sample lists in `/tmp`; it skips cleanly if they aren't there.
+`validate-rules.mjs` expects sample lists in `/tmp`; it skips cleanly if they aren't there. To give it something to chew on:
+
+```bash
+curl -o /tmp/easylist.txt https://easylist.to/easylist/easylist.txt
+curl -o /tmp/easyprivacy.txt https://easylist.to/easylist/easyprivacy.txt
+```
 
 Manifest V3 forbids inline scripts, so the extension's new tab page is generated from the root `index.html` rather than duplicated. After editing `index.html`, run:
 
 ```bash
 cd extension && python3 build-newtab.py
+```
+
+That writes `newtab.html` and `newtab.js`. Both are committed, so the extension loads unpacked without anyone having to build it first. The icons are generated too, though only if the mark itself changes:
+
+```bash
+pip install Pillow
+cd extension && python3 build-icons.py
 ```
 
 ## Notes
