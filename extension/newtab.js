@@ -7,6 +7,7 @@
   var STORAGE_COLORS = 'homepage.themeColors';
   var STORAGE_GROUPS = 'homepage.groups';
   var STORAGE_ACTIVE_GROUP = 'homepage.activeGroup';
+  var STORAGE_VISITS = 'homepage.visits';
 
   var defaultShortcuts = [
     { name: 'GitHub', url: 'https://github.com' },
@@ -197,6 +198,7 @@
         tile.href = s.url;
         tile.target = '_blank';
         tile.rel = 'noopener noreferrer';
+        tile.addEventListener('click', function () { recordVisit(s.url, s.name); });
       }
       tile.draggable = editing;
       tile.dataset.index = i;
@@ -1122,6 +1124,157 @@
     return /^https?:\/\//i.test(v) || /^[\w-]+(\.[\w-]+)+(\/.*)?$/.test(v);
   }
 
+  // ---- Visit history & autocomplete ----
+  // A page has no way to read the browser's own history, so the launcher keeps
+  // its own: destinations opened from here, ranked by how often and how
+  // recently they were used. Nothing is recorded until you actually go
+  // somewhere, and it never leaves localStorage.
+  var MAX_VISITS = 300;
+  var visits = loadVisits();
+  var historyStatus = document.getElementById('historyStatus');
+  var clearHistoryBtn = document.getElementById('clearHistoryBtn');
+
+  function loadVisits() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(STORAGE_VISITS));
+      if (Array.isArray(raw)) return raw;
+    } catch (e) {}
+    return [];
+  }
+
+  function saveVisits() {
+    try {
+      localStorage.setItem(STORAGE_VISITS, JSON.stringify(visits));
+    } catch (e) { /* out of quota — the log is expendable, don't break typing */ }
+  }
+
+  // Frequency alone parks last month's obsession at the top forever; recency
+  // alone forgets the site you open every morning. Multiplying the two is the
+  // usual compromise.
+  function frecency(v) {
+    var age = Date.now() - v.last;
+    var weight = age < 36e5 ? 4 : age < 864e5 ? 3 : age < 6048e5 ? 2 : 1;
+    return v.count * weight;
+  }
+
+  // The scheme and a trailing slash are noise when matching or deduplicating.
+  function visitKey(url) {
+    return String(url).replace(/^https?:\/\//i, '').replace(/\/$/, '').toLowerCase();
+  }
+
+  function bareHost(host) {
+    return String(host || '').toLowerCase().replace(/^www\./, '');
+  }
+
+  function recordVisit(url, label) {
+    if (!url || !/^https?:/i.test(url) || !hostnameFor(url)) return;
+    var key = visitKey(url);
+    // A typed URL has no name; storing one would show the host twice in a row.
+    if (label && visitKey(label) === key) label = '';
+    var found = null;
+    for (var i = 0; i < visits.length; i++) {
+      if (visits[i].key === key) { found = visits[i]; break; }
+    }
+    if (found) {
+      found.count++;
+      found.last = Date.now();
+      if (label) found.label = label;
+    } else {
+      visits.push({
+        key: key, url: url, host: hostnameFor(url),
+        label: label || '', count: 1, last: Date.now()
+      });
+    }
+    if (visits.length > MAX_VISITS) {
+      visits.sort(function (a, b) { return frecency(b) - frecency(a); });
+      visits.length = MAX_VISITS;
+    }
+    saveVisits();
+    updateHistoryStatus();
+  }
+
+  // Banded the same way shortcut matching is — exact beats prefix beats
+  // substring — with frecency breaking ties inside a band.
+  function scoreVisit(v, q) {
+    var host = bareHost(v.host);
+    var key = v.key.replace(/^www\./, '');
+    var label = (v.label || '').toLowerCase();
+    if (host === q || key === q) return 0;
+    if (host.indexOf(q) === 0 || key.indexOf(q) === 0) return 1;
+    if (label && label.indexOf(q) === 0) return 2;
+    if (key.indexOf(q) > -1) return 3;
+    if (label && label.indexOf(q) > -1) return 4;
+    return -1;
+  }
+
+  function matchVisits(q, exclude, limit) {
+    q = q.trim().toLowerCase();
+    if (!q) return [];
+    return visits
+      .map(function (v) { return { v: v, score: scoreVisit(v, q) }; })
+      .filter(function (m) { return m.score > -1 && exclude.indexOf(m.v.key) === -1; })
+      .sort(function (a, b) { return a.score - b.score || frecency(b.v) - frecency(a.v); })
+      .slice(0, limit)
+      .map(function (m) { return m.v; });
+  }
+
+  // What the input completes to inline. Hosts only: completing a path while
+  // you type turns every keystroke into a guess you have to undo.
+  function completionFor(typed) {
+    var q = typed.toLowerCase();
+    if (q.length < 2 || /[\s\/]/.test(q) || /^https?:/i.test(q)) return null;
+
+    var best = null;
+    function consider(host, rank) {
+      if (!host || host.indexOf(q) !== 0 || host === q) return;
+      if (!best || rank > best.rank) best = { host: host, rank: rank };
+    }
+    visits.forEach(function (v) { consider(bareHost(v.host), frecency(v)); });
+    // A shortcut you have never opened still deserves to complete, just below
+    // anything you actually visit.
+    shortcuts.forEach(function (sc) { consider(bareHost(hostnameFor(sc.url)), 0.5); });
+
+    return best ? best.host : null;
+  }
+
+  // Type-ahead in the input itself, the way an address bar does it: the rest of
+  // the host is appended and left selected, so typing on replaces it and Enter
+  // or the right arrow accepts it.
+  function applyInlineCompletion() {
+    var typed = searchInput.value;
+    if (!typed || searchInput.selectionStart !== typed.length) return;
+    var host = completionFor(typed);
+    if (!host) return;
+    searchInput.value = typed + host.slice(typed.length);
+    searchInput.setSelectionRange(typed.length, searchInput.value.length);
+  }
+
+  function updateHistoryStatus() {
+    if (!historyStatus) return;
+    var n = visits.length;
+    historyStatus.textContent = n
+      ? n + (n === 1 ? ' site remembered.' : ' sites remembered.')
+      : 'Nothing remembered yet.';
+  }
+
+  if (clearHistoryBtn) {
+    clearHistoryBtn.addEventListener('click', function () {
+      if (!visits.length) return;
+      var removed = visits.slice();
+      visits = [];
+      saveVisits();
+      updateHistoryStatus();
+      showToast('History cleared', function () {
+        visits = removed;
+        saveVisits();
+        updateHistoryStatus();
+      });
+    });
+  }
+
+  updateHistoryStatus();
+
+
   // ---- Inline calculator & unit conversion ----
   // A small hand-rolled recursive-descent parser rather than eval(), so a
   // typo can't run arbitrary script and behavior stays fully predictable.
@@ -1348,8 +1501,21 @@
     }
 
     matches = computeMatches(q);
+    var alreadyShown = [];
     matches.forEach(function (s) {
-      rows.push({ kind: 'shortcut', label: s.name, url: s.url });
+      alreadyShown.push(visitKey(s.url));
+      rows.push({ kind: 'shortcut', label: s.name, url: s.url, track: true, trackLabel: s.name });
+    });
+
+    matchVisits(q, alreadyShown, 4).forEach(function (v) {
+      rows.push({
+        kind: 'visit',
+        label: v.label || v.key,
+        sub: v.label ? v.key : '',
+        url: v.url,
+        track: true,
+        trackLabel: v.label
+      });
     });
 
     partialCommands(q).forEach(function (c) {
@@ -1358,7 +1524,7 @@
 
     if (!parsed) {
       if (looksLikeUrl(q)) {
-        rows.push({ kind: 'open', label: q.trim(), url: normalizeUrl(q) });
+        rows.push({ kind: 'open', label: q.trim(), url: normalizeUrl(q), track: true });
       }
       rows.push({
         kind: 'search',
@@ -1373,7 +1539,7 @@
       var el = document.createElement('div');
       el.className = 'result' + (i === selectedIdx ? ' selected' : '');
 
-      if (row.kind === 'shortcut') {
+      if (row.kind === 'shortcut' || row.kind === 'visit') {
         var host = hostnameFor(row.url);
         var img = document.createElement('img');
         img.src = 'https://www.google.com/s2/favicons?sz=64&domain=' + host;
@@ -1413,6 +1579,7 @@
       var kind = document.createElement('div');
       kind.className = 'result-kind';
       kind.textContent = row.kind === 'shortcut' ? 'Shortcut'
+        : row.kind === 'visit' ? 'Visited'
         : row.kind === 'open' ? 'Open'
         : row.kind === 'hint' ? 'Command'
         : row.kind === 'command' ? 'Go'
@@ -1437,6 +1604,7 @@
           copyText(row.copyValue);
           showToast('Copied ' + row.copyValue);
         } else {
+          if (row.track) recordVisit(row.url, row.trackLabel || '');
           go(row.url);
         }
       });
@@ -1472,8 +1640,10 @@
     if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
   }
 
-  searchInput.addEventListener('input', function () {
+  searchInput.addEventListener('input', function (e) {
     selectedIdx = 0;
+    var deleting = e && e.inputType && e.inputType.indexOf('delete') === 0;
+    if (!deleting) applyInlineCompletion();
     renderResults();
   });
 
@@ -1678,7 +1848,8 @@
       theme: localStorage.getItem(STORAGE_THEME) || 'ember',
       colors: colorOverrides,
       engine: engineSelect.value,
-      scratch: scratchText.value
+      scratch: scratchText.value,
+      visits: visits
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -1750,6 +1921,15 @@
           localStorage.setItem(STORAGE_SCRATCH, data.scratch);
         }
 
+        if (Array.isArray(data.visits)) {
+          visits = data.visits.filter(function (v) {
+            return v && typeof v.url === 'string' && typeof v.key === 'string' &&
+              typeof v.count === 'number' && typeof v.last === 'number';
+          });
+          saveVisits();
+          updateHistoryStatus();
+        }
+
         flashBackupStatus('Settings imported.');
       } catch (err) {
         flashBackupStatus("That file couldn't be read. Pick a homepage settings JSON file.");
@@ -1787,6 +1967,7 @@
       var vis = visibleShortcuts();
       if (vis[idx]) {
         e.preventDefault();
+        recordVisit(vis[idx].s.url, vis[idx].s.name);
         window.open(vis[idx].s.url, '_blank', 'noopener');
       }
       return;

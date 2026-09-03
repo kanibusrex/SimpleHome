@@ -15,6 +15,10 @@ extension/      optional Chrome extension: new tab override + ad blocking
 
 **Inline calculator & unit conversion.** Type an expression like `(18 + 4) * 2`, `9^2 - 1`, or `20% of 85` and the result appears as the top row, live, computed by a small hand-rolled parser — no `eval()`. Unit conversions work the same way: `10 km to mi`, `5 kg in lbs`, `100 f to c` (length, weight, volume, and temperature). Click the result or press Enter to copy it to the clipboard rather than navigate anywhere. Plain digit-hyphen-digit strings like phone numbers or `2026-08-08` are deliberately left alone.
 
+**Autocomplete.** The page can't read your browser history — no web page can — so the launcher keeps its own. Anything you open from here (a tile, a result, a URL you typed) is remembered and ranked by how often and how recently you used it. From then on, typing completes the host inline the way an address bar does: type `gith` and the rest of `github.com` appears selected, so carrying on typing replaces it and `→` or `Enter` accepts it. Deep links come back as their own rows, so `gith` can offer `github.com/notifications` rather than just the domain. Completion is host-only — completing a whole path mid-keystroke means undoing a guess on every character.
+
+Settings → History shows how many sites are remembered and clears them, with an undo. The log is capped at 300 entries, stays in this browser's `localStorage`, and travels with the export/import backup.
+
 **Command prefixes.** Start a query with a prefix to route it somewhere specific — `gh react` searches GitHub, `y live sets` searches YouTube. Typing a partial prefix suggests the matching commands. Built in: `g` Google · `d` DuckDuckGo · `y` YouTube · `gh` GitHub · `w` Wikipedia · `r` Reddit · `a` Amazon · `m` Maps · `i` Images · `np` npm · `mdn` MDN · `so` Stack Overflow. Add your own by editing the `COMMANDS` array.
 
 **Editable shortcuts.** Click the pencil to enter edit mode, then drag tiles to reorder, click one to rename or change its URL, or hit the × to remove it. The + tile adds new ones. Removals show an undo toast rather than a confirmation dialog, and adding a shortcut that duplicates an existing hostname warns first. Icons are pulled automatically from each site's favicon, with a letter avatar as fallback. Tiles always stay centered as a group, however many you have. Clicking a tile opens it in a new tab, leaving the home page in place.
@@ -59,7 +63,7 @@ Shortcut tiles, the search bar, and the scratchpad share a hover/focus treatment
 
 **Time-of-day greeting** above the clock, switching between morning, afternoon, evening, and night.
 
-**Export / import.** Everything lives in `localStorage`, which is per-browser and one "clear browsing data" away from gone. Settings → Backup writes a JSON file with your shortcuts, groups, theme, custom accent colors, engine, and notes, and reads it back on another machine.
+**Export / import.** Everything lives in `localStorage`, which is per-browser and one "clear browsing data" away from gone. Settings → Backup writes a JSON file with your shortcuts, groups, theme, custom accent colors, engine, notes, and autocomplete history, and reads it back on another machine.
 
 ## Keyboard
 
@@ -68,6 +72,7 @@ Shortcut tiles, the search bar, and the scratchpad share a hover/focus treatment
 | `/` | Jump to search |
 | `↑` `↓` | Move through results |
 | `Enter` | Open the selected result in a new tab, or copy a calculator result |
+| `→` | Accept the inline completion |
 | `Alt+1`–`Alt+9` | Open the first nine visible tiles in a new tab |
 | `Shift+S` | Toggle the scratchpad |
 | `Z` | Toggle zen mode |
@@ -162,7 +167,7 @@ cd extension && python3 build-icons.py
 
 ## Notes
 
-- Data is stored under the `homepage.*` keys in `localStorage`. Nothing leaves your browser.
+- Data is stored under the `homepage.*` keys in `localStorage`. Nothing leaves your browser, the autocomplete history included — clear it any time from Settings → History.
 - The page is installable — it ships a generated web app manifest, so Chrome and Safari will offer to add it to your dock or home screen as a standalone app. The favicon and status bar color follow the active theme.
 - Background animations pause when the tab is hidden, so a backgrounded home page costs nothing.
 - `prefers-reduced-motion` is respected: animated backgrounds are hidden and transitions are cut for anyone who has that set at the OS level.

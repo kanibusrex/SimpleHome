@@ -1340,6 +1340,9 @@
     padding: 10px 4px;
   }
   .search input::placeholder { color: var(--text-dim); }
+  /* The inline completion is left selected, so the selection is part of the
+     interface here rather than an incidental highlight. */
+  .search input::selection { background: var(--accent); color: var(--bg); }
 
   /* Stands in for placeholder text: a blinking, glowing cursor that steps
      aside the instant real input starts (typing or focus takes over). */
@@ -1885,7 +1888,15 @@
       <button class="panel-btn" id="importBtn">Import settings</button>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
     </div>
-    <p class="hint" id="backupStatus">Saves your shortcuts, theme, search engine, and notes to a JSON file you can move between browsers.</p>
+    <p class="hint" id="backupStatus">Saves your shortcuts, theme, search engine, notes, and history to a JSON file you can move between browsers.</p>
+  </div>
+  <div class="panel-section">
+    <h3>History</h3>
+    <p class="hint" id="historyStatus">Nothing remembered yet.</p>
+    <div class="stack">
+      <button class="panel-btn" id="clearHistoryBtn">Clear history</button>
+    </div>
+    <p class="hint">Sites you open from this page, kept so the search bar can complete them as you type. Stored in this browser only — nothing is sent anywhere, and the page can't see the rest of your browsing.</p>
   </div>
   <div class="panel-section">
     <h3>Keyboard</h3>
