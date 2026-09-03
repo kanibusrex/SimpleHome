@@ -4,6 +4,9 @@
   var STORAGE_SHORTCUTS = 'homepage.shortcuts';
   var STORAGE_THEME = 'homepage.theme';
   var STORAGE_ENGINE = 'homepage.engine';
+  var STORAGE_COLORS = 'homepage.themeColors';
+  var STORAGE_GROUPS = 'homepage.groups';
+  var STORAGE_ACTIVE_GROUP = 'homepage.activeGroup';
 
   var defaultShortcuts = [
     { name: 'GitHub', url: 'https://github.com' },
@@ -17,6 +20,7 @@
   var dragIndex = null;
 
   var grid = document.getElementById('shortcutsGrid');
+  var groupTabsEl = document.getElementById('groupTabs');
   var editBtn = document.getElementById('editBtn');
   var settingsBtn = document.getElementById('settingsBtn');
   var settingsPanel = document.getElementById('settingsPanel');
@@ -26,11 +30,13 @@
   var modalTitle = document.getElementById('modalTitle');
   var tileNameInput = document.getElementById('tileName');
   var tileUrlInput = document.getElementById('tileUrl');
+  var tileGroupSelect = document.getElementById('tileGroup');
   var modalSave = document.getElementById('modalSave');
   var modalCancel = document.getElementById('modalCancel');
   var modalDelete = document.getElementById('modalDelete');
   var searchForm = document.getElementById('searchForm');
   var searchInput = document.getElementById('searchInput');
+  var searchClear = document.getElementById('searchClear');
   var engineSelect = document.getElementById('engineSelect');
 
   function loadShortcuts() {
@@ -44,6 +50,22 @@
   function saveShortcuts(list) {
     localStorage.setItem(STORAGE_SHORTCUTS, JSON.stringify(list));
   }
+
+  function loadGroups() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(STORAGE_GROUPS));
+      if (Array.isArray(raw)) return raw;
+    } catch (e) {}
+    return [];
+  }
+
+  function saveGroups(list) {
+    localStorage.setItem(STORAGE_GROUPS, JSON.stringify(list));
+  }
+
+  var groups = loadGroups();
+  var activeGroup = localStorage.getItem(STORAGE_ACTIVE_GROUP) || 'all';
+  if (activeGroup !== 'all' && groups.indexOf(activeGroup) === -1) activeGroup = 'all';
 
   var shortcuts = loadShortcuts();
 
@@ -101,12 +123,81 @@
     });
   }
 
+  function visibleShortcuts() {
+    return shortcuts
+      .map(function (s, i) { return { s: s, i: i }; })
+      .filter(function (e) { return activeGroup === 'all' || (e.s.group || '') === activeGroup; });
+  }
+
+  function renderGroupTabs() {
+    groupTabsEl.innerHTML = '';
+    groupTabsEl.classList.toggle('hidden', groups.length === 0 && !editing);
+
+    function setActiveGroup(id) {
+      activeGroup = id;
+      localStorage.setItem(STORAGE_ACTIVE_GROUP, activeGroup);
+      renderShortcuts();
+    }
+
+    function makeTab(id, label, removable) {
+      var btn = document.createElement('button');
+      btn.className = 'group-tab' + (activeGroup === id ? ' active' : '');
+      var text = document.createElement('span');
+      text.textContent = label;
+      btn.appendChild(text);
+
+      if (removable) {
+        var rm = document.createElement('span');
+        rm.className = 'group-tab-remove';
+        rm.textContent = '×';
+        rm.setAttribute('aria-label', 'Delete group ' + label);
+        rm.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (!confirm('Delete group "' + label + '"? Its shortcuts will become ungrouped.')) return;
+          groups = groups.filter(function (g) { return g !== id; });
+          shortcuts.forEach(function (s) { if (s.group === id) s.group = ''; });
+          saveShortcuts(shortcuts);
+          saveGroups(groups);
+          setActiveGroup(activeGroup === id ? 'all' : activeGroup);
+        });
+        btn.appendChild(rm);
+      }
+
+      btn.addEventListener('click', function () { setActiveGroup(id); });
+      return btn;
+    }
+
+    groupTabsEl.appendChild(makeTab('all', 'All', false));
+    groups.forEach(function (g) { groupTabsEl.appendChild(makeTab(g, g, true)); });
+
+    var addTab = document.createElement('button');
+    addTab.className = 'group-tab group-tab-add';
+    addTab.textContent = '+';
+    addTab.setAttribute('aria-label', 'Add group');
+    addTab.addEventListener('click', function () {
+      var name = prompt('New group name');
+      if (!name) return;
+      name = name.trim();
+      if (!name || name === 'all' || groups.indexOf(name) > -1) return;
+      groups.push(name);
+      saveGroups(groups);
+      setActiveGroup(name);
+    });
+    groupTabsEl.appendChild(addTab);
+  }
+
   function renderShortcuts() {
+    renderGroupTabs();
     grid.innerHTML = '';
-    shortcuts.forEach(function (s, i) {
+    visibleShortcuts().forEach(function (entry, viewIdx) {
+      var s = entry.s, i = entry.i;
       var tile = document.createElement(editing ? 'div' : 'a');
       tile.className = 'tile';
-      if (!editing) { tile.href = s.url; }
+      if (!editing) {
+        tile.href = s.url;
+        tile.target = '_blank';
+        tile.rel = 'noopener noreferrer';
+      }
       tile.draggable = editing;
       tile.dataset.index = i;
 
@@ -133,10 +224,10 @@
       tile.appendChild(icon);
       tile.appendChild(label);
 
-      if (i < 9) {
+      if (viewIdx < 9) {
         var hk = document.createElement('div');
         hk.className = 'tile-hotkey';
-        hk.textContent = i + 1;
+        hk.textContent = viewIdx + 1;
         tile.appendChild(hk);
       }
 
@@ -193,17 +284,30 @@
     grid.appendChild(addTile);
   }
 
+  function populateGroupSelect(selected) {
+    tileGroupSelect.innerHTML = '<option value="">No group</option>';
+    groups.forEach(function (g) {
+      var opt = document.createElement('option');
+      opt.value = g;
+      opt.textContent = g;
+      tileGroupSelect.appendChild(opt);
+    });
+    tileGroupSelect.value = selected || '';
+  }
+
   function openModal(index) {
     editingIndex = index;
     if (index === null) {
       modalTitle.textContent = 'Add shortcut';
       tileNameInput.value = '';
       tileUrlInput.value = '';
+      populateGroupSelect(activeGroup === 'all' ? '' : activeGroup);
       modalDelete.classList.add('hidden');
     } else {
       modalTitle.textContent = 'Edit shortcut';
       tileNameInput.value = shortcuts[index].name;
       tileUrlInput.value = shortcuts[index].url;
+      populateGroupSelect(shortcuts[index].group || '');
       modalDelete.classList.remove('hidden');
     }
     modalOverlay.classList.remove('hidden');
@@ -233,10 +337,11 @@
       if (!confirm(shortcuts[dupe].name + ' already points to ' + host + '. Add this anyway?')) return;
     }
 
+    var group = tileGroupSelect.value;
     if (editingIndex === null) {
-      shortcuts.push({ name: name, url: url });
+      shortcuts.push({ name: name, url: url, group: group });
     } else {
-      shortcuts[editingIndex] = { name: name, url: url };
+      shortcuts[editingIndex] = { name: name, url: url, group: group };
     }
     saveShortcuts(shortcuts);
     closeModal();
@@ -266,12 +371,62 @@
     settingsPanel.classList.add('hidden');
   });
 
-  function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem(STORAGE_THEME, theme);
-    Array.prototype.forEach.call(themeGrid.children, function (btn) {
-      btn.classList.toggle('active', btn.dataset.swatch === theme);
-    });
+  // ---- Custom accent colors ----
+  // Overrides are stored per theme, keyed by theme name, so switching
+  // themes remembers whatever custom accents were set for each one.
+  var isHexColor = function (v) { return typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v); };
+
+  function loadColorOverrides() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(STORAGE_COLORS));
+      return (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch (e) { return {}; }
+  }
+  var colorOverrides = loadColorOverrides();
+  function saveColorOverrides() {
+    localStorage.setItem(STORAGE_COLORS, JSON.stringify(colorOverrides));
+  }
+
+  function hexToRgba(hex, alpha) {
+    var v = hex.replace('#', '');
+    var num = parseInt(v, 16);
+    return 'rgba(' + ((num >> 16) & 255) + ',' + ((num >> 8) & 255) + ',' + (num & 255) + ',' + alpha + ')';
+  }
+
+  // Accent doubles as --clock-2 and accent-2 as --clock in every built-in
+  // theme, so a custom accent recolors the clock too instead of leaving it stale.
+  function applyColorOverrides(theme) {
+    var root = document.documentElement.style;
+    var ov = colorOverrides[theme];
+    if (ov && isHexColor(ov.accent)) {
+      root.setProperty('--accent', ov.accent);
+      root.setProperty('--clock-2', ov.accent);
+      root.setProperty('--shadow', hexToRgba(ov.accent, 0.3));
+    } else {
+      root.removeProperty('--accent');
+      root.removeProperty('--clock-2');
+      root.removeProperty('--shadow');
+    }
+    if (ov && isHexColor(ov.accent2)) {
+      root.setProperty('--accent-2', ov.accent2);
+      root.setProperty('--clock', ov.accent2);
+    } else {
+      root.removeProperty('--accent-2');
+      root.removeProperty('--clock');
+    }
+  }
+
+  var colorAccentInput = document.getElementById('colorAccent');
+  var colorAccent2Input = document.getElementById('colorAccent2');
+  var colorResetBtn = document.getElementById('colorReset');
+
+  function updateColorInputs() {
+    var cs = getComputedStyle(document.documentElement);
+    colorAccentInput.value = cs.getPropertyValue('--accent').trim();
+    colorAccent2Input.value = cs.getPropertyValue('--accent-2').trim();
+  }
+
+  function updateFaviconAndMeta() {
     var cs = getComputedStyle(document.documentElement);
     var bg = cs.getPropertyValue('--bg').trim();
     var accent = cs.getPropertyValue('--accent').trim();
@@ -285,6 +440,17 @@
         + encodeURIComponent(accent)
         + "'/%3E%3C/svg%3E";
     }
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(STORAGE_THEME, theme);
+    Array.prototype.forEach.call(themeGrid.children, function (btn) {
+      btn.classList.toggle('active', btn.dataset.swatch === theme);
+    });
+    applyColorOverrides(theme);
+    updateColorInputs();
+    updateFaviconAndMeta();
     renderParticles(theme);
   }
 
@@ -294,10 +460,42 @@
     applyTheme(btn.dataset.swatch);
   });
 
+  function onColorInputChange(key, input) {
+    return function () {
+      if (!isHexColor(input.value)) return;
+      var theme = document.documentElement.getAttribute('data-theme');
+      colorOverrides[theme] = colorOverrides[theme] || {};
+      colorOverrides[theme][key] = input.value;
+      saveColorOverrides();
+      applyColorOverrides(theme);
+      updateFaviconAndMeta();
+    };
+  }
+  colorAccentInput.addEventListener('input', onColorInputChange('accent', colorAccentInput));
+  colorAccent2Input.addEventListener('input', onColorInputChange('accent2', colorAccent2Input));
+
+  colorResetBtn.addEventListener('click', function () {
+    var theme = document.documentElement.getAttribute('data-theme');
+    delete colorOverrides[theme];
+    saveColorOverrides();
+    applyColorOverrides(theme);
+    updateColorInputs();
+    updateFaviconAndMeta();
+  });
+
   var particlesEl = document.getElementById('particles');
-  var particleTimer = null;
+  // Some effects run more than one interval (a spawner plus glyph churn, say),
+  // so timers are tracked as a list and torn down together.
+  var particleTimers = [];
+
+  function addTimer(fn, ms) { particleTimers.push(setInterval(fn, ms)); }
+  function stopTimers() {
+    particleTimers.forEach(clearInterval);
+    particleTimers = [];
+  }
 
   function rand(min, max) { return min + Math.random() * (max - min); }
+  function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
 
   var THEME_ANIM = {
     ember:    { type: 'rise',    color: 'var(--accent-2)', size: [2, 4], duration: [6, 12],  interval: 850, seed: 6 },
@@ -305,14 +503,25 @@
     noir:     { type: 'twinkle', count: 45,                size: [1, 2] },
     aurora:   { type: 'aurora',  stars: 20 },
     daybreak: { type: 'firefly', color: 'var(--accent-2)', count: 14,    size: [1.5, 3] },
-    frost:    { type: 'fall',    color: '#ffffff',         size: [2, 4], duration: [8, 15],  interval: 750, seed: 6 },
+    frost:    { type: 'fall',    color: '#a9c9e6',         size: [2, 4], duration: [8, 15],  interval: 750, seed: 6 },
     sunset:   { type: 'clouds' },
-    bloom:    { type: 'fall',    color: 'var(--accent-2)', size: [6, 10], duration: [9, 16],  interval: 1000, seed: 5, petal: true }
+    bloom:    { type: 'fall',    color: 'var(--accent-2)', size: [6, 10], duration: [9, 16],  interval: 1000, seed: 5, petal: true },
+    matrix:    { type: 'rain',   maxColumns: 600, length: [8, 26], duration: [6, 16], churn: 5 },
+    embermatrix: { type: 'rain', maxColumns: 600, length: [8, 26], duration: [6, 16], churn: 5 },
+    synthwave: { type: 'synth' },
+    cosmos:    { type: 'cosmos', stars: 60, shootInterval: 5200 },
+    storm:     { type: 'storm',  duration: [0.7, 1.4], interval: 60, seed: 30, flashChance: 0.45 },
+    abyss:     { type: 'bubbles', size: [4, 16], duration: [9, 18], interval: 700, seed: 18, rays: 4 },
+    circuit:   { type: 'circuit', traces: 14, nodes: 16 },
+    terminal:  { type: 'crt' },
+    festival:  { type: 'fireworks', interval: 1900, sparks: 22 },
+    ripple:    { type: 'ripple', interval: 1100 },
+    lava:      { type: 'lava', blobs: 6 }
   };
 
   function clearParticles() {
     particlesEl.innerHTML = '';
-    if (particleTimer) { clearInterval(particleTimer); particleTimer = null; }
+    stopTimers();
   }
 
   function spawnRiseOrFall(cfg, kind) {
@@ -335,7 +544,7 @@
       setTimeout(function () { p.remove(); }, duration * 1000);
     }
     for (var i = 0; i < cfg.seed; i++) setTimeout(spawn, i * (cfg.interval * 0.7));
-    particleTimer = setInterval(spawn, cfg.interval);
+    addTimer(spawn, cfg.interval);
   }
 
   function spawnStars(count) {
@@ -409,6 +618,334 @@
     }
   }
 
+  // Half-width katakana, the glyphs the film's rain is built from, plus digits.
+  var RAIN_GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789';
+
+  function randGlyph() {
+    return RAIN_GLYPHS.charAt(Math.floor(Math.random() * RAIN_GLYPHS.length));
+  }
+
+  function buildRain(cfg) {
+    var colWidth = 10;
+    var cols = Math.min(cfg.maxColumns, Math.ceil(window.innerWidth / colWidth));
+    var columns = [];
+
+    for (var i = 0; i < cols; i++) {
+      var col = document.createElement('div');
+      col.className = 'rain-column';
+      col.style.left = (i * colWidth) + 'px';
+      col.style.animationDuration = rand(cfg.duration[0], cfg.duration[1]) + 's';
+      // Negative delays start each column mid-fall, so nothing lines up.
+      col.style.animationDelay = '-' + rand(0, 14) + 's';
+      col.style.opacity = rand(0.3, 0.62);
+
+      var len = randInt(cfg.length[0], cfg.length[1]);
+      var glyphs = [];
+      for (var j = 0; j < len; j++) glyphs.push(randGlyph());
+      col.dataset.len = len;
+      paintColumn(col, glyphs);
+      col._glyphs = glyphs;
+
+      particlesEl.appendChild(col);
+      columns.push(col);
+    }
+
+    // Churn a few glyphs per frame-ish rather than redrawing every column.
+    addTimer(function () {
+      for (var n = 0; n < cfg.churn; n++) {
+        var col = columns[Math.floor(Math.random() * columns.length)];
+        if (!col || !col._glyphs) continue;
+        col._glyphs[Math.floor(Math.random() * col._glyphs.length)] = randGlyph();
+        paintColumn(col, col._glyphs);
+      }
+    }, 120);
+  }
+
+  function paintColumn(col, glyphs) {
+    var body = glyphs.slice(0, -1).join('\n');
+    col.innerHTML = '';
+    col.appendChild(document.createTextNode(body + '\n'));
+    var head = document.createElement('span');
+    head.className = 'rain-head';
+    head.textContent = glyphs[glyphs.length - 1];
+    col.appendChild(head);
+  }
+
+  function buildSynthwave() {
+    var sun = document.createElement('div');
+    sun.className = 'synth-sun';
+    particlesEl.appendChild(sun);
+    var grid = document.createElement('div');
+    grid.className = 'synth-grid';
+    particlesEl.appendChild(grid);
+  }
+
+  function buildCosmos(cfg) {
+    spawnStars(cfg.stars);
+    for (var i = 0; i < 2; i++) {
+      var b = document.createElement('div');
+      b.className = 'aurora-blob';
+      var size = rand(300, 460);
+      b.style.width = size + 'px';
+      b.style.height = size + 'px';
+      b.style.left = rand(-5, 65) + 'vw';
+      b.style.top = rand(-15, 25) + 'vh';
+      b.style.background = i === 0 ? 'var(--accent)' : 'var(--accent-2)';
+      b.style.opacity = 0.22;
+      b.style.animationDuration = rand(20, 30) + 's';
+      b.style.animationDelay = '-' + rand(0, 20) + 's';
+      particlesEl.appendChild(b);
+    }
+    addTimer(function () {
+      var s = document.createElement('div');
+      s.className = 'shooting-star';
+      s.style.left = rand(-10, 45) + 'vw';
+      s.style.top = rand(2, 40) + 'vh';
+      var dur = rand(0.9, 1.6);
+      s.style.animationDuration = dur + 's';
+      particlesEl.appendChild(s);
+      setTimeout(function () { s.remove(); }, dur * 1000);
+    }, cfg.shootInterval);
+  }
+
+  function buildStorm(cfg) {
+    function spawn() {
+      var s = document.createElement('div');
+      s.className = 'rain-streak';
+      var duration = rand(cfg.duration[0], cfg.duration[1]);
+      s.style.left = rand(0, 120) + 'vw';
+      s.style.height = rand(40, 90) + 'px';
+      s.style.setProperty('--drift', rand(-16, -10) + 'vw');
+      s.style.animationDuration = duration + 's';
+      particlesEl.appendChild(s);
+      setTimeout(function () { s.remove(); }, duration * 1000);
+    }
+    for (var i = 0; i < cfg.seed; i++) setTimeout(spawn, i * 60);
+    addTimer(spawn, cfg.interval);
+
+    addTimer(function () {
+      if (Math.random() > cfg.flashChance) return;
+      var f = document.createElement('div');
+      f.className = 'lightning';
+      particlesEl.appendChild(f);
+      setTimeout(function () { f.remove(); }, 260);
+    }, 3000);
+  }
+
+  function buildAbyss(cfg) {
+    for (var r = 0; r < cfg.rays; r++) {
+      var ray = document.createElement('div');
+      ray.className = 'water-ray';
+      ray.style.left = rand(0, 95) + 'vw';
+      ray.style.animationDuration = rand(9, 16) + 's';
+      ray.style.animationDelay = '-' + rand(0, 10) + 's';
+      particlesEl.appendChild(ray);
+    }
+    // A bubble takes up to 18s to cross, so the seeded ones start mid-climb via
+    // a negative delay -- otherwise the water is empty for the first while.
+    function spawn(preroll) {
+      var b = document.createElement('div');
+      b.className = 'bubble';
+      var size = rand(cfg.size[0], cfg.size[1]);
+      var duration = rand(cfg.duration[0], cfg.duration[1]);
+      var offset = preroll === true ? rand(0, duration) : 0;
+      b.style.left = rand(0, 100) + 'vw';
+      b.style.width = size + 'px';
+      b.style.height = size + 'px';
+      b.style.setProperty('--wobble', rand(-28, 28) + 'px');
+      b.style.animationDuration = duration + 's';
+      if (offset) b.style.animationDelay = '-' + offset + 's';
+      particlesEl.appendChild(b);
+      setTimeout(function () { b.remove(); }, (duration - offset) * 1000);
+    }
+    for (var i = 0; i < cfg.seed; i++) spawn(true);
+    addTimer(spawn, cfg.interval);
+  }
+
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  // Builds an orthogonal trace: a few right-angle segments, like a PCB track.
+  function tracePath(w, h) {
+    var x = Math.random() < 0.5 ? 0 : w;
+    var y = rand(0, h);
+    var d = 'M' + x.toFixed(1) + ' ' + y.toFixed(1);
+    var dir = x === 0 ? 1 : -1;
+    var segments = randInt(3, 6);
+    var pts = [];
+    for (var i = 0; i < segments; i++) {
+      x += dir * rand(w * 0.08, w * 0.22);
+      d += ' L' + x.toFixed(1) + ' ' + y.toFixed(1);
+      y += (Math.random() < 0.5 ? -1 : 1) * rand(h * 0.04, h * 0.16);
+      d += ' L' + x.toFixed(1) + ' ' + y.toFixed(1);
+      pts.push([x, y]);
+    }
+    return { d: d, points: pts };
+  }
+
+  function buildCircuit(cfg) {
+    var w = window.innerWidth;
+    var h = window.innerHeight;
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'circuit-svg');
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    var joints = [];
+    var pulses = [];
+
+    for (var i = 0; i < cfg.traces; i++) {
+      var t = tracePath(w, h);
+      joints = joints.concat(t.points);
+
+      var base = document.createElementNS(SVG_NS, 'path');
+      base.setAttribute('class', 'circuit-trace');
+      base.setAttribute('d', t.d);
+      svg.appendChild(base);
+
+      var pulse = document.createElementNS(SVG_NS, 'path');
+      pulse.setAttribute('class', 'circuit-pulse');
+      pulse.setAttribute('d', t.d);
+      svg.appendChild(pulse);
+
+      // getTotalLength needs the node in the document, so measure after append.
+      pulses.push(pulse);
+    }
+
+    particlesEl.appendChild(svg);
+
+    pulses.forEach(function (p) {
+      var len = p.getTotalLength();
+      var dash = 55;
+      p.style.strokeDasharray = dash + ' ' + len;
+      p.style.setProperty('--dash', -(len + dash) + 'px');
+      p.style.animationDuration = rand(3, 8) + 's';
+      p.style.animationDelay = '-' + rand(0, 6) + 's';
+    });
+
+    for (var n = 0; n < cfg.nodes && n < joints.length; n++) {
+      var j = joints[Math.floor(Math.random() * joints.length)];
+      var c = document.createElementNS(SVG_NS, 'circle');
+      c.setAttribute('class', 'circuit-node');
+      c.setAttribute('cx', j[0]);
+      c.setAttribute('cy', j[1]);
+      c.setAttribute('r', rand(2, 3.5));
+      c.style.animationDuration = rand(2, 5) + 's';
+      c.style.animationDelay = '-' + rand(0, 4) + 's';
+      svg.appendChild(c);
+    }
+  }
+
+  function buildCrt() {
+    ['crt-glow', 'crt-scanlines', 'crt-roll', 'crt-vignette'].forEach(function (cls) {
+      var el = document.createElement('div');
+      el.className = cls;
+      particlesEl.appendChild(el);
+    });
+  }
+
+  var FIREWORK_COLORS = ['#ffd166', '#ef476f', '#06d6a0', '#8ecae6', '#c77dff', '#ff9f1c'];
+
+  function buildFireworks(cfg) {
+    function burst(x, y, color) {
+      var flash = document.createElement('div');
+      flash.className = 'burst-flash';
+      flash.style.left = x + 'px';
+      flash.style.top = y + 'px';
+      flash.style.setProperty('--spark-color', color);
+      particlesEl.appendChild(flash);
+      setTimeout(function () { flash.remove(); }, 430);
+
+      for (var i = 0; i < cfg.sparks; i++) {
+        var angle = (Math.PI * 2 * i) / cfg.sparks + rand(-0.12, 0.12);
+        var dist = rand(75, 175);
+        var s = document.createElement('div');
+        s.className = 'spark';
+        s.style.left = x + 'px';
+        s.style.top = y + 'px';
+        s.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+        s.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+        s.style.setProperty('--spark-color', color);
+        var dur = rand(1.1, 1.8);
+        s.style.animationDuration = dur + 's';
+        particlesEl.appendChild(s);
+        (function (el, ms) { setTimeout(function () { el.remove(); }, ms); })(s, dur * 1000);
+      }
+    }
+
+    function launch() {
+      var color = FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)];
+      var x = rand(window.innerWidth * 0.12, window.innerWidth * 0.88);
+      var peak = rand(window.innerHeight * 0.12, window.innerHeight * 0.45);
+      var climb = window.innerHeight - peak;
+      var r = document.createElement('div');
+      r.className = 'rocket';
+      r.style.left = x + 'px';
+      r.style.top = window.innerHeight + 'px';
+      r.style.setProperty('--climb', -climb + 'px');
+      r.style.setProperty('--spark-color', color);
+      var climbMs = rand(900, 1300);
+      r.style.animationDuration = climbMs + 'ms';
+      particlesEl.appendChild(r);
+      setTimeout(function () { r.remove(); burst(x, peak, color); }, climbMs);
+    }
+
+    launch();
+    addTimer(launch, cfg.interval);
+  }
+
+  function buildRipple(cfg) {
+    function drop() {
+      var x = rand(5, 95);
+      var y = rand(8, 92);
+      // Two rings offset in time read as one spreading disturbance.
+      for (var i = 0; i < 2; i++) {
+        var ring = document.createElement('div');
+        ring.className = 'ripple-ring';
+        var size = rand(160, 340);
+        var dur = rand(2.8, 4.4);
+        ring.style.left = x + 'vw';
+        ring.style.top = y + 'vh';
+        ring.style.setProperty('--r', size + 'px');
+        ring.style.animationDuration = dur + 's';
+        ring.style.animationDelay = (i * 0.35) + 's';
+        particlesEl.appendChild(ring);
+        (function (el, ms) { setTimeout(function () { el.remove(); }, ms); })(ring, (dur + i * 0.35) * 1000 + 100);
+      }
+    }
+    drop();
+    addTimer(drop, cfg.interval);
+  }
+
+  function buildLava(cfg) {
+    var defs = document.createElementNS(SVG_NS, 'svg');
+    defs.setAttribute('width', '0');
+    defs.setAttribute('height', '0');
+    defs.style.position = 'absolute';
+    defs.innerHTML =
+      '<defs><filter id="goo">' +
+      '<feGaussianBlur in="SourceGraphic" stdDeviation="16" result="blur"/>' +
+      '<feColorMatrix in="blur" mode="matrix" ' +
+      'values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="goo"/>' +
+      '<feBlend in="SourceGraphic" in2="goo"/>' +
+      '</filter></defs>';
+    particlesEl.appendChild(defs);
+
+    var field = document.createElement('div');
+    field.className = 'lava-field';
+    for (var i = 0; i < cfg.blobs; i++) {
+      var b = document.createElement('div');
+      b.className = 'lava-blob';
+      var size = rand(90, 190);
+      b.style.width = size + 'px';
+      b.style.height = size + 'px';
+      b.style.left = rand(2, 88) + 'vw';
+      b.style.bottom = rand(-20, 10) + 'vh';
+      b.style.background = i % 2 ? 'var(--accent-2)' : 'var(--accent)';
+      b.style.animationDuration = rand(14, 26) + 's';
+      b.style.animationDelay = '-' + rand(0, 14) + 's';
+      field.appendChild(b);
+    }
+    particlesEl.appendChild(field);
+  }
+
   function renderParticles(theme) {
     clearParticles();
     var cfg = THEME_ANIM[theme];
@@ -418,6 +955,16 @@
     else if (cfg.type === 'firefly') spawnFireflies(cfg);
     else if (cfg.type === 'clouds') buildClouds();
     else if (cfg.type === 'aurora') { buildAurora(); spawnStars(cfg.stars); }
+    else if (cfg.type === 'rain') buildRain(cfg);
+    else if (cfg.type === 'synth') buildSynthwave();
+    else if (cfg.type === 'cosmos') buildCosmos(cfg);
+    else if (cfg.type === 'storm') buildStorm(cfg);
+    else if (cfg.type === 'bubbles') buildAbyss(cfg);
+    else if (cfg.type === 'circuit') buildCircuit(cfg);
+    else if (cfg.type === 'crt') buildCrt();
+    else if (cfg.type === 'fireworks') buildFireworks(cfg);
+    else if (cfg.type === 'ripple') buildRipple(cfg);
+    else if (cfg.type === 'lava') buildLava(cfg);
   }
 
   function greetingFor(hour) {
@@ -427,19 +974,393 @@
     return 'Good night';
   }
 
+  // Set to false for a 12-hour clock with an AM/PM suffix.
+  var CLOCK_24H = true;
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  // ISO-8601 week number: week 1 is the one holding the year's first Thursday.
+  function isoWeek(d) {
+    var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+    var yearStart = Date.UTC(t.getUTCFullYear(), 0, 1);
+    return Math.ceil(((t - yearStart) / 86400000 + 1) / 7);
+  }
+
+  function dayOfYear(d) {
+    return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+  }
+
+  function utcOffset(d) {
+    var mins = -d.getTimezoneOffset();
+    var sign = mins < 0 ? '-' : '+';
+    mins = Math.abs(mins);
+    return sign + pad2(Math.floor(mins / 60)) + ':' + pad2(mins % 60);
+  }
+
+  var clockH = document.getElementById('clockH');
+  var clockM = document.getElementById('clockM');
+  var clockS = document.getElementById('clockS');
+  var clockMeter = document.getElementById('clockMeter');
+  var clockGhost = document.querySelector('.clock-ghost');
+  var lastDateKey = '';
+  var lastGreeting = '';
+
   function tick() {
     var now = new Date();
     var h = now.getHours();
     var m = now.getMinutes();
-    var clockStr = (h % 12 === 0 ? 12 : h % 12) + ':' + (m < 10 ? '0' : '') + m + (h < 12 ? ' AM' : ' PM');
-    document.getElementById('clock').textContent = clockStr;
-    document.getElementById('greeting').textContent = greetingFor(h);
+    var s = now.getSeconds();
+
+    var shown = CLOCK_24H ? h : (h % 12 === 0 ? 12 : h % 12);
+    clockH.textContent = CLOCK_24H ? pad2(shown) : String(shown);
+    clockM.textContent = pad2(m);
+    clockS.textContent = pad2(s) + (CLOCK_24H ? '' : (h < 12 ? ' AM' : ' PM'));
+    clockGhost.textContent = (CLOCK_24H || shown >= 10) ? '88:88' : '8:88';
+
+    // Skip the sweep animation across the :59 -> :00 wrap so it doesn't run backwards.
+    clockMeter.classList.toggle('no-anim', s === 0);
+    clockMeter.style.width = (s / 60 * 100) + '%';
+
+    if (s === 0) updateTodayPastState();
+
+    var greeting = greetingFor(h);
+    if (greeting !== lastGreeting) {
+      lastGreeting = greeting;
+      document.getElementById('greeting').textContent = greeting;
+    }
+
+    var dateKey = now.toDateString();
+    if (dateKey === lastDateKey) return;
+    lastDateKey = dateKey;
+
     var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     document.getElementById('date').textContent = days[now.getDay()] + ', ' + months[now.getMonth()] + ' ' + now.getDate();
+
+    document.getElementById('metaIso').textContent =
+      now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate());
+    document.getElementById('metaWeek').textContent = pad2(isoWeek(now));
+    document.getElementById('metaDoy').textContent = dayOfYear(now);
+    document.getElementById('metaTz').textContent = 'UTC' + utcOffset(now);
+    refreshCalendarToday();
   }
-  tick();
-  setInterval(tick, 1000 * 15);
+
+  var clockTimer = null;
+  function startClock() {
+    tick();
+    if (!clockTimer) clockTimer = setInterval(tick, 1000);
+  }
+  function stopClock() {
+    if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+  }
+
+  // ---- Google Calendar "Today" ----
+  // Declared before startClock() runs below: tick() calls refreshCalendarToday()
+  // on its very first (synchronous) invocation, so these need to exist first.
+  // No server exists to hold a client secret, so this uses Google Identity
+  // Services' token flow: a short-lived access token straight to the
+  // browser, refreshed silently while it can be, never persisted.
+  var STORAGE_GCAL_CLIENT_ID = 'homepage.gcalClientId';
+  var STORAGE_GCAL_CONNECTED = 'homepage.gcalConnected';
+  var STORAGE_GCAL_TOKEN = 'homepage.gcalToken';
+  var STORAGE_GCAL_TOKEN_EXPIRY = 'homepage.gcalTokenExpiry';
+  var GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events.readonly';
+
+  var todaySection = document.getElementById('todaySection');
+  var todayList = document.getElementById('todayList');
+  var gcalClientIdInput = document.getElementById('gcalClientId');
+  var gcalConnectBtn = document.getElementById('gcalConnectBtn');
+  var gcalStatus = document.getElementById('gcalStatus');
+
+  var gcalClientId = localStorage.getItem(STORAGE_GCAL_CLIENT_ID) || '';
+  var gcalWasConnected = localStorage.getItem(STORAGE_GCAL_CONNECTED) === '1';
+  var gcalTokenClient = null;
+  var gcalAccessToken = null;
+  var gcalTokenExpiry = 0;
+  var gcalGisLoading = null;
+
+  // Google's token popup only opens when triggered by a real click — an
+  // automatic request on page load gets silently blocked by the browser's
+  // popup blocker. Caching the token across reloads means most refreshes
+  // (within its ~1hr life) need no Google call, and thus no popup, at all.
+  (function loadCachedGcalToken() {
+    var expiry = Number(sessionStorage.getItem(STORAGE_GCAL_TOKEN_EXPIRY) || 0);
+    var token = sessionStorage.getItem(STORAGE_GCAL_TOKEN);
+    if (token && expiry > Date.now()) {
+      gcalAccessToken = token;
+      gcalTokenExpiry = expiry;
+    }
+  })();
+
+  function cacheGcalToken(token, expiry) {
+    sessionStorage.setItem(STORAGE_GCAL_TOKEN, token);
+    sessionStorage.setItem(STORAGE_GCAL_TOKEN_EXPIRY, String(expiry));
+  }
+
+  gcalClientIdInput.value = gcalClientId;
+
+  function loadGis() {
+    if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
+    if (!gcalGisLoading) {
+      gcalGisLoading = new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.async = true;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    return gcalGisLoading;
+  }
+
+  function ensureTokenClient() {
+    if (!gcalTokenClient) {
+      gcalTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: gcalClientId,
+        scope: GCAL_SCOPE,
+        callback: function () {}
+      });
+    }
+    return gcalTokenClient;
+  }
+
+  function requestGcalToken(interactive) {
+    return loadGis().then(function () {
+      return new Promise(function (resolve, reject) {
+        var client = ensureTokenClient();
+        client.callback = function (resp) {
+          if (resp && resp.access_token) {
+            gcalAccessToken = resp.access_token;
+            gcalTokenExpiry = Date.now() + (resp.expires_in || 3600) * 1000;
+            cacheGcalToken(gcalAccessToken, gcalTokenExpiry);
+            resolve(gcalAccessToken);
+          } else {
+            reject(new Error('no access token'));
+          }
+        };
+        client.error_callback = function (err) { reject(err); };
+        client.requestAccessToken(interactive ? { prompt: 'consent' } : { prompt: '' });
+      });
+    });
+  }
+
+  function updateGcalConnectBtn() {
+    gcalConnectBtn.textContent = gcalWasConnected ? 'Disconnect' : 'Connect';
+  }
+
+  function formatEventTime(dateObj) {
+    var h = dateObj.getHours(), m = dateObj.getMinutes();
+    if (CLOCK_24H) return pad2(h) + ':' + pad2(m);
+    var shown = h % 12 === 0 ? 12 : h % 12;
+    return shown + ':' + pad2(m) + (h < 12 ? 'am' : 'pm');
+  }
+
+  function fetchTodayEvents(token) {
+    var now = new Date();
+    var startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    var endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    var params = new URLSearchParams({
+      timeMin: startOfDay.toISOString(),
+      timeMax: endOfDay.toISOString(),
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: '20'
+    });
+    return fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?' + params.toString(), {
+      headers: { Authorization: 'Bearer ' + token }
+    }).then(function (res) {
+      if (!res.ok) throw new Error('gcal fetch failed: ' + res.status);
+      return res.json();
+    }).then(function (data) {
+      return (data.items || [])
+        .filter(function (ev) { return ev.status !== 'cancelled'; })
+        .map(function (ev) {
+          var allDay = !ev.start.dateTime;
+          var startDate = allDay ? null : new Date(ev.start.dateTime);
+          return {
+            title: ev.summary || '(untitled)',
+            time: allDay ? 'All day' : formatEventTime(startDate),
+            startMs: allDay ? null : startDate.getTime()
+          };
+        });
+    });
+  }
+
+  function renderTodayState(kind, events) {
+    todaySection.classList.remove('hidden');
+    if (kind === 'connect') {
+      var connectMsg = document.createElement('div');
+      connectMsg.className = 'today-connect';
+      var connectBtn = document.createElement('button');
+      connectBtn.className = 'today-connect-btn';
+      connectBtn.textContent = 'Connect Google Calendar';
+      connectBtn.addEventListener('click', function () { connectGcal(true); });
+      connectMsg.appendChild(connectBtn);
+      todayList.innerHTML = '';
+      todayList.appendChild(connectMsg);
+    } else if (kind === 'loading') {
+      todayList.innerHTML = '<div class="today-empty">Loading today’s events…</div>';
+    } else if (kind === 'empty') {
+      todayList.innerHTML = '<div class="today-empty">No events today.</div>';
+    } else if (kind === 'error') {
+      var errEl = document.createElement('div');
+      errEl.className = 'today-error';
+      errEl.textContent = 'Couldn’t load your calendar. ';
+      var retryBtn = document.createElement('button');
+      retryBtn.className = 'today-connect-btn';
+      retryBtn.textContent = 'Retry';
+      retryBtn.addEventListener('click', function () { refreshCalendarToday(); });
+      errEl.appendChild(retryBtn);
+      todayList.innerHTML = '';
+      todayList.appendChild(errEl);
+    } else if (kind === 'events') {
+      todayList.innerHTML = '';
+      events.forEach(function (ev) {
+        var row = document.createElement('div');
+        var isPast = ev.startMs != null && ev.startMs <= Date.now();
+        row.className = 'today-item' + (isPast ? ' past' : '');
+        if (ev.startMs != null) row.dataset.start = ev.startMs;
+        var time = document.createElement('div');
+        time.className = 'today-time';
+        time.textContent = ev.time;
+        var title = document.createElement('div');
+        title.className = 'today-title';
+        title.textContent = ev.title;
+        row.appendChild(time);
+        row.appendChild(title);
+        todayList.appendChild(row);
+      });
+    }
+  }
+
+  // Dims events once their start time passes, without waiting for the next
+  // 15-minute calendar refetch — just re-checks timestamps already in hand.
+  function updateTodayPastState() {
+    Array.prototype.forEach.call(todayList.querySelectorAll('.today-item[data-start]'), function (el) {
+      el.classList.toggle('past', Number(el.dataset.start) <= Date.now());
+    });
+  }
+
+  // Google's silent token request opens a popup under the hood, so a call
+  // that isn't itself inside a user gesture (page load, the 15-minute
+  // timer) gets blocked by the browser and always fails — confirmed via
+  // "Failed to open popup window ... Maybe blocked by the browser?" in the
+  // console. Rather than making the user hunt down the visible Retry
+  // button, arm a one-time listener that retries on the user's very next
+  // click or keypress anywhere on the page, since that click carries the
+  // activation the popup needs.
+  var gcalGestureArmed = false;
+  function armGcalGestureRetry() {
+    if (gcalGestureArmed) return;
+    gcalGestureArmed = true;
+    var handler = function () {
+      document.removeEventListener('click', handler, true);
+      document.removeEventListener('keydown', handler, true);
+      gcalGestureArmed = false;
+      refreshCalendarToday();
+    };
+    document.addEventListener('click', handler, true);
+    document.addEventListener('keydown', handler, true);
+  }
+
+  // Guards against the retry button's own click and the armed gesture
+  // listener both firing for the same click and racing two requests.
+  var gcalRefreshInFlight = false;
+
+  function refreshCalendarToday() {
+    if (!gcalClientId) { todaySection.classList.add('hidden'); return; }
+    if (gcalRefreshInFlight) return;
+    gcalRefreshInFlight = true;
+    renderTodayState('loading');
+    var tokenPromise = (gcalAccessToken && Date.now() < gcalTokenExpiry - 60000)
+      ? Promise.resolve(gcalAccessToken)
+      : requestGcalToken(false);
+
+    tokenPromise.then(fetchTodayEvents).then(function (events) {
+      gcalRefreshInFlight = false;
+      gcalWasConnected = true;
+      localStorage.setItem(STORAGE_GCAL_CONNECTED, '1');
+      gcalStatus.textContent = 'Connected.';
+      updateGcalConnectBtn();
+      renderTodayState(events.length ? 'events' : 'empty', events);
+    }).catch(function () {
+      gcalRefreshInFlight = false;
+      renderTodayState(gcalWasConnected ? 'error' : 'connect');
+      if (gcalWasConnected) armGcalGestureRetry();
+    });
+  }
+
+  function connectGcal(interactive) {
+    if (!gcalClientId) {
+      alert('Paste your Google OAuth Client ID first.');
+      return;
+    }
+    renderTodayState('loading');
+    requestGcalToken(interactive).then(fetchTodayEvents).then(function (events) {
+      gcalWasConnected = true;
+      localStorage.setItem(STORAGE_GCAL_CONNECTED, '1');
+      gcalStatus.textContent = 'Connected.';
+      updateGcalConnectBtn();
+      renderTodayState(events.length ? 'events' : 'empty', events);
+    }).catch(function () {
+      renderTodayState(gcalWasConnected ? 'error' : 'connect');
+    });
+  }
+
+  function disconnectGcal() {
+    if (gcalAccessToken && window.google && google.accounts && google.accounts.oauth2) {
+      google.accounts.oauth2.revoke(gcalAccessToken, function () {});
+    }
+    gcalAccessToken = null;
+    gcalTokenExpiry = 0;
+    gcalWasConnected = false;
+    localStorage.removeItem(STORAGE_GCAL_CONNECTED);
+    sessionStorage.removeItem(STORAGE_GCAL_TOKEN);
+    sessionStorage.removeItem(STORAGE_GCAL_TOKEN_EXPIRY);
+    gcalStatus.textContent = 'Not connected.';
+    updateGcalConnectBtn();
+    renderTodayState('connect');
+  }
+
+  gcalClientIdInput.addEventListener('change', function () {
+    gcalClientId = gcalClientIdInput.value.trim();
+    localStorage.setItem(STORAGE_GCAL_CLIENT_ID, gcalClientId);
+    gcalTokenClient = null;
+    gcalAccessToken = null;
+    gcalTokenExpiry = 0;
+    sessionStorage.removeItem(STORAGE_GCAL_TOKEN);
+    sessionStorage.removeItem(STORAGE_GCAL_TOKEN_EXPIRY);
+    if (gcalClientId) refreshCalendarToday();
+    else todaySection.classList.add('hidden');
+  });
+
+  gcalConnectBtn.addEventListener('click', function () {
+    if (gcalWasConnected) disconnectGcal();
+    else connectGcal(true);
+  });
+
+  // Only polls while the tab is actually visible — a background tab has no
+  // reason to keep hitting the Calendar API every 15 minutes. Paused/resumed
+  // alongside the clock in the visibilitychange handler below.
+  var gcalPollTimer = null;
+  function startGcalPolling() {
+    if (!gcalPollTimer && gcalClientId) gcalPollTimer = setInterval(refreshCalendarToday, 15 * 60 * 1000);
+  }
+  function stopGcalPolling() {
+    if (gcalPollTimer) { clearInterval(gcalPollTimer); gcalPollTimer = null; }
+  }
+
+  updateGcalConnectBtn();
+  if (gcalClientId) {
+    gcalStatus.textContent = gcalWasConnected ? 'Reconnecting…' : 'Not connected.';
+    startGcalPolling();
+  }
+
+  // startClock() fires tick() immediately, which calls refreshCalendarToday()
+  // on its first run — so the calendar module above must be set up before this.
+  startClock();
 
   var savedEngine = localStorage.getItem(STORAGE_ENGINE);
   if (savedEngine) engineSelect.value = savedEngine;
@@ -509,9 +1430,206 @@
     return /^https?:\/\//i.test(v) || /^[\w-]+(\.[\w-]+)+(\/.*)?$/.test(v);
   }
 
+  // ---- Inline calculator & unit conversion ----
+  // A small hand-rolled recursive-descent parser rather than eval(), so a
+  // typo can't run arbitrary script and behavior stays fully predictable.
+  function evalMath(expr) {
+    var pos = 0;
+    function skipWs() { while (expr.charAt(pos) === ' ') pos++; }
+    function parseNumber() {
+      skipWs();
+      var start = pos;
+      var hasDigits = false;
+      while (/[0-9]/.test(expr.charAt(pos))) { pos++; hasDigits = true; }
+      if (expr.charAt(pos) === '.') {
+        pos++;
+        while (/[0-9]/.test(expr.charAt(pos))) { pos++; hasDigits = true; }
+      }
+      if (!hasDigits) throw new Error('bad number');
+      return parseFloat(expr.slice(start, pos));
+    }
+    function parseAtom() {
+      skipWs();
+      var ch = expr.charAt(pos);
+      if (ch === '(') {
+        pos++;
+        var v = parseExpr();
+        skipWs();
+        if (expr.charAt(pos) !== ')') throw new Error('expected )');
+        pos++;
+        return v;
+      }
+      if (ch === '-' || ch === '+') {
+        pos++;
+        var v2 = parseAtom();
+        return ch === '-' ? -v2 : v2;
+      }
+      return parseNumber();
+    }
+    function parsePow() {
+      var base = parseAtom();
+      skipWs();
+      if (expr.charAt(pos) === '^') {
+        pos++;
+        return Math.pow(base, parsePow());
+      }
+      return base;
+    }
+    function parseTerm() {
+      var v = parsePow();
+      for (;;) {
+        skipWs();
+        var op = expr.charAt(pos);
+        if (op === '*' || op === '/' || op === '%') {
+          pos++;
+          var rhs = parsePow();
+          if (op === '*') v *= rhs;
+          else if (op === '/') v /= rhs;
+          else v = v % rhs;
+        } else break;
+      }
+      return v;
+    }
+    function parseExpr() {
+      var v = parseTerm();
+      for (;;) {
+        skipWs();
+        var op = expr.charAt(pos);
+        if (op === '+' || op === '-') {
+          pos++;
+          var rhs = parseTerm();
+          v = op === '+' ? v + rhs : v - rhs;
+        } else break;
+      }
+      return v;
+    }
+    var result = parseExpr();
+    skipWs();
+    if (pos !== expr.length) throw new Error('trailing input');
+    if (!isFinite(result)) throw new Error('not finite');
+    return result;
+  }
+
+  function looksLikeMath(q) {
+    var v = q.trim();
+    if (!v) return false;
+    if (!/^[-+*/^%().\d\s]+$/.test(v)) return false;
+    if (!/\d/.test(v)) return false;
+    // Bare digit-hyphen-digit is far more likely a phone number or a date
+    // (555-1234, 2026-08-08) than subtraction, so don't treat it as math.
+    if (/^\d+(-\d+)+$/.test(v)) return false;
+    if (!/[-+*/^%]/.test(v.replace(/^-/, ''))) return false;
+    return true;
+  }
+
+  function formatNum(n, decimals) {
+    var factor = Math.pow(10, decimals == null ? 6 : decimals);
+    if (Math.abs(n) < 1e-9) n = 0;
+    var rounded = Math.round(n * factor) / factor;
+    return rounded.toString();
+  }
+
+  var UNIT_ALIASES = {
+    mm: 'mm', millimeter: 'mm', millimeters: 'mm', millimetre: 'mm', millimetres: 'mm',
+    cm: 'cm', centimeter: 'cm', centimeters: 'cm', centimetre: 'cm', centimetres: 'cm',
+    m: 'm', meter: 'm', meters: 'm', metre: 'm', metres: 'm',
+    km: 'km', kilometer: 'km', kilometers: 'km', kilometre: 'km', kilometres: 'km',
+    in: 'in', inch: 'in', inches: 'in',
+    ft: 'ft', foot: 'ft', feet: 'ft',
+    yd: 'yd', yard: 'yd', yards: 'yd',
+    mi: 'mi', mile: 'mi', miles: 'mi',
+    mg: 'mg', milligram: 'mg', milligrams: 'mg',
+    g: 'g', gram: 'g', grams: 'g',
+    kg: 'kg', kilogram: 'kg', kilograms: 'kg',
+    oz: 'oz', ounce: 'oz', ounces: 'oz',
+    lb: 'lb', lbs: 'lb', pound: 'lb', pounds: 'lb',
+    st: 'st', stone: 'st', stones: 'st',
+    ml: 'ml', milliliter: 'ml', milliliters: 'ml', millilitre: 'ml', millilitres: 'ml',
+    l: 'l', liter: 'l', liters: 'l', litre: 'l', litres: 'l',
+    cup: 'cup', cups: 'cup',
+    tbsp: 'tbsp', tablespoon: 'tbsp', tablespoons: 'tbsp',
+    tsp: 'tsp', teaspoon: 'tsp', teaspoons: 'tsp',
+    floz: 'floz',
+    gal: 'gal', gallon: 'gal', gallons: 'gal',
+    qt: 'qt', quart: 'qt', quarts: 'qt',
+    pt: 'pt', pint: 'pt', pints: 'pt',
+    c: 'c', celsius: 'c',
+    f: 'f', fahrenheit: 'f',
+    k: 'k', kelvin: 'k'
+  };
+  var UNIT_TO_BASE = {
+    mm: 0.001, cm: 0.01, m: 1, km: 1000, in: 0.0254, ft: 0.3048, yd: 0.9144, mi: 1609.344,
+    mg: 0.001, g: 1, kg: 1000, oz: 28.3495, lb: 453.592, st: 6350.29,
+    ml: 1, l: 1000, cup: 236.588, tbsp: 14.7868, tsp: 4.92892, floz: 29.5735, gal: 3785.41, qt: 946.353, pt: 473.176
+  };
+  var UNIT_CATEGORY = {
+    mm: 'length', cm: 'length', m: 'length', km: 'length', in: 'length', ft: 'length', yd: 'length', mi: 'length',
+    mg: 'weight', g: 'weight', kg: 'weight', oz: 'weight', lb: 'weight', st: 'weight',
+    ml: 'volume', l: 'volume', cup: 'volume', tbsp: 'volume', tsp: 'volume', floz: 'volume', gal: 'volume', qt: 'volume', pt: 'volume',
+    c: 'temp', f: 'temp', k: 'temp'
+  };
+
+  function convertTemp(v, from, to) {
+    var celsius = from === 'c' ? v : from === 'f' ? (v - 32) * 5 / 9 : v - 273.15;
+    if (to === 'c') return celsius;
+    if (to === 'f') return celsius * 9 / 5 + 32;
+    return celsius + 273.15;
+  }
+
+  function tryConvert(q) {
+    var m = q.trim().match(/^(-?[\d.]+)\s*°?([a-zA-Z]+)\s+(?:to|in|as)\s+°?([a-zA-Z]+)\s*$/i);
+    if (!m) return null;
+    var value = parseFloat(m[1]);
+    var from = UNIT_ALIASES[m[2].toLowerCase()];
+    var to = UNIT_ALIASES[m[3].toLowerCase()];
+    if (!from || !to) return null;
+    var cat = UNIT_CATEGORY[from];
+    if (cat !== UNIT_CATEGORY[to]) return null;
+    var result = cat === 'temp' ? convertTemp(value, from, to) : value * UNIT_TO_BASE[from] / UNIT_TO_BASE[to];
+    if (!isFinite(result)) return null;
+    return { value: result, to: to };
+  }
+
+  function tryPercentOf(q) {
+    var m = q.trim().match(/^(-?[\d.]+)\s*%\s+of\s+(-?[\d.]+)$/i);
+    if (!m) return null;
+    var result = (parseFloat(m[1]) / 100) * parseFloat(m[2]);
+    return isFinite(result) ? result : null;
+  }
+
+  function computeCalc(q) {
+    var pct = tryPercentOf(q);
+    if (pct !== null) return { display: formatNum(pct) };
+    if (looksLikeMath(q)) {
+      try { return { display: formatNum(evalMath(q.trim())) }; } catch (e) { return null; }
+    }
+    var conv = tryConvert(q);
+    if (conv) return { display: formatNum(conv.value, 2) + ' ' + conv.to };
+    return null;
+  }
+
+  function copyText(str) {
+    function legacyCopy() {
+      var ta = document.createElement('textarea');
+      ta.value = str;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(str).catch(legacyCopy);
+    } else {
+      legacyCopy();
+    }
+  }
+
   function renderResults() {
     var q = searchInput.value;
     resultsEl.innerHTML = '';
+    searchForm.classList.toggle('has-value', !!q);
 
     if (!q.trim()) {
       resultsEl.classList.add('hidden');
@@ -521,6 +1639,11 @@
 
     var rows = [];
     var parsed = parseCommand(q);
+
+    if (!parsed) {
+      var calc = computeCalc(q);
+      if (calc) rows.push({ kind: 'calc', label: calc.display, sub: q.trim(), copyValue: calc.display });
+    }
 
     if (parsed) {
       rows.push({
@@ -573,7 +1696,7 @@
       } else {
         var glyph = document.createElement('div');
         glyph.className = 'result-fallback';
-        glyph.textContent = row.kind === 'open' ? '\u2197' : '\u2315';
+        glyph.textContent = row.kind === 'open' ? '\u2197' : row.kind === 'calc' ? '=' : '\u2315';
         el.appendChild(glyph);
       }
 
@@ -601,6 +1724,7 @@
         : row.kind === 'open' ? 'Open'
         : row.kind === 'hint' ? 'Command'
         : row.kind === 'command' ? 'Go'
+        : row.kind === 'calc' ? 'Copy'
         : 'Search';
       el.appendChild(kind);
 
@@ -617,6 +1741,9 @@
           selectedIdx = 0;
           searchInput.focus();
           renderResults();
+        } else if (row.kind === 'calc') {
+          copyText(row.copyValue);
+          showToast('Copied ' + row.copyValue);
         } else {
           go(row.url);
         }
@@ -629,7 +1756,7 @@
   }
 
   function go(url) {
-    window.location.href = url;
+    window.open(url, '_blank', 'noopener');
   }
 
   function activateSelection() {
@@ -658,6 +1785,15 @@
     renderResults();
   });
 
+  function clearSearch() {
+    searchInput.value = '';
+    selectedIdx = 0;
+    renderResults();
+    searchInput.focus();
+  }
+
+  searchClear.addEventListener('click', clearSearch);
+
   searchInput.addEventListener('keydown', function (e) {
     if (e.key === 'ArrowDown') { e.preventDefault(); moveSelection(1); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); moveSelection(-1); }
@@ -683,16 +1819,32 @@
     document.body.classList.remove('show-hotkeys');
   });
 
-  // ---- Pause background animation when the tab isn't visible ----
+  // Column-based effects size themselves to the viewport at build time, so a
+  // resize needs a rebuild or the new width stays empty.
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      if (document.hidden) return;
+      renderParticles(document.documentElement.getAttribute('data-theme'));
+    }, 250);
+  });
+
+  // ---- Pause background animation and the clock when the tab isn't visible ----
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
-      if (particleTimer) { clearInterval(particleTimer); particleTimer = null; }
+      stopClock();
+      stopTimers();
+      stopGcalPolling();
       particlesEl.style.animationPlayState = 'paused';
       particlesEl.querySelectorAll('*').forEach(function (el) {
         el.style.animationPlayState = 'paused';
       });
     } else {
+      startClock();
       renderParticles(document.documentElement.getAttribute('data-theme'));
+      if (gcalClientId) refreshCalendarToday();
+      startGcalPolling();
     }
   });
 
@@ -747,6 +1899,24 @@
     scratchTimer = setTimeout(saveScratch, 400);
   });
 
+  // Checklist syntax: a line starting with "- [ ]" or "- [x]" toggles when
+  // clicked near the brackets, since a plain textarea can't host a real
+  // checkbox widget. Clicks elsewhere on the line just place the cursor.
+  scratchText.addEventListener('click', function () {
+    var pos = scratchText.selectionStart;
+    var value = scratchText.value;
+    var lineStart = value.lastIndexOf('\n', pos - 1) + 1;
+    var lineEnd = value.indexOf('\n', lineStart);
+    if (lineEnd === -1) lineEnd = value.length;
+    var line = value.slice(lineStart, lineEnd);
+    var m = line.match(/^- \[([ xX])\]/);
+    if (!m || pos - lineStart > 5) return;
+    var toggled = (m[1] === ' ' ? '- [x]' : '- [ ]') + line.slice(5);
+    scratchText.value = value.slice(0, lineStart) + toggled + value.slice(lineEnd);
+    scratchText.selectionStart = scratchText.selectionEnd = pos;
+    scratchText.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
   scratchClear.addEventListener('click', function () {
     if (!scratchText.value || confirm('Clear the scratchpad?')) {
       scratchText.value = '';
@@ -776,6 +1946,28 @@
   scratchBtn.addEventListener('click', toggleScratch);
   scratchClose.addEventListener('click', closeScratch);
 
+  // ---- Zen mode ----
+  var STORAGE_ZEN = 'homepage.zen';
+  var zenBtn = document.getElementById('zenBtn');
+  var zenActive = localStorage.getItem(STORAGE_ZEN) === '1';
+
+  function applyZen() {
+    document.body.classList.toggle('zen', zenActive);
+    zenBtn.classList.toggle('active', zenActive);
+    var label = zenActive ? 'Exit zen mode (Z)' : 'Zen mode (Z)';
+    zenBtn.title = label;
+    zenBtn.setAttribute('aria-label', label);
+  }
+
+  function toggleZen() {
+    zenActive = !zenActive;
+    localStorage.setItem(STORAGE_ZEN, zenActive ? '1' : '0');
+    applyZen();
+  }
+
+  zenBtn.addEventListener('click', toggleZen);
+  applyZen();
+
   // ---- Export / import ----
   var exportBtn = document.getElementById('exportBtn');
   var importBtn = document.getElementById('importBtn');
@@ -793,9 +1985,12 @@
       version: 1,
       exportedAt: new Date().toISOString(),
       shortcuts: shortcuts,
+      groups: groups,
       theme: localStorage.getItem(STORAGE_THEME) || 'ember',
+      colors: colorOverrides,
       engine: engineSelect.value,
-      scratch: scratchText.value
+      scratch: scratchText.value,
+      gcalClientId: gcalClientId
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -818,11 +2013,19 @@
         var data = JSON.parse(reader.result);
         if (!data || typeof data !== 'object') throw new Error('bad file');
 
+        if (Array.isArray(data.groups)) {
+          groups = data.groups.filter(function (g) { return typeof g === 'string' && g.trim(); });
+          saveGroups(groups);
+          activeGroup = 'all';
+          localStorage.setItem(STORAGE_ACTIVE_GROUP, activeGroup);
+          renderShortcuts();
+        }
+
         if (Array.isArray(data.shortcuts)) {
           var clean = data.shortcuts.filter(function (s) {
             return s && typeof s.name === 'string' && typeof s.url === 'string';
           }).map(function (s) {
-            return { name: s.name, url: s.url };
+            return { name: s.name, url: s.url, group: typeof s.group === 'string' ? s.group : '' };
           });
           if (!confirm('Replace your ' + shortcuts.length + ' shortcuts with ' + clean.length + ' from this file?')) {
             importFile.value = '';
@@ -833,7 +2036,18 @@
           renderShortcuts();
         }
 
-        if (typeof data.theme === 'string' && THEME_ANIM[data.theme]) applyTheme(data.theme);
+        if (data.colors && typeof data.colors === 'object' && !Array.isArray(data.colors)) {
+          colorOverrides = data.colors;
+          saveColorOverrides();
+        }
+
+        if (typeof data.theme === 'string' && THEME_ANIM[data.theme]) {
+          applyTheme(data.theme);
+        } else {
+          applyColorOverrides(document.documentElement.getAttribute('data-theme'));
+          updateColorInputs();
+          updateFaviconAndMeta();
+        }
 
         if (typeof data.engine === 'string') {
           var found = Array.prototype.some.call(engineSelect.options, function (o) { return o.value === data.engine; });
@@ -846,6 +2060,17 @@
         if (typeof data.scratch === 'string') {
           scratchText.value = data.scratch;
           localStorage.setItem(STORAGE_SCRATCH, data.scratch);
+        }
+
+        if (typeof data.gcalClientId === 'string') {
+          gcalClientId = data.gcalClientId.trim();
+          gcalClientIdInput.value = gcalClientId;
+          localStorage.setItem(STORAGE_GCAL_CLIENT_ID, gcalClientId);
+          gcalTokenClient = null;
+          gcalAccessToken = null;
+          gcalTokenExpiry = 0;
+          if (gcalClientId) refreshCalendarToday();
+          else todaySection.classList.add('hidden');
         }
 
         flashBackupStatus('Settings imported.');
@@ -874,11 +2099,18 @@
       return;
     }
 
+    if ((e.key === 'z' || e.key === 'Z') && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      toggleZen();
+      return;
+    }
+
     if (e.altKey && !e.metaKey && !e.ctrlKey && /^[1-9]$/.test(e.key)) {
       var idx = parseInt(e.key, 10) - 1;
-      if (shortcuts[idx]) {
+      var vis = visibleShortcuts();
+      if (vis[idx]) {
         e.preventDefault();
-        window.location.href = shortcuts[idx].url;
+        window.open(vis[idx].s.url, '_blank', 'noopener');
       }
       return;
     }
@@ -893,8 +2125,14 @@
       } else if (!settingsPanel.classList.contains('hidden')) {
         settingsPanel.classList.add('hidden');
       } else if (document.activeElement === searchInput) {
-        resultsEl.classList.add('hidden');
-        searchInput.blur();
+        if (searchInput.value) {
+          clearSearch();
+        } else {
+          resultsEl.classList.add('hidden');
+          searchInput.blur();
+        }
+      } else if (zenActive) {
+        toggleZen();
       }
     }
   });
