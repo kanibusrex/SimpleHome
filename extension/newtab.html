@@ -790,7 +790,6 @@
   body.zen .greeting,
   body.zen .date,
   body.zen .clock-meta,
-  body.zen .today,
   body.zen .shortcuts-wrap {
     display: none;
   }
@@ -1261,113 +1260,6 @@
     color: var(--accent);
     opacity: 0.75;
   }
-
-  .today {
-    position: relative;
-    width: 100%;
-    max-width: 480px;
-    margin: 26px auto 0;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 18px 24px;
-  }
-  .today.hidden { display: none; }
-
-  .today::after {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    border-radius: calc(var(--radius) + 1px);
-    padding: 2px;
-    background: conic-gradient(
-      from var(--glow-angle),
-      #0a0a0a 0deg,
-      #0a0a0a 40deg,
-      var(--accent) 85deg,
-      var(--accent-2) 110deg,
-      var(--accent) 135deg,
-      #0a0a0a 180deg,
-      #0a0a0a 360deg
-    );
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    filter: drop-shadow(0 0 4px var(--accent)) drop-shadow(0 0 9px var(--accent));
-    pointer-events: none;
-    animation: travel-glow 2.6s linear infinite;
-  }
-  .today-head {
-    font-size: 12px;
-    letter-spacing: 2.5px;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    text-align: center;
-    margin-bottom: 14px;
-  }
-  .today-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .today-item {
-    display: flex;
-    align-items: baseline;
-    gap: 16px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 16px;
-    opacity: 1;
-    transition: opacity 0.3s ease;
-  }
-  .today-item.past { opacity: 0.4; }
-  .today-time {
-    flex-shrink: 0;
-    min-width: 78px;
-    text-align: right;
-    color: var(--accent);
-    font-variant-numeric: tabular-nums;
-  }
-  .today-title {
-    flex: 1;
-    min-width: 0;
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .today-empty,
-  .today-connect,
-  .today-error {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 14.5px;
-    color: var(--text-dim);
-    text-align: center;
-    padding: 4px 0;
-  }
-  .today-connect-btn {
-    background: none;
-    border: none;
-    color: var(--accent);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 14.5px;
-    cursor: pointer;
-    text-decoration: underline;
-    padding: 0;
-  }
-
-  .panel-input {
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-    color: var(--text);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 13px;
-    outline: none;
-  }
-  .panel-input:focus { border-color: var(--accent); }
 
   .search {
     position: relative;
@@ -1921,10 +1813,6 @@
       <span><b>DOY</b><em id="metaDoy"></em></span>
       <span><b>TZ</b><em id="metaTz"></em></span>
     </div>
-    <div class="today hidden" id="todaySection">
-      <div class="today-head">Today</div>
-      <div class="today-list" id="todayList"></div>
-    </div>
   </header>
 
   <div class="search-wrap">
@@ -1998,15 +1886,6 @@
       <input type="file" id="importFile" accept="application/json,.json" hidden>
     </div>
     <p class="hint" id="backupStatus">Saves your shortcuts, theme, search engine, and notes to a JSON file you can move between browsers.</p>
-  </div>
-  <div class="panel-section">
-    <h3>Google Calendar</h3>
-    <p class="hint" id="gcalStatus">Not connected.</p>
-    <div class="stack">
-      <input class="panel-input" id="gcalClientId" placeholder="Google OAuth Client ID">
-      <button class="panel-btn" id="gcalConnectBtn">Connect</button>
-    </div>
-    <p class="hint">Shows today's events above the search bar. This page has no server, so it needs your own free OAuth client: in Google Cloud Console → APIs &amp; Services → Credentials, create an OAuth Client ID (type Web application), add this page's URL under Authorized JavaScript origins, then paste the Client ID above. Only your browser talks to Google — nothing passes through a server. Doesn't work from a file:// page; needs to be hosted over https.</p>
   </div>
   <div class="panel-section">
     <h3>Keyboard</h3>

@@ -59,9 +59,7 @@ Shortcut tiles, the search bar, and the scratchpad share a hover/focus treatment
 
 **Time-of-day greeting** above the clock, switching between morning, afternoon, evening, and night.
 
-**Today (Google Calendar).** An optional agenda strip below the date, listing today's events in order. Off by default and invisible until you connect it in Settings — see [Google Calendar setup](#google-calendar-setup) below, since it needs a one-time OAuth client of your own. Refreshes every 15 minutes and on a new day; a stale or expired connection shows a quiet "Couldn't load your calendar" with a retry rather than breaking anything else on the page. Events dim once their start time passes, rechecked every minute, so the card reads as "what's left today" rather than the whole day at once.
-
-**Export / import.** Everything lives in `localStorage`, which is per-browser and one "clear browsing data" away from gone. Settings → Backup writes a JSON file with your shortcuts, groups, theme, custom accent colors, engine, notes, and Google Calendar client ID, and reads it back on another machine. (It carries the client ID, not a live connection — you'll still click Connect once per browser.)
+**Export / import.** Everything lives in `localStorage`, which is per-browser and one "clear browsing data" away from gone. Settings → Backup writes a JSON file with your shortcuts, groups, theme, custom accent colors, engine, and notes, and reads it back on another machine.
 
 ## Keyboard
 
@@ -92,20 +90,6 @@ Then set it in your browser:
 ### New tab page
 
 Browsers reserve the new tab slot for extensions, so a plain web page can't claim it. `extension/` in this repo does exactly that — see [The extension](#the-extension) below. A general-purpose redirector like *Custom New Tab URL* (Chrome) or *New Tab Override* (Firefox) pointed at your Pages URL works too, if you'd rather not run this one.
-
-## Google Calendar setup
-
-The Today section needs to read your calendar, and this page has no server to hold a secret on your behalf — so each person who wants it has to create their own free Google OAuth client, scoped to their own hosted URL. This only works when the page is hosted over https (GitHub Pages, or any real domain); Google's OAuth flow refuses to run against a `file://` page at all.
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create a project (or reuse one).
-2. **APIs & Services → Library** — enable the **Google Calendar API**.
-3. **APIs & Services → OAuth consent screen** — set it up for **External** users, add your own Google account as a test user (this keeps it out of Google's review process, since you're the only one using it).
-4. **APIs & Services → Credentials → Create Credentials → OAuth client ID** — type **Web application**. Under **Authorized JavaScript origins**, add the exact origin the page is served from (e.g. `https://yourname.github.io`, no path). Leave Authorized redirect URIs empty — this flow doesn't use one.
-5. Copy the generated **Client ID** and paste it into Settings → Google Calendar → Connect.
-
-From there, "Connect" opens Google's normal account picker and consent screen once; the page requests a token in the background afterward and only asks again if that silent refresh fails (e.g. third-party cookies blocked, or the grant was revoked). Nothing about your calendar passes through any server but Google's own — the access token lives in memory for the tab's lifetime and is never written to `localStorage`.
-
-**Today does not work on the extension's new tab page.** Connecting needs Google's Identity Services script, and Manifest V3 forbids extension pages from loading a script from anywhere but the extension itself — there is no manifest setting that permits it. The rest of the page is unaffected, and Today works normally on the hosted version. If you want the calendar, use the hosted page as your home page and let the extension handle new tabs.
 
 ## The extension
 
@@ -145,7 +129,6 @@ This is not a uBlock Origin replacement, and you should use uBlock instead if pu
 - Procedural cosmetic filters (`:has-text`, `:-abp-has`, ABP snippets) are skipped; only plain CSS selectors are applied
 - `$badfilter`, which retracts another list's filter, is skipped rather than honoured, so a handful of filters stay live that a full engine would drop
 - There's no anti-adblock circumvention, so sites that detect blockers will still detect this
-- The Today calendar can't connect on the new tab page, because MV3 blocks the remote Google script it needs — see [Google Calendar setup](#google-calendar-setup)
 
 ### Developing
 
@@ -183,7 +166,7 @@ cd extension && python3 build-icons.py
 - The page is installable — it ships a generated web app manifest, so Chrome and Safari will offer to add it to your dock or home screen as a standalone app. The favicon and status bar color follow the active theme.
 - Background animations pause when the tab is hidden, so a backgrounded home page costs nothing.
 - `prefers-reduced-motion` is respected: animated backgrounds are hidden and transitions are cut for anyone who has that set at the OS level.
-- Two things reach outside the page, both optional: Google's favicon service (`s2/favicons`) for tile icons — remove that line in `renderShortcuts()` for zero third-party requests, tiles fall back to letter avatars — and Google Identity Services' script, loaded only if you configure Google Calendar in Settings. Nobody who skips both ever makes an external request.
+- One request reaches outside the page: Google's favicon service (`s2/favicons`) for tile icons. Remove that line in `renderShortcuts()` and the page makes no third-party request at all — tiles fall back to letter avatars.
 - The traveling glow uses `@property` for the animated gradient angle: Chrome/Edge 85+, Safari 16.4+, Firefox 128+. On older browsers the outline renders static instead of animating; nothing breaks.
 
 ## License

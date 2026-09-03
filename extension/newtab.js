@@ -1022,8 +1022,6 @@
     clockMeter.classList.toggle('no-anim', s === 0);
     clockMeter.style.width = (s / 60 * 100) + '%';
 
-    if (s === 0) updateTodayPastState();
-
     var greeting = greetingFor(h);
     if (greeting !== lastGreeting) {
       lastGreeting = greeting;
@@ -1043,7 +1041,6 @@
     document.getElementById('metaWeek').textContent = pad2(isoWeek(now));
     document.getElementById('metaDoy').textContent = dayOfYear(now);
     document.getElementById('metaTz').textContent = 'UTC' + utcOffset(now);
-    refreshCalendarToday();
   }
 
   var clockTimer = null;
@@ -1055,311 +1052,6 @@
     if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
   }
 
-  // ---- Google Calendar "Today" ----
-  // Declared before startClock() runs below: tick() calls refreshCalendarToday()
-  // on its very first (synchronous) invocation, so these need to exist first.
-  // No server exists to hold a client secret, so this uses Google Identity
-  // Services' token flow: a short-lived access token straight to the
-  // browser, refreshed silently while it can be, never persisted.
-  var STORAGE_GCAL_CLIENT_ID = 'homepage.gcalClientId';
-  var STORAGE_GCAL_CONNECTED = 'homepage.gcalConnected';
-  var STORAGE_GCAL_TOKEN = 'homepage.gcalToken';
-  var STORAGE_GCAL_TOKEN_EXPIRY = 'homepage.gcalTokenExpiry';
-  var GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events.readonly';
-
-  var todaySection = document.getElementById('todaySection');
-  var todayList = document.getElementById('todayList');
-  var gcalClientIdInput = document.getElementById('gcalClientId');
-  var gcalConnectBtn = document.getElementById('gcalConnectBtn');
-  var gcalStatus = document.getElementById('gcalStatus');
-
-  var gcalClientId = localStorage.getItem(STORAGE_GCAL_CLIENT_ID) || '';
-  var gcalWasConnected = localStorage.getItem(STORAGE_GCAL_CONNECTED) === '1';
-  var gcalTokenClient = null;
-  var gcalAccessToken = null;
-  var gcalTokenExpiry = 0;
-  var gcalGisLoading = null;
-
-  // Google's token popup only opens when triggered by a real click — an
-  // automatic request on page load gets silently blocked by the browser's
-  // popup blocker. Caching the token across reloads means most refreshes
-  // (within its ~1hr life) need no Google call, and thus no popup, at all.
-  (function loadCachedGcalToken() {
-    var expiry = Number(sessionStorage.getItem(STORAGE_GCAL_TOKEN_EXPIRY) || 0);
-    var token = sessionStorage.getItem(STORAGE_GCAL_TOKEN);
-    if (token && expiry > Date.now()) {
-      gcalAccessToken = token;
-      gcalTokenExpiry = expiry;
-    }
-  })();
-
-  function cacheGcalToken(token, expiry) {
-    sessionStorage.setItem(STORAGE_GCAL_TOKEN, token);
-    sessionStorage.setItem(STORAGE_GCAL_TOKEN_EXPIRY, String(expiry));
-  }
-
-  gcalClientIdInput.value = gcalClientId;
-
-  function loadGis() {
-    if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
-    if (!gcalGisLoading) {
-      gcalGisLoading = new Promise(function (resolve, reject) {
-        var s = document.createElement('script');
-        s.src = 'https://accounts.google.com/gsi/client';
-        s.async = true;
-        s.onload = resolve;
-        s.onerror = reject;
-        document.head.appendChild(s);
-      });
-    }
-    return gcalGisLoading;
-  }
-
-  function ensureTokenClient() {
-    if (!gcalTokenClient) {
-      gcalTokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: gcalClientId,
-        scope: GCAL_SCOPE,
-        callback: function () {}
-      });
-    }
-    return gcalTokenClient;
-  }
-
-  function requestGcalToken(interactive) {
-    return loadGis().then(function () {
-      return new Promise(function (resolve, reject) {
-        var client = ensureTokenClient();
-        client.callback = function (resp) {
-          if (resp && resp.access_token) {
-            gcalAccessToken = resp.access_token;
-            gcalTokenExpiry = Date.now() + (resp.expires_in || 3600) * 1000;
-            cacheGcalToken(gcalAccessToken, gcalTokenExpiry);
-            resolve(gcalAccessToken);
-          } else {
-            reject(new Error('no access token'));
-          }
-        };
-        client.error_callback = function (err) { reject(err); };
-        client.requestAccessToken(interactive ? { prompt: 'consent' } : { prompt: '' });
-      });
-    });
-  }
-
-  function updateGcalConnectBtn() {
-    gcalConnectBtn.textContent = gcalWasConnected ? 'Disconnect' : 'Connect';
-  }
-
-  function formatEventTime(dateObj) {
-    var h = dateObj.getHours(), m = dateObj.getMinutes();
-    if (CLOCK_24H) return pad2(h) + ':' + pad2(m);
-    var shown = h % 12 === 0 ? 12 : h % 12;
-    return shown + ':' + pad2(m) + (h < 12 ? 'am' : 'pm');
-  }
-
-  function fetchTodayEvents(token) {
-    var now = new Date();
-    var startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-    var endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-    var params = new URLSearchParams({
-      timeMin: startOfDay.toISOString(),
-      timeMax: endOfDay.toISOString(),
-      singleEvents: 'true',
-      orderBy: 'startTime',
-      maxResults: '20'
-    });
-    return fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?' + params.toString(), {
-      headers: { Authorization: 'Bearer ' + token }
-    }).then(function (res) {
-      if (!res.ok) throw new Error('gcal fetch failed: ' + res.status);
-      return res.json();
-    }).then(function (data) {
-      return (data.items || [])
-        .filter(function (ev) { return ev.status !== 'cancelled'; })
-        .map(function (ev) {
-          var allDay = !ev.start.dateTime;
-          var startDate = allDay ? null : new Date(ev.start.dateTime);
-          return {
-            title: ev.summary || '(untitled)',
-            time: allDay ? 'All day' : formatEventTime(startDate),
-            startMs: allDay ? null : startDate.getTime()
-          };
-        });
-    });
-  }
-
-  function renderTodayState(kind, events) {
-    todaySection.classList.remove('hidden');
-    if (kind === 'connect') {
-      var connectMsg = document.createElement('div');
-      connectMsg.className = 'today-connect';
-      var connectBtn = document.createElement('button');
-      connectBtn.className = 'today-connect-btn';
-      connectBtn.textContent = 'Connect Google Calendar';
-      connectBtn.addEventListener('click', function () { connectGcal(true); });
-      connectMsg.appendChild(connectBtn);
-      todayList.innerHTML = '';
-      todayList.appendChild(connectMsg);
-    } else if (kind === 'loading') {
-      todayList.innerHTML = '<div class="today-empty">Loading today’s events…</div>';
-    } else if (kind === 'empty') {
-      todayList.innerHTML = '<div class="today-empty">No events today.</div>';
-    } else if (kind === 'error') {
-      var errEl = document.createElement('div');
-      errEl.className = 'today-error';
-      errEl.textContent = 'Couldn’t load your calendar. ';
-      var retryBtn = document.createElement('button');
-      retryBtn.className = 'today-connect-btn';
-      retryBtn.textContent = 'Retry';
-      retryBtn.addEventListener('click', function () { refreshCalendarToday(); });
-      errEl.appendChild(retryBtn);
-      todayList.innerHTML = '';
-      todayList.appendChild(errEl);
-    } else if (kind === 'events') {
-      todayList.innerHTML = '';
-      events.forEach(function (ev) {
-        var row = document.createElement('div');
-        var isPast = ev.startMs != null && ev.startMs <= Date.now();
-        row.className = 'today-item' + (isPast ? ' past' : '');
-        if (ev.startMs != null) row.dataset.start = ev.startMs;
-        var time = document.createElement('div');
-        time.className = 'today-time';
-        time.textContent = ev.time;
-        var title = document.createElement('div');
-        title.className = 'today-title';
-        title.textContent = ev.title;
-        row.appendChild(time);
-        row.appendChild(title);
-        todayList.appendChild(row);
-      });
-    }
-  }
-
-  // Dims events once their start time passes, without waiting for the next
-  // 15-minute calendar refetch — just re-checks timestamps already in hand.
-  function updateTodayPastState() {
-    Array.prototype.forEach.call(todayList.querySelectorAll('.today-item[data-start]'), function (el) {
-      el.classList.toggle('past', Number(el.dataset.start) <= Date.now());
-    });
-  }
-
-  // Google's silent token request opens a popup under the hood, so a call
-  // that isn't itself inside a user gesture (page load, the 15-minute
-  // timer) gets blocked by the browser and always fails — confirmed via
-  // "Failed to open popup window ... Maybe blocked by the browser?" in the
-  // console. Rather than making the user hunt down the visible Retry
-  // button, arm a one-time listener that retries on the user's very next
-  // click or keypress anywhere on the page, since that click carries the
-  // activation the popup needs.
-  var gcalGestureArmed = false;
-  function armGcalGestureRetry() {
-    if (gcalGestureArmed) return;
-    gcalGestureArmed = true;
-    var handler = function () {
-      document.removeEventListener('click', handler, true);
-      document.removeEventListener('keydown', handler, true);
-      gcalGestureArmed = false;
-      refreshCalendarToday();
-    };
-    document.addEventListener('click', handler, true);
-    document.addEventListener('keydown', handler, true);
-  }
-
-  // Guards against the retry button's own click and the armed gesture
-  // listener both firing for the same click and racing two requests.
-  var gcalRefreshInFlight = false;
-
-  function refreshCalendarToday() {
-    if (!gcalClientId) { todaySection.classList.add('hidden'); return; }
-    if (gcalRefreshInFlight) return;
-    gcalRefreshInFlight = true;
-    renderTodayState('loading');
-    var tokenPromise = (gcalAccessToken && Date.now() < gcalTokenExpiry - 60000)
-      ? Promise.resolve(gcalAccessToken)
-      : requestGcalToken(false);
-
-    tokenPromise.then(fetchTodayEvents).then(function (events) {
-      gcalRefreshInFlight = false;
-      gcalWasConnected = true;
-      localStorage.setItem(STORAGE_GCAL_CONNECTED, '1');
-      gcalStatus.textContent = 'Connected.';
-      updateGcalConnectBtn();
-      renderTodayState(events.length ? 'events' : 'empty', events);
-    }).catch(function () {
-      gcalRefreshInFlight = false;
-      renderTodayState(gcalWasConnected ? 'error' : 'connect');
-      if (gcalWasConnected) armGcalGestureRetry();
-    });
-  }
-
-  function connectGcal(interactive) {
-    if (!gcalClientId) {
-      alert('Paste your Google OAuth Client ID first.');
-      return;
-    }
-    renderTodayState('loading');
-    requestGcalToken(interactive).then(fetchTodayEvents).then(function (events) {
-      gcalWasConnected = true;
-      localStorage.setItem(STORAGE_GCAL_CONNECTED, '1');
-      gcalStatus.textContent = 'Connected.';
-      updateGcalConnectBtn();
-      renderTodayState(events.length ? 'events' : 'empty', events);
-    }).catch(function () {
-      renderTodayState(gcalWasConnected ? 'error' : 'connect');
-    });
-  }
-
-  function disconnectGcal() {
-    if (gcalAccessToken && window.google && google.accounts && google.accounts.oauth2) {
-      google.accounts.oauth2.revoke(gcalAccessToken, function () {});
-    }
-    gcalAccessToken = null;
-    gcalTokenExpiry = 0;
-    gcalWasConnected = false;
-    localStorage.removeItem(STORAGE_GCAL_CONNECTED);
-    sessionStorage.removeItem(STORAGE_GCAL_TOKEN);
-    sessionStorage.removeItem(STORAGE_GCAL_TOKEN_EXPIRY);
-    gcalStatus.textContent = 'Not connected.';
-    updateGcalConnectBtn();
-    renderTodayState('connect');
-  }
-
-  gcalClientIdInput.addEventListener('change', function () {
-    gcalClientId = gcalClientIdInput.value.trim();
-    localStorage.setItem(STORAGE_GCAL_CLIENT_ID, gcalClientId);
-    gcalTokenClient = null;
-    gcalAccessToken = null;
-    gcalTokenExpiry = 0;
-    sessionStorage.removeItem(STORAGE_GCAL_TOKEN);
-    sessionStorage.removeItem(STORAGE_GCAL_TOKEN_EXPIRY);
-    if (gcalClientId) refreshCalendarToday();
-    else todaySection.classList.add('hidden');
-  });
-
-  gcalConnectBtn.addEventListener('click', function () {
-    if (gcalWasConnected) disconnectGcal();
-    else connectGcal(true);
-  });
-
-  // Only polls while the tab is actually visible — a background tab has no
-  // reason to keep hitting the Calendar API every 15 minutes. Paused/resumed
-  // alongside the clock in the visibilitychange handler below.
-  var gcalPollTimer = null;
-  function startGcalPolling() {
-    if (!gcalPollTimer && gcalClientId) gcalPollTimer = setInterval(refreshCalendarToday, 15 * 60 * 1000);
-  }
-  function stopGcalPolling() {
-    if (gcalPollTimer) { clearInterval(gcalPollTimer); gcalPollTimer = null; }
-  }
-
-  updateGcalConnectBtn();
-  if (gcalClientId) {
-    gcalStatus.textContent = gcalWasConnected ? 'Reconnecting…' : 'Not connected.';
-    startGcalPolling();
-  }
-
-  // startClock() fires tick() immediately, which calls refreshCalendarToday()
-  // on its first run — so the calendar module above must be set up before this.
   startClock();
 
   var savedEngine = localStorage.getItem(STORAGE_ENGINE);
@@ -1835,7 +1527,6 @@
     if (document.hidden) {
       stopClock();
       stopTimers();
-      stopGcalPolling();
       particlesEl.style.animationPlayState = 'paused';
       particlesEl.querySelectorAll('*').forEach(function (el) {
         el.style.animationPlayState = 'paused';
@@ -1843,8 +1534,6 @@
     } else {
       startClock();
       renderParticles(document.documentElement.getAttribute('data-theme'));
-      if (gcalClientId) refreshCalendarToday();
-      startGcalPolling();
     }
   });
 
@@ -1989,8 +1678,7 @@
       theme: localStorage.getItem(STORAGE_THEME) || 'ember',
       colors: colorOverrides,
       engine: engineSelect.value,
-      scratch: scratchText.value,
-      gcalClientId: gcalClientId
+      scratch: scratchText.value
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -2060,17 +1748,6 @@
         if (typeof data.scratch === 'string') {
           scratchText.value = data.scratch;
           localStorage.setItem(STORAGE_SCRATCH, data.scratch);
-        }
-
-        if (typeof data.gcalClientId === 'string') {
-          gcalClientId = data.gcalClientId.trim();
-          gcalClientIdInput.value = gcalClientId;
-          localStorage.setItem(STORAGE_GCAL_CLIENT_ID, gcalClientId);
-          gcalTokenClient = null;
-          gcalAccessToken = null;
-          gcalTokenExpiry = 0;
-          if (gcalClientId) refreshCalendarToday();
-          else todaySection.classList.add('hidden');
         }
 
         flashBackupStatus('Settings imported.');
