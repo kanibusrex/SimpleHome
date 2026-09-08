@@ -168,7 +168,7 @@ cd extension && python3 build-icons.py
 ## Notes
 
 - Data is stored under the `homepage.*` keys in `localStorage`. Nothing leaves your browser, the autocomplete history included — clear it any time from Settings → History.
-- The page is installable — it ships a generated web app manifest, so Chrome and Safari will offer to add it to your dock or home screen as a standalone app. The favicon and status bar color follow the active theme.
+- The page is installable — it ships a generated web app manifest, so Chrome and Safari will offer to add it to your dock or home screen as a standalone app. The icon is a command prompt rather than a house, since a house glyph is indistinguishable from every other one on a home screen. It is drawn from the theme: the chevron takes the accent, the cursor takes the second accent, and the ground and status bar colour take the background, so an installed copy keeps the theme it was installed from. The extension's PNGs carry the same mark.
 - Background animations pause when the tab is hidden, so a backgrounded home page costs nothing.
 - `prefers-reduced-motion` is respected: animated backgrounds are hidden and transitions are cut for anyone who has that set at the OS level.
 - One request reaches outside the page: Google's favicon service (`s2/favicons`) for tile icons. Remove that line in `renderShortcuts()` and the page makes no third-party request at all — tiles fall back to letter avatars.
