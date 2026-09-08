@@ -1168,10 +1168,22 @@
     50%, 100% { opacity: 1; }
   }
 
-  .clock-secs {
+  /* Seconds and meridiem read as one small sub-instrument beside the digits. */
+  .clock-aux {
     position: relative;
-    top: -0.72em;
+    /* The old single-line offset assumed a one-line box; the column is taller,
+       so this is the value that lands the seconds where they have always sat.
+       In em, so it tracks the clamped clock size at every viewport width. */
+    top: -0.25em;
     margin-left: 10px;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15em;
+    vertical-align: baseline;
+  }
+
+  .clock-secs {
     font-size: 0.3em;
     font-weight: 500;
     letter-spacing: 2px;
@@ -1179,6 +1191,15 @@
     -webkit-text-fill-color: var(--accent);
     text-shadow: 0 0 10px var(--shadow);
   }
+
+  .clock-mer {
+    font-size: 0.17em;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    -webkit-text-fill-color: var(--text-dim);
+  }
+  .clock-mer:empty { display: none; }
 
   /* Sweeps once per minute, spanning the width of the readout. */
   .clock-meter {
@@ -1806,7 +1827,7 @@
     <div class="greeting" id="greeting"></div>
     <div class="clock" id="clock" role="timer">
       <span class="clock-ghost" aria-hidden="true">88:88</span>
-      <span class="clock-face"><span id="clockH">--</span><span class="clock-sep">:</span><span id="clockM">--</span></span><span class="clock-secs" id="clockS">--</span>
+      <span class="clock-face"><span id="clockH">--</span><span class="clock-sep">:</span><span id="clockM">--</span></span><span class="clock-aux"><span class="clock-secs" id="clockS">--</span><span class="clock-mer" id="clockMer"></span></span>
       <span class="clock-meter" aria-hidden="true"><i id="clockMeter"></i></span>
     </div>
     <div class="date" id="date"></div>

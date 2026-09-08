@@ -987,7 +987,8 @@
   }
 
   // Set to false for a 12-hour clock with an AM/PM suffix.
-  var CLOCK_24H = true;
+  // Set to true for a 24-hour readout; the meridiem element then stays empty.
+  var CLOCK_24H = false;
 
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
 
@@ -1013,6 +1014,7 @@
   var clockH = document.getElementById('clockH');
   var clockM = document.getElementById('clockM');
   var clockS = document.getElementById('clockS');
+  var clockMer = document.getElementById('clockMer');
   var clockMeter = document.getElementById('clockMeter');
   var clockGhost = document.querySelector('.clock-ghost');
   var lastDateKey = '';
@@ -1027,7 +1029,8 @@
     var shown = CLOCK_24H ? h : (h % 12 === 0 ? 12 : h % 12);
     clockH.textContent = CLOCK_24H ? pad2(shown) : String(shown);
     clockM.textContent = pad2(m);
-    clockS.textContent = pad2(s) + (CLOCK_24H ? '' : (h < 12 ? ' AM' : ' PM'));
+    clockS.textContent = pad2(s);
+    clockMer.textContent = CLOCK_24H ? '' : (h < 12 ? 'AM' : 'PM');
     clockGhost.textContent = (CLOCK_24H || shown >= 10) ? '88:88' : '8:88';
 
     // Skip the sweep animation across the :59 -> :00 wrap so it doesn't run backwards.
