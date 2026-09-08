@@ -27,6 +27,8 @@ Settings → History shows how many sites are remembered and clears them, with a
 
 **Tile hotkeys.** `Alt+1` through `Alt+9` open the first nine visible tiles in a new tab. Hold `Alt` to see the numbers.
 
+**Toolbar.** Scratchpad, edit, settings and zen sit in a floating bar at the bottom right, over a blurred ground so it reads as a bar above the page. It used to be pinned top right, where the clock — which is sized to the viewport — grew into it below 900px wide and genuinely overlapped it on a phone in landscape. The bottom is also the easier end of a phone to reach.
+
 **Zen mode.** `Z` (or the ◎ button) strips everything down to just the clock and search bar, dead-centered, with the theme's background animation still running as ambience. `Esc` or `Z` again brings everything back. The state is remembered across reloads.
 
 **Scratchpad.** A persistent notes panel that saves as you type. `Shift+S` from anywhere. Lines starting with `- [ ]` are checklist items — click the brackets to check them off (toggles to `- [x]`); clicking anywhere else on the line just places the cursor like normal text.

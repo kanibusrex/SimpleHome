@@ -776,7 +776,7 @@
     z-index: 1;
     max-width: 880px;
     margin: 0 auto;
-    padding: 8vh 24px 64px;
+    padding: 8vh 24px calc(96px + env(safe-area-inset-bottom, 0px));
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -902,7 +902,7 @@
 
   .toast {
     position: fixed;
-    bottom: 24px;
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     left: 50%;
     transform: translateX(-50%) translateY(8px);
     display: flex;
@@ -1056,30 +1056,31 @@
     padding: 0;
   }
 
-  .zen-btn {
+  /* One cluster rather than four separately-offset buttons. The clock is
+     clamp-sized and centred, so anything pinned top-right eventually grows into
+     it: below 900px the readout ran past these, and in landscape on a phone the
+     boxes actually intersected. Anchored bottom-right instead, which clears the
+     readout at every width and lands nearer the thumb on a phone. */
+  .toolbar {
     position: fixed;
-    top: 20px;
     right: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    gap: 8px;
+    padding: 6px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
     z-index: 5;
+    /* A fixed bar will always float over something on a short screen, so it
+       carries its own ground: it reads as a bar above the page rather than as
+       buttons colliding with it. Solid first for anything without color-mix. */
+    background: var(--surface);
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
   }
-  .settings-btn {
-    position: fixed;
-    top: 20px;
-    right: 72px;
-    z-index: 5;
-  }
-  .edit-btn {
-    position: fixed;
-    top: 20px;
-    right: 124px;
-    z-index: 5;
-  }
-  .scratch-btn {
-    position: fixed;
-    top: 20px;
-    right: 176px;
-    z-index: 5;
-  }
+  .toolbar .icon-btn { border-color: transparent; background: transparent; }
+  .toolbar .icon-btn:hover { border-color: var(--accent); background: var(--surface-hover); }
   .scratch-btn.active,
   .edit-btn.active,
   .zen-btn.active {
@@ -1101,7 +1102,10 @@
     padding: 6px 20px 16px;
     font-family: 'IBM Plex Mono', monospace;
     font-weight: 600;
-    font-size: clamp(58px, 13vw, 128px);
+    /* Sized off width and height: on a short viewport (a phone in landscape,
+       a squat window) a width-only clamp made the readout tall enough to push
+       the search bar under the toolbar. */
+    font-size: clamp(58px, min(13vw, 20vh), 128px);
     letter-spacing: 3px;
     line-height: 1;
     font-variant-numeric: tabular-nums;
@@ -1802,10 +1806,28 @@
   .modal-actions .danger { color: var(--accent); }
   .modal-actions .hidden { display: none; }
 
+  /* A phone in landscape has barely 390px of height: at the normal rhythm the
+     search bar lands under the toolbar. Tighten the stack rather than let the
+     primary control sit behind a button. */
+  @media (max-height: 500px) {
+    .app { padding-top: 2vh; }
+    .greeting { margin-bottom: 6px; }
+    .clock { padding-top: 0; padding-bottom: 8px; }
+    .clock-meter { margin-top: 8px; }
+    .date { margin-top: 8px; }
+    .clock-meta { margin-top: 6px; }
+    .hero { margin-bottom: 18px; }
+    .search-wrap { margin-bottom: 24px; }
+  }
+
+  /* Shorter still — a landscape phone with the browser chrome showing. The
+     technical strip is the most expendable thing on the page. */
+  @media (max-height: 420px) {
+    .clock-meta, .greeting { display: none; }
+  }
+
   @media (max-width: 480px) {
-    .settings-btn { right: 66px; }
-    .edit-btn { right: 112px; }
-    .scratch-btn { right: 158px; }
+    .toolbar { right: 14px; gap: 10px; }
     .tile { width: 72px; }
     .search { padding-right: 8px; }
     .search button { display: none; }
@@ -1816,10 +1838,12 @@
 
 <div class="particles" id="particles"></div>
 
-<button class="icon-btn zen-btn" id="zenBtn" aria-label="Zen mode" title="Zen mode (Z)">&#9678;</button>
-<button class="icon-btn scratch-btn" id="scratchBtn" aria-label="Scratchpad" title="Scratchpad (Shift+S)">&#9636;</button>
-<button class="icon-btn edit-btn" id="editBtn" aria-label="Edit shortcuts" title="Edit shortcuts">&#9998;</button>
-<button class="icon-btn settings-btn" id="settingsBtn" aria-label="Settings" title="Settings">&#9881;</button>
+<div class="toolbar">
+  <button class="icon-btn scratch-btn" id="scratchBtn" aria-label="Scratchpad" title="Scratchpad (Shift+S)">&#9636;</button>
+  <button class="icon-btn edit-btn" id="editBtn" aria-label="Edit shortcuts" title="Edit shortcuts">&#9998;</button>
+  <button class="icon-btn settings-btn" id="settingsBtn" aria-label="Settings" title="Settings">&#9881;</button>
+  <button class="icon-btn zen-btn" id="zenBtn" aria-label="Zen mode" title="Zen mode (Z)">&#9678;</button>
+</div>
 
 <div class="app">
   <header class="hero">
