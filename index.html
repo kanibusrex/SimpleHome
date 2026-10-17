@@ -302,6 +302,66 @@
     --clock-2: #ff6ea3;
   }
 
+  html[data-theme="hyperdrive"] {
+    --bg: #03040b;
+    --bg-gradient: radial-gradient(ellipse 70% 55% at 50% 42%, #0d1338, #03040b 70%);
+    --surface: #0a0d20;
+    --surface-hover: #11163a;
+    --border: #212a5c;
+    --text: #e6ecff;
+    --text-dim: #8a93c4;
+    --accent: #00e5ff;
+    --accent-2: #ff3df2;
+    --shadow: rgba(0, 229, 255, 0.3);
+    --clock: #a6f4ff;
+    --clock-2: #ff7af5;
+  }
+
+  html[data-theme="gilded"] {
+    --bg: #0a0805;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% 110%, #2b200b, #0a0805 65%);
+    --surface: #14100a;
+    --surface-hover: #1e180d;
+    --border: #3d3018;
+    --text: #f6ecd6;
+    --text-dim: #b39d70;
+    --accent: #d4af37;
+    --accent-2: #ffe08a;
+    --shadow: rgba(212, 175, 55, 0.3);
+    --clock: #ffe9a8;
+    --clock-2: #d4a531;
+  }
+
+  html[data-theme="prism"] {
+    --bg: #07050d;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #1a1233, #07050d 65%);
+    --surface: #110c1f;
+    --surface-hover: #1a1330;
+    --border: #2f2552;
+    --text: #f1ecff;
+    --text-dim: #9d93c4;
+    --accent: #8b6cff;
+    --accent-2: #2ee6c8;
+    --shadow: rgba(139, 108, 255, 0.32);
+    --clock: #b9fff1;
+    --clock-2: #a48bff;
+  }
+
+  html[data-theme="velvet"] {
+    --bg: #0c0306;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #26060f, #0c0306 65%);
+    --surface: #18070c;
+    --surface-hover: #240b13;
+    --border: #46151f;
+    --text: #ffe9ec;
+    --text-dim: #c48c95;
+    --accent: #ff2a55;
+    --accent-2: #ff9a3c;
+    --shadow: rgba(255, 42, 85, 0.32);
+    --clock: #ffc08f;
+    --clock-2: #ff4d6d;
+  }
+
   * { box-sizing: border-box; }
 
   html, body {
@@ -773,6 +833,162 @@
   @keyframes lava-float {
     0% { transform: translateY(8vh) scale(0.9); }
     100% { transform: translateY(-70vh) scale(1.15); }
+  }
+
+  /* ---- Hyperdrive: warp starfield, drawn on a canvas ---- */
+  .warp-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ---- Gilded: art-deco sunburst, gold dust, glints, a sweeping sheen ---- */
+  .deco-rays {
+    position: absolute;
+    left: 50%;
+    bottom: -60vmax;
+    width: 160vmax;
+    height: 160vmax;
+    margin-left: -80vmax;
+    border-radius: 50%;
+    background: repeating-conic-gradient(from 0deg, var(--accent) 0deg 1.2deg, transparent 1.2deg 10deg);
+    -webkit-mask: radial-gradient(circle, transparent 18%, #000 30%, transparent 70%);
+    mask: radial-gradient(circle, transparent 18%, #000 30%, transparent 70%);
+    opacity: 0.075;
+    animation: deco-turn 60s ease-in-out infinite alternate;
+  }
+
+  @keyframes deco-turn {
+    from { transform: rotate(-8deg); }
+    to { transform: rotate(8deg); }
+  }
+
+  .gold-sheen {
+    position: absolute;
+    top: -50%;
+    left: 0;
+    width: 40vmax;
+    height: 200%;
+    background: linear-gradient(90deg, transparent, rgba(255, 224, 138, 0.09) 45%, rgba(255, 240, 200, 0.14) 50%, rgba(255, 224, 138, 0.09) 55%, transparent);
+    transform: translateX(-60vmax) rotate(18deg);
+    animation: gold-sheen 11s ease-in-out infinite;
+  }
+
+  @keyframes gold-sheen {
+    0%, 15% { transform: translateX(-60vmax) rotate(18deg); }
+    55%, 100% { transform: translateX(calc(100vw + 20vmax)) rotate(18deg); }
+  }
+
+  .gold-dust {
+    position: absolute;
+    bottom: -10px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 6px 1px var(--accent);
+    animation: gold-drift linear infinite, gold-twinkle ease-in-out infinite alternate;
+  }
+
+  @keyframes gold-drift {
+    0% { transform: translate(0, 0); }
+    50% { transform: translate(var(--sway, 20px), -55vh); }
+    100% { transform: translate(0, -110vh); }
+  }
+
+  @keyframes gold-twinkle {
+    from { opacity: 0.15; }
+    to { opacity: 0.9; }
+  }
+
+  /* A four-point star: two thin gradient bars crossed over a soft core. */
+  .gold-glint {
+    position: absolute;
+    width: 46px;
+    height: 46px;
+    margin: -23px 0 0 -23px;
+    background:
+      radial-gradient(circle, rgba(255, 246, 214, 0.95), transparent 22%),
+      linear-gradient(90deg, transparent, var(--accent-2), transparent) center / 100% 2px no-repeat,
+      linear-gradient(0deg, transparent, var(--accent-2), transparent) center / 2px 100% no-repeat;
+    animation: gold-glint 1.6s ease-in-out forwards;
+  }
+
+  @keyframes gold-glint {
+    0% { transform: scale(0) rotate(0deg); opacity: 0; }
+    45% { transform: scale(1) rotate(45deg); opacity: 1; }
+    100% { transform: scale(0) rotate(90deg); opacity: 0; }
+  }
+
+  /* ---- Prism: counter-rotating iridescent fields and sweeping beams ---- */
+  .prism-field {
+    position: absolute;
+    width: 170vmax;
+    height: 170vmax;
+    margin: -85vmax 0 0 -85vmax;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, var(--accent), #ff5fa2, #ffd36e, var(--accent-2), #4f8bff, var(--accent));
+    -webkit-mask: radial-gradient(circle, transparent 0%, #000 14%, rgba(0, 0, 0, 0.6) 30%, transparent 58%);
+    mask: radial-gradient(circle, transparent 0%, #000 14%, rgba(0, 0, 0, 0.6) 30%, transparent 58%);
+    opacity: 0.34;
+    mix-blend-mode: screen;
+    animation: prism-spin linear infinite;
+  }
+  .prism-field.a { left: 12%; top: 8%; animation-duration: 48s; }
+  .prism-field.b { left: 88%; top: 92%; animation-duration: 64s; animation-direction: reverse; }
+
+  @keyframes prism-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .prism-beam {
+    position: absolute;
+    top: -20vh;
+    width: 7vmax;
+    height: 150vh;
+    background: linear-gradient(180deg, var(--beam, #fff), transparent 70%);
+    transform-origin: 50% 0;
+    mix-blend-mode: screen;
+    animation: prism-beam ease-in-out infinite alternate;
+  }
+
+  @keyframes prism-beam {
+    from { transform: rotate(var(--from, -30deg)); opacity: 0.08; }
+    to { transform: rotate(var(--to, 30deg)); opacity: 0.26; }
+  }
+
+  /* ---- Velvet: a morphing mesh gradient under film grain ---- */
+  .mesh-orb {
+    position: absolute;
+    width: var(--size, 80vmax);
+    height: var(--size, 80vmax);
+    margin: calc(var(--size, 80vmax) / -2) 0 0 calc(var(--size, 80vmax) / -2);
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--orb), transparent 62%);
+    opacity: 0.5;
+    animation: mesh-drift ease-in-out infinite alternate;
+  }
+
+  @keyframes mesh-drift {
+    0% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(var(--dx1, 10vw), var(--dy1, 10vh)) scale(1.2); }
+    100% { transform: translate(var(--dx2, -10vw), var(--dy2, 5vh)) scale(0.9); }
+  }
+
+  .film-grain {
+    position: absolute;
+    inset: -50%;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.07;
+    animation: film-grain 0.9s steps(6) infinite;
+  }
+
+  @keyframes film-grain {
+    0% { transform: translate(0, 0); }
+    20% { transform: translate(-6%, 4%); }
+    40% { transform: translate(5%, -7%); }
+    60% { transform: translate(-3%, 8%); }
+    80% { transform: translate(7%, 2%); }
+    100% { transform: translate(0, 0); }
   }
 
   .app {
@@ -1749,6 +1965,14 @@
   .swatch[data-swatch="ripple"] .swatch-preview { background: linear-gradient(135deg, #38bdf8, #0e7490); }
   .swatch[data-swatch="lava"] { background: #170720; }
   .swatch[data-swatch="lava"] .swatch-preview { background: linear-gradient(135deg, #ffa14a, #ff4d8d); }
+  .swatch[data-swatch="hyperdrive"] { background: #0a0d20; }
+  .swatch[data-swatch="hyperdrive"] .swatch-preview { background: linear-gradient(135deg, #00e5ff, #03040b 55%, #ff3df2); }
+  .swatch[data-swatch="gilded"] { background: #14100a; }
+  .swatch[data-swatch="gilded"] .swatch-preview { background: linear-gradient(135deg, #ffe08a, #d4af37 45%, #0a0805); }
+  .swatch[data-swatch="prism"] { background: #110c1f; }
+  .swatch[data-swatch="prism"] .swatch-preview { background: conic-gradient(#8b6cff, #ff5fa2, #ffd36e, #2ee6c8, #4f8bff, #8b6cff); }
+  .swatch[data-swatch="velvet"] { background: #18070c; }
+  .swatch[data-swatch="velvet"] .swatch-preview { background: linear-gradient(135deg, #7b2cff, #ff2a55 50%, #ff9a3c); }
 
   .hint { font-size: 11.5px; color: var(--text-dim); line-height: 1.6; }
 
@@ -1925,6 +2149,10 @@
       <button class="swatch" data-swatch="festival"><div class="swatch-preview"></div>Festival</button>
       <button class="swatch" data-swatch="ripple"><div class="swatch-preview"></div>Ripple</button>
       <button class="swatch" data-swatch="lava"><div class="swatch-preview"></div>Lava</button>
+      <button class="swatch" data-swatch="hyperdrive"><div class="swatch-preview"></div>Hyperdrive</button>
+      <button class="swatch" data-swatch="gilded"><div class="swatch-preview"></div>Gilded</button>
+      <button class="swatch" data-swatch="prism"><div class="swatch-preview"></div>Prism</button>
+      <button class="swatch" data-swatch="velvet"><div class="swatch-preview"></div>Velvet</button>
     </div>
     <div class="color-custom">
       <div class="color-field">
@@ -2515,11 +2743,14 @@
   // Some effects run more than one interval (a spawner plus glyph churn, say),
   // so timers are tracked as a list and torn down together.
   var particleTimers = [];
+  var particleFrame = null; // the canvas effects run on requestAnimationFrame instead
 
   function addTimer(fn, ms) { particleTimers.push(setInterval(fn, ms)); }
   function stopTimers() {
     particleTimers.forEach(clearInterval);
     particleTimers = [];
+    if (particleFrame !== null) cancelAnimationFrame(particleFrame);
+    particleFrame = null;
   }
 
   function rand(min, max) { return min + Math.random() * (max - min); }
@@ -2544,7 +2775,11 @@
     terminal:  { type: 'crt' },
     festival:  { type: 'fireworks', interval: 1900, sparks: 22 },
     ripple:    { type: 'ripple', interval: 1100 },
-    lava:      { type: 'lava', blobs: 6 }
+    lava:      { type: 'lava', blobs: 6 },
+    hyperdrive: { type: 'warp', stars: 240, cruise: 0.12, jump: 1.1, cycle: 13 },
+    gilded:    { type: 'gilded', dust: 30, glintInterval: 1400 },
+    prism:     { type: 'prism', beams: 4 },
+    velvet:    { type: 'mesh', orbs: ['var(--accent)', '#7b2cff', 'var(--accent-2)', '#c2185b', '#4a148c'] }
   };
 
   function clearParticles() {
@@ -2974,6 +3209,155 @@
     particlesEl.appendChild(field);
   }
 
+  function buildWarp(cfg) {
+    // The CSS rule that hides .particles can't stop a canvas loop, so check here.
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var canvas = document.createElement('canvas');
+    canvas.className = 'warp-canvas';
+    particlesEl.appendChild(canvas);
+    var ctx = canvas.getContext('2d');
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = window.innerWidth, h = window.innerHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Stars live in a box in front of the viewer and fly toward the screen;
+    // dividing by depth projects them out from the vanishing point.
+    var cx = w / 2, cy = h * 0.42, k = Math.max(w, h) * 0.5;
+    var stars = [];
+    for (var i = 0; i < cfg.stars; i++) stars.push({ x: rand(-1, 1), y: rand(-1, 1), z: rand(0.05, 1), c: i % 3 });
+
+    var colors = [], start = null, last = null, frames = 0;
+    function readColors() {
+      var cs = getComputedStyle(document.documentElement);
+      colors = [cs.getPropertyValue('--accent').trim(), cs.getPropertyValue('--accent-2').trim(), '#ffffff'];
+    }
+    readColors();
+
+    function frame(now) {
+      if (start === null) start = last = now;
+      var dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      if (++frames % 30 === 0) readColors(); // picks up accent colour edits live
+
+      // Cruise, then once a cycle surge into a jump and ease back out of it.
+      var phase = ((now - start) / 1000) % cfg.cycle / cfg.cycle;
+      var surge = phase > 0.7 ? Math.pow(Math.sin((phase - 0.7) / 0.3 * Math.PI), 2) : 0;
+      var speed = cfg.cruise + (cfg.jump - cfg.cruise) * surge;
+      var trail = 0.012 + speed * 0.07;
+
+      ctx.clearRect(0, 0, w, h);
+      var glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, k * 0.6);
+      glow.addColorStop(0, colors[0]);
+      glow.addColorStop(1, 'transparent');
+      ctx.globalAlpha = 0.05 + 0.13 * surge;
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.lineCap = 'round';
+      for (var i = 0; i < stars.length; i++) {
+        var s = stars[i];
+        s.z -= speed * dt;
+        var x1 = cx + s.x / s.z * k, y1 = cy + s.y / s.z * k;
+        if (s.z <= 0.01 || x1 < -50 || x1 > w + 50 || y1 < -50 || y1 > h + 50) {
+          s.x = rand(-1, 1); s.y = rand(-1, 1); s.z = 1;
+          continue;
+        }
+        var z0 = s.z + trail;
+        var x0 = cx + s.x / z0 * k, y0 = cy + s.y / z0 * k;
+        var near = 1 - s.z;
+        ctx.globalAlpha = Math.min(1, near * 1.3);
+        ctx.strokeStyle = colors[s.c];
+        ctx.lineWidth = 0.4 + near * 2.2;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      particleFrame = requestAnimationFrame(frame);
+    }
+    particleFrame = requestAnimationFrame(frame);
+  }
+
+  function buildGilded(cfg) {
+    var rays = document.createElement('div');
+    rays.className = 'deco-rays';
+    particlesEl.appendChild(rays);
+
+    var sheen = document.createElement('div');
+    sheen.className = 'gold-sheen';
+    particlesEl.appendChild(sheen);
+
+    for (var i = 0; i < cfg.dust; i++) {
+      var d = document.createElement('div');
+      d.className = 'gold-dust';
+      var size = rand(1.5, 3.5);
+      d.style.width = size + 'px';
+      d.style.height = size + 'px';
+      d.style.left = rand(0, 100) + 'vw';
+      d.style.setProperty('--sway', rand(-40, 40) + 'px');
+      var drift = rand(14, 26), twinkle = rand(1.2, 3);
+      d.style.animationDuration = drift + 's, ' + twinkle + 's';
+      d.style.animationDelay = '-' + rand(0, drift) + 's, -' + rand(0, twinkle) + 's';
+      particlesEl.appendChild(d);
+    }
+
+    function glint() {
+      var g = document.createElement('div');
+      g.className = 'gold-glint';
+      g.style.left = rand(5, 95) + 'vw';
+      g.style.top = rand(5, 95) + 'vh';
+      g.style.width = g.style.height = rand(28, 56) + 'px';
+      particlesEl.appendChild(g);
+      setTimeout(function () { g.remove(); }, 1700);
+    }
+    addTimer(glint, cfg.glintInterval);
+  }
+
+  function buildPrism(cfg) {
+    ['a', 'b'].forEach(function (k) {
+      var f = document.createElement('div');
+      f.className = 'prism-field ' + k;
+      particlesEl.appendChild(f);
+    });
+    for (var i = 0; i < cfg.beams; i++) {
+      var b = document.createElement('div');
+      b.className = 'prism-beam';
+      b.style.left = (10 + i * 80 / Math.max(1, cfg.beams - 1)) + 'vw';
+      b.style.setProperty('--beam', ['var(--accent)', '#ffffff', 'var(--accent-2)', '#ff5fa2'][i % 4]);
+      var swing = rand(18, 34);
+      b.style.setProperty('--from', -swing + 'deg');
+      b.style.setProperty('--to', swing + 'deg');
+      b.style.animationDuration = rand(7, 13) + 's';
+      b.style.animationDelay = '-' + rand(0, 10) + 's';
+      particlesEl.appendChild(b);
+    }
+  }
+
+  function buildMesh(cfg) {
+    cfg.orbs.forEach(function (color) {
+      var o = document.createElement('div');
+      o.className = 'mesh-orb';
+      o.style.setProperty('--orb', color);
+      o.style.setProperty('--size', rand(60, 95) + 'vmax');
+      o.style.left = rand(0, 100) + 'vw';
+      o.style.top = rand(0, 100) + 'vh';
+      o.style.setProperty('--dx1', rand(-30, 30) + 'vw');
+      o.style.setProperty('--dy1', rand(-30, 30) + 'vh');
+      o.style.setProperty('--dx2', rand(-30, 30) + 'vw');
+      o.style.setProperty('--dy2', rand(-30, 30) + 'vh');
+      var dur = rand(18, 32);
+      o.style.animationDuration = dur + 's';
+      o.style.animationDelay = '-' + rand(0, dur) + 's';
+      particlesEl.appendChild(o);
+    });
+    var grain = document.createElement('div');
+    grain.className = 'film-grain';
+    particlesEl.appendChild(grain);
+  }
+
   function renderParticles(theme) {
     clearParticles();
     var cfg = THEME_ANIM[theme];
@@ -2993,6 +3377,10 @@
     else if (cfg.type === 'fireworks') buildFireworks(cfg);
     else if (cfg.type === 'ripple') buildRipple(cfg);
     else if (cfg.type === 'lava') buildLava(cfg);
+    else if (cfg.type === 'warp') buildWarp(cfg);
+    else if (cfg.type === 'gilded') buildGilded(cfg);
+    else if (cfg.type === 'prism') buildPrism(cfg);
+    else if (cfg.type === 'mesh') buildMesh(cfg);
   }
 
   function greetingFor(hour) {

@@ -1,6 +1,6 @@
 # SimpleHome
 
-A custom browser home page. One HTML file, no build step, no dependencies, no tracking — clock, launcher search, editable shortcuts, a scratchpad, and nineteen themes with animated backgrounds and customizable accent colors.
+A custom browser home page. One HTML file, no build step, no dependencies, no tracking — clock, launcher search, editable shortcuts, a scratchpad, and twenty-three themes with animated backgrounds and customizable accent colors.
 
 Optionally, an accompanying Chrome extension puts it on your new tab page and blocks ads using EasyList.
 
@@ -37,7 +37,7 @@ Settings → History shows how many sites are remembered and clears them, with a
 
 **Custom accent colors.** Settings → Theme has two color pickers — Accent and Accent 2 — that recolor the active theme's glow, particles, and clock digits live. Each theme remembers its own override independently, so switching themes never clobbers another theme's custom colors, and "Reset colors" drops back to that theme's defaults. Overrides travel with the export/import backup.
 
-**Nineteen themes**, each with its own background animation:
+**Twenty-three themes**, each with its own background animation:
 
 | Theme | Palette | Animation |
 |---|---|---|
@@ -60,6 +60,10 @@ Settings → History shows how many sites are remembered and clears them, with a
 | Festival | Night blue / multicolour | Rockets climbing and bursting into falling sparks |
 | Ripple | Pale blue light | Rings spreading outward like rain on still water |
 | Lava | Plum / magenta | Metaball blobs rising and merging, lava-lamp style |
+| Hyperdrive | Cyan / magenta on deep space | A warp-speed starfield drawn on a canvas — cruising streaks that surge into a light-speed jump every thirteen seconds |
+| Gilded | Black / gold | Art-deco sunburst rocking slowly from below, drifting gold dust, four-point glints, and a light sheen sweeping across |
+| Prism | Violet / teal iridescent | Two counter-rotating holographic colour fields with tinted stage beams swinging through them |
+| Velvet | Crimson / violet / orange | A slowly morphing mesh gradient under a fine, animated film grain |
 
 Shortcut tiles, the search bar, and the scratchpad share a hover/focus treatment: a dark outline with a gradient glow that travels around the perimeter, colored from the active theme's accent.
 

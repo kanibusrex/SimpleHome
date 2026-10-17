@@ -499,11 +499,14 @@
   // Some effects run more than one interval (a spawner plus glyph churn, say),
   // so timers are tracked as a list and torn down together.
   var particleTimers = [];
+  var particleFrame = null; // the canvas effects run on requestAnimationFrame instead
 
   function addTimer(fn, ms) { particleTimers.push(setInterval(fn, ms)); }
   function stopTimers() {
     particleTimers.forEach(clearInterval);
     particleTimers = [];
+    if (particleFrame !== null) cancelAnimationFrame(particleFrame);
+    particleFrame = null;
   }
 
   function rand(min, max) { return min + Math.random() * (max - min); }
@@ -528,7 +531,11 @@
     terminal:  { type: 'crt' },
     festival:  { type: 'fireworks', interval: 1900, sparks: 22 },
     ripple:    { type: 'ripple', interval: 1100 },
-    lava:      { type: 'lava', blobs: 6 }
+    lava:      { type: 'lava', blobs: 6 },
+    hyperdrive: { type: 'warp', stars: 240, cruise: 0.12, jump: 1.1, cycle: 13 },
+    gilded:    { type: 'gilded', dust: 30, glintInterval: 1400 },
+    prism:     { type: 'prism', beams: 4 },
+    velvet:    { type: 'mesh', orbs: ['var(--accent)', '#7b2cff', 'var(--accent-2)', '#c2185b', '#4a148c'] }
   };
 
   function clearParticles() {
@@ -958,6 +965,155 @@
     particlesEl.appendChild(field);
   }
 
+  function buildWarp(cfg) {
+    // The CSS rule that hides .particles can't stop a canvas loop, so check here.
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var canvas = document.createElement('canvas');
+    canvas.className = 'warp-canvas';
+    particlesEl.appendChild(canvas);
+    var ctx = canvas.getContext('2d');
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = window.innerWidth, h = window.innerHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Stars live in a box in front of the viewer and fly toward the screen;
+    // dividing by depth projects them out from the vanishing point.
+    var cx = w / 2, cy = h * 0.42, k = Math.max(w, h) * 0.5;
+    var stars = [];
+    for (var i = 0; i < cfg.stars; i++) stars.push({ x: rand(-1, 1), y: rand(-1, 1), z: rand(0.05, 1), c: i % 3 });
+
+    var colors = [], start = null, last = null, frames = 0;
+    function readColors() {
+      var cs = getComputedStyle(document.documentElement);
+      colors = [cs.getPropertyValue('--accent').trim(), cs.getPropertyValue('--accent-2').trim(), '#ffffff'];
+    }
+    readColors();
+
+    function frame(now) {
+      if (start === null) start = last = now;
+      var dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      if (++frames % 30 === 0) readColors(); // picks up accent colour edits live
+
+      // Cruise, then once a cycle surge into a jump and ease back out of it.
+      var phase = ((now - start) / 1000) % cfg.cycle / cfg.cycle;
+      var surge = phase > 0.7 ? Math.pow(Math.sin((phase - 0.7) / 0.3 * Math.PI), 2) : 0;
+      var speed = cfg.cruise + (cfg.jump - cfg.cruise) * surge;
+      var trail = 0.012 + speed * 0.07;
+
+      ctx.clearRect(0, 0, w, h);
+      var glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, k * 0.6);
+      glow.addColorStop(0, colors[0]);
+      glow.addColorStop(1, 'transparent');
+      ctx.globalAlpha = 0.05 + 0.13 * surge;
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.lineCap = 'round';
+      for (var i = 0; i < stars.length; i++) {
+        var s = stars[i];
+        s.z -= speed * dt;
+        var x1 = cx + s.x / s.z * k, y1 = cy + s.y / s.z * k;
+        if (s.z <= 0.01 || x1 < -50 || x1 > w + 50 || y1 < -50 || y1 > h + 50) {
+          s.x = rand(-1, 1); s.y = rand(-1, 1); s.z = 1;
+          continue;
+        }
+        var z0 = s.z + trail;
+        var x0 = cx + s.x / z0 * k, y0 = cy + s.y / z0 * k;
+        var near = 1 - s.z;
+        ctx.globalAlpha = Math.min(1, near * 1.3);
+        ctx.strokeStyle = colors[s.c];
+        ctx.lineWidth = 0.4 + near * 2.2;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      particleFrame = requestAnimationFrame(frame);
+    }
+    particleFrame = requestAnimationFrame(frame);
+  }
+
+  function buildGilded(cfg) {
+    var rays = document.createElement('div');
+    rays.className = 'deco-rays';
+    particlesEl.appendChild(rays);
+
+    var sheen = document.createElement('div');
+    sheen.className = 'gold-sheen';
+    particlesEl.appendChild(sheen);
+
+    for (var i = 0; i < cfg.dust; i++) {
+      var d = document.createElement('div');
+      d.className = 'gold-dust';
+      var size = rand(1.5, 3.5);
+      d.style.width = size + 'px';
+      d.style.height = size + 'px';
+      d.style.left = rand(0, 100) + 'vw';
+      d.style.setProperty('--sway', rand(-40, 40) + 'px');
+      var drift = rand(14, 26), twinkle = rand(1.2, 3);
+      d.style.animationDuration = drift + 's, ' + twinkle + 's';
+      d.style.animationDelay = '-' + rand(0, drift) + 's, -' + rand(0, twinkle) + 's';
+      particlesEl.appendChild(d);
+    }
+
+    function glint() {
+      var g = document.createElement('div');
+      g.className = 'gold-glint';
+      g.style.left = rand(5, 95) + 'vw';
+      g.style.top = rand(5, 95) + 'vh';
+      g.style.width = g.style.height = rand(28, 56) + 'px';
+      particlesEl.appendChild(g);
+      setTimeout(function () { g.remove(); }, 1700);
+    }
+    addTimer(glint, cfg.glintInterval);
+  }
+
+  function buildPrism(cfg) {
+    ['a', 'b'].forEach(function (k) {
+      var f = document.createElement('div');
+      f.className = 'prism-field ' + k;
+      particlesEl.appendChild(f);
+    });
+    for (var i = 0; i < cfg.beams; i++) {
+      var b = document.createElement('div');
+      b.className = 'prism-beam';
+      b.style.left = (10 + i * 80 / Math.max(1, cfg.beams - 1)) + 'vw';
+      b.style.setProperty('--beam', ['var(--accent)', '#ffffff', 'var(--accent-2)', '#ff5fa2'][i % 4]);
+      var swing = rand(18, 34);
+      b.style.setProperty('--from', -swing + 'deg');
+      b.style.setProperty('--to', swing + 'deg');
+      b.style.animationDuration = rand(7, 13) + 's';
+      b.style.animationDelay = '-' + rand(0, 10) + 's';
+      particlesEl.appendChild(b);
+    }
+  }
+
+  function buildMesh(cfg) {
+    cfg.orbs.forEach(function (color) {
+      var o = document.createElement('div');
+      o.className = 'mesh-orb';
+      o.style.setProperty('--orb', color);
+      o.style.setProperty('--size', rand(60, 95) + 'vmax');
+      o.style.left = rand(0, 100) + 'vw';
+      o.style.top = rand(0, 100) + 'vh';
+      o.style.setProperty('--dx1', rand(-30, 30) + 'vw');
+      o.style.setProperty('--dy1', rand(-30, 30) + 'vh');
+      o.style.setProperty('--dx2', rand(-30, 30) + 'vw');
+      o.style.setProperty('--dy2', rand(-30, 30) + 'vh');
+      var dur = rand(18, 32);
+      o.style.animationDuration = dur + 's';
+      o.style.animationDelay = '-' + rand(0, dur) + 's';
+      particlesEl.appendChild(o);
+    });
+    var grain = document.createElement('div');
+    grain.className = 'film-grain';
+    particlesEl.appendChild(grain);
+  }
+
   function renderParticles(theme) {
     clearParticles();
     var cfg = THEME_ANIM[theme];
@@ -977,6 +1133,10 @@
     else if (cfg.type === 'fireworks') buildFireworks(cfg);
     else if (cfg.type === 'ripple') buildRipple(cfg);
     else if (cfg.type === 'lava') buildLava(cfg);
+    else if (cfg.type === 'warp') buildWarp(cfg);
+    else if (cfg.type === 'gilded') buildGilded(cfg);
+    else if (cfg.type === 'prism') buildPrism(cfg);
+    else if (cfg.type === 'mesh') buildMesh(cfg);
   }
 
   function greetingFor(hour) {

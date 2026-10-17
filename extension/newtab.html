@@ -303,6 +303,66 @@
     --clock-2: #ff6ea3;
   }
 
+  html[data-theme="hyperdrive"] {
+    --bg: #03040b;
+    --bg-gradient: radial-gradient(ellipse 70% 55% at 50% 42%, #0d1338, #03040b 70%);
+    --surface: #0a0d20;
+    --surface-hover: #11163a;
+    --border: #212a5c;
+    --text: #e6ecff;
+    --text-dim: #8a93c4;
+    --accent: #00e5ff;
+    --accent-2: #ff3df2;
+    --shadow: rgba(0, 229, 255, 0.3);
+    --clock: #a6f4ff;
+    --clock-2: #ff7af5;
+  }
+
+  html[data-theme="gilded"] {
+    --bg: #0a0805;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% 110%, #2b200b, #0a0805 65%);
+    --surface: #14100a;
+    --surface-hover: #1e180d;
+    --border: #3d3018;
+    --text: #f6ecd6;
+    --text-dim: #b39d70;
+    --accent: #d4af37;
+    --accent-2: #ffe08a;
+    --shadow: rgba(212, 175, 55, 0.3);
+    --clock: #ffe9a8;
+    --clock-2: #d4a531;
+  }
+
+  html[data-theme="prism"] {
+    --bg: #07050d;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #1a1233, #07050d 65%);
+    --surface: #110c1f;
+    --surface-hover: #1a1330;
+    --border: #2f2552;
+    --text: #f1ecff;
+    --text-dim: #9d93c4;
+    --accent: #8b6cff;
+    --accent-2: #2ee6c8;
+    --shadow: rgba(139, 108, 255, 0.32);
+    --clock: #b9fff1;
+    --clock-2: #a48bff;
+  }
+
+  html[data-theme="velvet"] {
+    --bg: #0c0306;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #26060f, #0c0306 65%);
+    --surface: #18070c;
+    --surface-hover: #240b13;
+    --border: #46151f;
+    --text: #ffe9ec;
+    --text-dim: #c48c95;
+    --accent: #ff2a55;
+    --accent-2: #ff9a3c;
+    --shadow: rgba(255, 42, 85, 0.32);
+    --clock: #ffc08f;
+    --clock-2: #ff4d6d;
+  }
+
   * { box-sizing: border-box; }
 
   html, body {
@@ -774,6 +834,162 @@
   @keyframes lava-float {
     0% { transform: translateY(8vh) scale(0.9); }
     100% { transform: translateY(-70vh) scale(1.15); }
+  }
+
+  /* ---- Hyperdrive: warp starfield, drawn on a canvas ---- */
+  .warp-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ---- Gilded: art-deco sunburst, gold dust, glints, a sweeping sheen ---- */
+  .deco-rays {
+    position: absolute;
+    left: 50%;
+    bottom: -60vmax;
+    width: 160vmax;
+    height: 160vmax;
+    margin-left: -80vmax;
+    border-radius: 50%;
+    background: repeating-conic-gradient(from 0deg, var(--accent) 0deg 1.2deg, transparent 1.2deg 10deg);
+    -webkit-mask: radial-gradient(circle, transparent 18%, #000 30%, transparent 70%);
+    mask: radial-gradient(circle, transparent 18%, #000 30%, transparent 70%);
+    opacity: 0.075;
+    animation: deco-turn 60s ease-in-out infinite alternate;
+  }
+
+  @keyframes deco-turn {
+    from { transform: rotate(-8deg); }
+    to { transform: rotate(8deg); }
+  }
+
+  .gold-sheen {
+    position: absolute;
+    top: -50%;
+    left: 0;
+    width: 40vmax;
+    height: 200%;
+    background: linear-gradient(90deg, transparent, rgba(255, 224, 138, 0.09) 45%, rgba(255, 240, 200, 0.14) 50%, rgba(255, 224, 138, 0.09) 55%, transparent);
+    transform: translateX(-60vmax) rotate(18deg);
+    animation: gold-sheen 11s ease-in-out infinite;
+  }
+
+  @keyframes gold-sheen {
+    0%, 15% { transform: translateX(-60vmax) rotate(18deg); }
+    55%, 100% { transform: translateX(calc(100vw + 20vmax)) rotate(18deg); }
+  }
+
+  .gold-dust {
+    position: absolute;
+    bottom: -10px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 6px 1px var(--accent);
+    animation: gold-drift linear infinite, gold-twinkle ease-in-out infinite alternate;
+  }
+
+  @keyframes gold-drift {
+    0% { transform: translate(0, 0); }
+    50% { transform: translate(var(--sway, 20px), -55vh); }
+    100% { transform: translate(0, -110vh); }
+  }
+
+  @keyframes gold-twinkle {
+    from { opacity: 0.15; }
+    to { opacity: 0.9; }
+  }
+
+  /* A four-point star: two thin gradient bars crossed over a soft core. */
+  .gold-glint {
+    position: absolute;
+    width: 46px;
+    height: 46px;
+    margin: -23px 0 0 -23px;
+    background:
+      radial-gradient(circle, rgba(255, 246, 214, 0.95), transparent 22%),
+      linear-gradient(90deg, transparent, var(--accent-2), transparent) center / 100% 2px no-repeat,
+      linear-gradient(0deg, transparent, var(--accent-2), transparent) center / 2px 100% no-repeat;
+    animation: gold-glint 1.6s ease-in-out forwards;
+  }
+
+  @keyframes gold-glint {
+    0% { transform: scale(0) rotate(0deg); opacity: 0; }
+    45% { transform: scale(1) rotate(45deg); opacity: 1; }
+    100% { transform: scale(0) rotate(90deg); opacity: 0; }
+  }
+
+  /* ---- Prism: counter-rotating iridescent fields and sweeping beams ---- */
+  .prism-field {
+    position: absolute;
+    width: 170vmax;
+    height: 170vmax;
+    margin: -85vmax 0 0 -85vmax;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, var(--accent), #ff5fa2, #ffd36e, var(--accent-2), #4f8bff, var(--accent));
+    -webkit-mask: radial-gradient(circle, transparent 0%, #000 14%, rgba(0, 0, 0, 0.6) 30%, transparent 58%);
+    mask: radial-gradient(circle, transparent 0%, #000 14%, rgba(0, 0, 0, 0.6) 30%, transparent 58%);
+    opacity: 0.34;
+    mix-blend-mode: screen;
+    animation: prism-spin linear infinite;
+  }
+  .prism-field.a { left: 12%; top: 8%; animation-duration: 48s; }
+  .prism-field.b { left: 88%; top: 92%; animation-duration: 64s; animation-direction: reverse; }
+
+  @keyframes prism-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .prism-beam {
+    position: absolute;
+    top: -20vh;
+    width: 7vmax;
+    height: 150vh;
+    background: linear-gradient(180deg, var(--beam, #fff), transparent 70%);
+    transform-origin: 50% 0;
+    mix-blend-mode: screen;
+    animation: prism-beam ease-in-out infinite alternate;
+  }
+
+  @keyframes prism-beam {
+    from { transform: rotate(var(--from, -30deg)); opacity: 0.08; }
+    to { transform: rotate(var(--to, 30deg)); opacity: 0.26; }
+  }
+
+  /* ---- Velvet: a morphing mesh gradient under film grain ---- */
+  .mesh-orb {
+    position: absolute;
+    width: var(--size, 80vmax);
+    height: var(--size, 80vmax);
+    margin: calc(var(--size, 80vmax) / -2) 0 0 calc(var(--size, 80vmax) / -2);
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--orb), transparent 62%);
+    opacity: 0.5;
+    animation: mesh-drift ease-in-out infinite alternate;
+  }
+
+  @keyframes mesh-drift {
+    0% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(var(--dx1, 10vw), var(--dy1, 10vh)) scale(1.2); }
+    100% { transform: translate(var(--dx2, -10vw), var(--dy2, 5vh)) scale(0.9); }
+  }
+
+  .film-grain {
+    position: absolute;
+    inset: -50%;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.07;
+    animation: film-grain 0.9s steps(6) infinite;
+  }
+
+  @keyframes film-grain {
+    0% { transform: translate(0, 0); }
+    20% { transform: translate(-6%, 4%); }
+    40% { transform: translate(5%, -7%); }
+    60% { transform: translate(-3%, 8%); }
+    80% { transform: translate(7%, 2%); }
+    100% { transform: translate(0, 0); }
   }
 
   .app {
@@ -1750,6 +1966,14 @@
   .swatch[data-swatch="ripple"] .swatch-preview { background: linear-gradient(135deg, #38bdf8, #0e7490); }
   .swatch[data-swatch="lava"] { background: #170720; }
   .swatch[data-swatch="lava"] .swatch-preview { background: linear-gradient(135deg, #ffa14a, #ff4d8d); }
+  .swatch[data-swatch="hyperdrive"] { background: #0a0d20; }
+  .swatch[data-swatch="hyperdrive"] .swatch-preview { background: linear-gradient(135deg, #00e5ff, #03040b 55%, #ff3df2); }
+  .swatch[data-swatch="gilded"] { background: #14100a; }
+  .swatch[data-swatch="gilded"] .swatch-preview { background: linear-gradient(135deg, #ffe08a, #d4af37 45%, #0a0805); }
+  .swatch[data-swatch="prism"] { background: #110c1f; }
+  .swatch[data-swatch="prism"] .swatch-preview { background: conic-gradient(#8b6cff, #ff5fa2, #ffd36e, #2ee6c8, #4f8bff, #8b6cff); }
+  .swatch[data-swatch="velvet"] { background: #18070c; }
+  .swatch[data-swatch="velvet"] .swatch-preview { background: linear-gradient(135deg, #7b2cff, #ff2a55 50%, #ff9a3c); }
 
   .hint { font-size: 11.5px; color: var(--text-dim); line-height: 1.6; }
 
@@ -1926,6 +2150,10 @@
       <button class="swatch" data-swatch="festival"><div class="swatch-preview"></div>Festival</button>
       <button class="swatch" data-swatch="ripple"><div class="swatch-preview"></div>Ripple</button>
       <button class="swatch" data-swatch="lava"><div class="swatch-preview"></div>Lava</button>
+      <button class="swatch" data-swatch="hyperdrive"><div class="swatch-preview"></div>Hyperdrive</button>
+      <button class="swatch" data-swatch="gilded"><div class="swatch-preview"></div>Gilded</button>
+      <button class="swatch" data-swatch="prism"><div class="swatch-preview"></div>Prism</button>
+      <button class="swatch" data-swatch="velvet"><div class="swatch-preview"></div>Velvet</button>
     </div>
     <div class="color-custom">
       <div class="color-field">
