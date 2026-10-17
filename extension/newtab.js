@@ -275,13 +275,13 @@
           icon.classList.remove('loading');
           icon.innerHTML = '';
           icon.textContent = initialFor(s.name);
-          icon.classList.add('letter-in');
+          icon.classList.add('letter', 'letter-in');
         };
         img.src = 'https://www.google.com/s2/favicons?sz=64&domain=' + host;
         icon.appendChild(img);
       } else {
         icon.textContent = initialFor(s.name);
-        icon.classList.add('letter-in');
+        icon.classList.add('letter', 'letter-in');
       }
 
       var label = document.createElement('div');
@@ -608,7 +608,7 @@
     velvet:    { type: 'mesh', orbs: ['var(--accent)', '#7b2cff', 'var(--accent-2)', '#c2185b', '#4a148c'] },
     carbon:    { type: 'carbon' },
     pulse:     { type: 'pulse', speed: 230, beat: 280 },
-    shard:     { type: 'shard', count: 11 },
+    shard:     { type: 'shard', count: 12 },
     hive:      { type: 'hive', cell: 22, waveInterval: 1900, waveSpeed: 300 },
     eclipse:   { type: 'eclipse', streamers: 220, stars: 40, cycle: 22 },
     silk:      { type: 'silk', density: 0.9, speed: 42, scale: 0.0022 },
@@ -1158,61 +1158,139 @@
     particleFrame = requestAnimationFrame(frame);
   }
 
+  // Shard: panes of dark glass drifting at different depths. Each face is
+  // pre-rendered once (far ones blurred, for depth of field) and moved with
+  // a transform, so motion is sub-pixel smooth; a comet of light with a
+  // tapered tail runs round each edge.
   function buildShard(cfg) {
-    var w = window.innerWidth, h = window.innerHeight;
-    var svg = document.createElementNS(SVG_NS, 'svg');
-    svg.setAttribute('class', 'shard-svg');
-    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
-    svg.innerHTML =
-      '<defs><linearGradient id="shardFill" x1="0" y1="0" x2="1" y2="1">' +
-      '<stop offset="0" stop-color="#3a3a42" stop-opacity="0.55"/>' +
-      '<stop offset="0.55" stop-color="#1c1c21" stop-opacity="0.35"/>' +
-      '<stop offset="1" stop-color="#0e0e11" stop-opacity="0.15"/>' +
-      '</linearGradient></defs>';
-    var edges = [];
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, dpr = c.dpr, TAU = Math.PI * 2;
     var big = Math.max(w, h);
-    for (var i = 0; i < cfg.count; i++) {
-      // A long, thin, irregular triangle or quad, like a broken pane.
-      var cx = rand(-0.05, 1.05) * w, cy = rand(-0.05, 1.05) * h;
-      var len = rand(0.18, 0.42) * big, wid = len * rand(0.18, 0.4), ang = rand(0, Math.PI);
-      var ca = Math.cos(ang), sa = Math.sin(ang);
-      var local = [[-len / 2, rand(-0.2, 0.2) * wid], [len / 2, rand(-0.3, 0.3) * wid], [rand(-0.2, 0.3) * len, wid / 2]];
-      if (Math.random() < 0.5) local.push([rand(-0.3, 0.2) * len, -wid / 2]);
-      var pts = local.map(function (q) { return (cx + q[0] * ca - q[1] * sa).toFixed(1) + ',' + (cy + q[0] * sa + q[1] * ca).toFixed(1); }).join(' ');
 
-      var g = document.createElementNS(SVG_NS, 'g');
-      g.setAttribute('class', 'shard');
-      var r0 = rand(-6, 6);
-      g.style.setProperty('--r0', r0 + 'deg');
-      g.style.setProperty('--r1', (r0 + rand(-14, 14)) + 'deg');
-      g.style.setProperty('--tx', rand(-40, 40) + 'px');
-      g.style.setProperty('--ty', rand(-50, 50) + 'px');
-      g.style.animationDuration = rand(16, 30) + 's';
-      g.style.animationDelay = '-' + rand(0, 16) + 's';
-
-      var face = document.createElementNS(SVG_NS, 'polygon');
-      face.setAttribute('class', 'shard-face');
-      face.setAttribute('points', pts);
-      face.setAttribute('fill', 'url(#shardFill)');
-      g.appendChild(face);
-
-      var edge = document.createElementNS(SVG_NS, 'polygon');
-      edge.setAttribute('class', 'shard-edge');
-      edge.setAttribute('points', pts);
-      g.appendChild(edge);
-      edges.push(edge);
-      svg.appendChild(g);
+    function roundedPoly(g, pts, r) {
+      var n = pts.length;
+      g.beginPath();
+      for (var i = 0; i < n; i++) {
+        var p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n];
+        var a1 = Math.atan2(p0[1] - p1[1], p0[0] - p1[0]), a2 = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]);
+        var q1 = [p1[0] + Math.cos(a1) * r, p1[1] + Math.sin(a1) * r];
+        var q2 = [p1[0] + Math.cos(a2) * r, p1[1] + Math.sin(a2) * r];
+        if (i === 0) g.moveTo(q1[0], q1[1]); else g.lineTo(q1[0], q1[1]);
+        g.quadraticCurveTo(p1[0], p1[1], q2[0], q2[1]);
+      }
+      g.closePath();
     }
-    particlesEl.appendChild(svg);
 
-    // A short run of light chasing round each edge; lengths need the node in the document.
-    edges.forEach(function (e) {
-      var perim = e.getTotalLength();
-      var run = perim * rand(0.08, 0.16);
-      e.style.strokeDasharray = run + ' ' + (perim - run);
-      e.style.setProperty('--dash', -perim + 'px');
-      e.style.animationDuration = rand(4, 9) + 's';
-      e.style.animationDelay = '-' + rand(0, 8) + 's';
+    var shards = [];
+    for (var i = 0; i < cfg.count; i++) {
+      var depth = i < 3 ? rand(0.15, 0.35) : rand(0.5, 1);
+      var len = big * rand(0.16, 0.36) * (0.7 + depth * 0.4), wid = len * rand(0.2, 0.42);
+      var pts = [[-len / 2, rand(-0.15, 0.15) * wid], [rand(-0.1, 0.3) * len, -wid / 2], [len / 2, rand(-0.2, 0.2) * wid], [rand(-0.25, 0.15) * len, wid / 2]];
+      if (Math.random() < 0.4) pts.splice(1, 1);
+      var minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+      pts.forEach(function (p) { minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]); minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]); });
+      var blur = depth < 0.4 ? 7 : 0, pad = 4 + blur * 3;
+      var sw = maxX - minX + pad * 2, sh = maxY - minY + pad * 2;
+      var spr = document.createElement('canvas');
+      spr.width = Math.ceil(sw * dpr);
+      spr.height = Math.ceil(sh * dpr);
+      var g = spr.getContext('2d');
+      g.scale(dpr, dpr);
+      g.translate(pad - minX, pad - minY);
+      if (blur) g.filter = 'blur(' + blur + 'px)';
+      roundedPoly(g, pts, 6);
+      var fill = g.createLinearGradient(minX, minY, maxX, maxY);
+      fill.addColorStop(0, 'rgba(78, 78, 90, 0.5)');
+      fill.addColorStop(0.45, 'rgba(34, 34, 40, 0.42)');
+      fill.addColorStop(1, 'rgba(14, 14, 18, 0.2)');
+      g.fillStyle = fill;
+      g.fill();
+      // Bevel: a bright hairline on the lit side, fading round the pane.
+      var bevel = g.createLinearGradient(minX, minY, maxX, maxY);
+      bevel.addColorStop(0, 'rgba(255, 255, 255, 0.28)');
+      bevel.addColorStop(0.5, 'rgba(255, 255, 255, 0.06)');
+      bevel.addColorStop(1, 'rgba(255, 255, 255, 0.02)');
+      g.strokeStyle = bevel;
+      g.lineWidth = 1;
+      g.stroke();
+      // Sheen across the face.
+      g.save();
+      g.clip();
+      var sheen = g.createLinearGradient(minX, maxY, maxX, minY);
+      sheen.addColorStop(0.35, 'rgba(255, 255, 255, 0)');
+      sheen.addColorStop(0.5, 'rgba(255, 255, 255, 0.07)');
+      sheen.addColorStop(0.65, 'rgba(255, 255, 255, 0)');
+      g.fillStyle = sheen;
+      g.fillRect(minX, minY, maxX - minX, maxY - minY);
+      g.restore();
+
+      var per = 0, segs = [];
+      for (var k = 0; k < pts.length; k++) {
+        var p1 = pts[k], p2 = pts[(k + 1) % pts.length], l = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+        segs.push(l);
+        per += l;
+      }
+      shards.push({
+        spr: spr, ox: minX - pad, oy: minY - pad, sw: sw, sh: sh, pts: pts, segs: segs, per: per, depth: depth,
+        x0: rand(-0.05, 1.05) * w, y0: rand(-0.05, 1.05) * h, r0: rand(0, TAU),
+        ax: rand(20, 50) * depth, ay: rand(25, 60) * depth, ar: rand(0.08, 0.2), fx: rand(0.05, 0.11), fy: rand(0.04, 0.09), fr: rand(0.03, 0.07), ph: rand(0, TAU),
+        d: rand(0, per), sp: rand(0.12, 0.28) * per, tail: per * rand(0.14, 0.24), lit: depth > 0.45
+      });
+    }
+    shards.sort(function (a, b) { return a.depth - b.depth; });
+
+    function along(sh, d) {
+      d = ((d % sh.per) + sh.per) % sh.per;
+      for (var k = 0; k < sh.segs.length; k++) {
+        if (d <= sh.segs[k]) {
+          var f = d / sh.segs[k], a = sh.pts[k], b = sh.pts[(k + 1) % sh.pts.length];
+          return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+        }
+        d -= sh.segs[k];
+      }
+      return sh.pts[0];
+    }
+
+    runFrames(function (t, dt, col) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      shards.forEach(function (sh) {
+        var x = sh.x0 + Math.sin(t * sh.fx + sh.ph) * sh.ax;
+        var y = sh.y0 + Math.sin(t * sh.fy + sh.ph * 1.3) * sh.ay;
+        var r = sh.r0 + Math.sin(t * sh.fr + sh.ph) * sh.ar;
+        var cr = Math.cos(r), sr = Math.sin(r);
+        ctx.setTransform(dpr * cr, dpr * sr, -dpr * sr, dpr * cr, dpr * x, dpr * y);
+        ctx.globalAlpha = 0.55 + sh.depth * 0.45;
+        ctx.drawImage(sh.spr, sh.ox, sh.oy, sh.sw, sh.sh);
+        if (!sh.lit) return;
+
+        // Comet: head plus a tail of short segments thinning and fading.
+        sh.d += sh.sp * dt;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineCap = ctx.lineJoin = 'round';
+        var steps = 18, prev = along(sh, sh.d);
+        for (var s2 = 1; s2 <= steps; s2++) {
+          var q = along(sh, sh.d - sh.tail * s2 / steps), f = 1 - s2 / steps;
+          ctx.strokeStyle = col[0];
+          ctx.globalAlpha = 0.16 * f;
+          ctx.lineWidth = 7 * f + 1;
+          ctx.beginPath();
+          ctx.moveTo(prev[0], prev[1]);
+          ctx.lineTo(q[0], q[1]);
+          ctx.stroke();
+          ctx.globalAlpha = 0.95 * f;
+          ctx.lineWidth = 1.6 * f + 0.4;
+          ctx.stroke();
+          prev = q;
+        }
+        var hd = along(sh, sh.d);
+        ctx.globalAlpha = 0.9;
+        stamp(ctx, glowSprite(col[0], true), hd[0], hd[1], 10);
+        ctx.globalCompositeOperation = 'source-over';
+      });
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.globalAlpha = 1;
     });
   }
 
@@ -4477,6 +4555,17 @@
     var r = t.getBoundingClientRect();
     t.style.setProperty('--mx', (e.clientX - r.left) + 'px');
     t.style.setProperty('--my', (e.clientY - r.top) + 'px');
+    if (e.pointerType === 'mouse' && !editing) {
+      t.style.setProperty('--ry', (((e.clientX - r.left) / r.width - 0.5) * 12).toFixed(2) + 'deg');
+      t.style.setProperty('--rx', ((0.5 - (e.clientY - r.top) / r.height) * 12).toFixed(2) + 'deg');
+    }
+  });
+  grid.addEventListener('pointerout', function (e) {
+    var t = e.target.closest && e.target.closest('.tile');
+    if (t && !t.contains(e.relatedTarget)) {
+      t.style.removeProperty('--rx');
+      t.style.removeProperty('--ry');
+    }
   });
 
   // Opening choreography runs once, on first paint.
