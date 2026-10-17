@@ -483,6 +483,66 @@
     --clock-2: #ffb35c;
   }
 
+  html[data-theme="kintsugi"] {
+    --bg: #121316;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 30% 10%, #24262c, #121316 70%);
+    --surface: #1a1b1f;
+    --surface-hover: #222328;
+    --border: #33343a;
+    --text: #f2ede2;
+    --text-dim: #a39f95;
+    --accent: #d4a64a;
+    --accent-2: #f6dc98;
+    --shadow: rgba(212, 166, 74, 0.28);
+    --clock: #f7e3ae;
+    --clock-2: #d4a64a;
+  }
+
+  html[data-theme="ink"] {
+    --bg: #f3efe6;
+    --bg-gradient: linear-gradient(180deg, #fbf9f4, #f3efe6 70%);
+    --surface: #ffffff;
+    --surface-hover: #f4efe4;
+    --border: #e2dccd;
+    --text: #23222a;
+    --text-dim: #77736a;
+    --accent: #2b3a8c;
+    --accent-2: #c0392b;
+    --shadow: rgba(43, 58, 140, 0.15);
+    --clock: #1d2559;
+    --clock-2: #2b3a8c;
+  }
+
+  html[data-theme="liquidchrome"] {
+    --bg: #0b0c10;
+    --bg-gradient: linear-gradient(180deg, #14161c, #0b0c10 70%);
+    --surface: #14161c;
+    --surface-hover: #1b1e26;
+    --border: #2a2e38;
+    --text: #eef1f6;
+    --text-dim: #9aa1ad;
+    --accent: #9ecbff;
+    --accent-2: #e6ebf2;
+    --shadow: rgba(158, 203, 255, 0.25);
+    --clock: #ffffff;
+    --clock-2: #b8c7da;
+  }
+
+  html[data-theme="origami"] {
+    --bg: #0d1b24;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #17323f, #0d1b24 65%);
+    --surface: #12232d;
+    --surface-hover: #183041;
+    --border: #26404f;
+    --text: #eef3f2;
+    --text-dim: #93a9ae;
+    --accent: #ff7a59;
+    --accent-2: #fdf6e3;
+    --shadow: rgba(255, 122, 89, 0.28);
+    --clock: #fdf6e3;
+    --clock-2: #ff9a7a;
+  }
+
   * { box-sizing: border-box; }
 
   html, body {
@@ -1213,6 +1273,46 @@
   @keyframes bokeh-drift {
     from { transform: translate(0, 0) scale(1); opacity: var(--o0, 0.3); }
     to { transform: translate(var(--bx, 20px), var(--by, 10px)) scale(1.15); opacity: var(--o1, 0.55); }
+  }
+
+  /* ---- Kintsugi: raku glaze under the gold seams ---- */
+  .ceramic {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 55% 45% at 28% 18%, rgba(255, 255, 255, 0.06), transparent 70%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.09;
+  }
+
+  /* ---- Ink: dark plumes on a light page, so fade them hard behind the clock ---- */
+  .ink-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    -webkit-mask: radial-gradient(ellipse 65% 32% at 50% 22%, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.25) 60%, #000 100%);
+    mask: radial-gradient(ellipse 65% 32% at 50% 22%, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.25) 60%, #000 100%);
+  }
+
+  /* ---- Liquid Chrome: rendered small and scaled up, which is the blur ---- */
+  .chrome-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.75;
+    -webkit-mask: radial-gradient(ellipse 48% 36% at 50% 26%, rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.22) 55%, #000 100%);
+    mask: radial-gradient(ellipse 48% 36% at 50% 26%, rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.22) 55%, #000 100%);
+  }
+
+  /* ---- Origami: faint creases from a sheet folded and unfolded ---- */
+  .origami-creases {
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(45deg, transparent 0 139px, rgba(255, 255, 255, 0.03) 139px 140px),
+      repeating-linear-gradient(-45deg, transparent 0 139px, rgba(255, 255, 255, 0.03) 139px 140px);
   }
 
   /* ---- Velvet: a morphing mesh gradient under film grain ---- */
@@ -2248,6 +2348,14 @@
   .swatch[data-swatch="contour"] .swatch-preview { background: repeating-radial-gradient(ellipse at 30% 70%, #0f1011 0 5px, #d9895b 5px 6px); }
   .swatch[data-swatch="nocturne"] { background: #0e0f15; }
   .swatch[data-swatch="nocturne"] .swatch-preview { background: radial-gradient(circle at 25% 45%, #ffb35c 0 4px, transparent 12px), radial-gradient(circle at 70% 60%, #5ad1ff 0 3px, transparent 10px), radial-gradient(circle at 52% 30%, #ff5d8f 0 2px, transparent 8px), #06070b; }
+  .swatch[data-swatch="kintsugi"] { background: #1a1b1f; }
+  .swatch[data-swatch="kintsugi"] .swatch-preview { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 32' preserveAspectRatio='none'%3E%3Cpath d='M0 20l14-4 9 5 12-9 10 3 8-8 14 6 9-4 11 7 13-3M45 15l4 12M68 13l-6-10' fill='none' stroke='%23e3b95c' stroke-width='1.6'/%3E%3C/svg%3E") center / 100% 100% no-repeat, #121316; }
+  .swatch[data-swatch="ink"] { background: #ffffff; color: #23222a; }
+  .swatch[data-swatch="ink"] .swatch-preview { background: radial-gradient(circle at 35% 45%, #2b3a8c 0 4px, rgba(43, 58, 140, 0.35) 9px, transparent 18px), radial-gradient(circle at 70% 60%, #c0392b 0 3px, rgba(192, 57, 43, 0.3) 7px, transparent 13px), #f3efe6; }
+  .swatch[data-swatch="liquidchrome"] { background: #14161c; }
+  .swatch[data-swatch="liquidchrome"] .swatch-preview { background: linear-gradient(180deg, #f1f5f9, #6b7280 30%, #0b0c10 48%, #9ecbff 62%, #e6ebf2 74%, #1b1e26); }
+  .swatch[data-swatch="origami"] { background: #12232d; }
+  .swatch[data-swatch="origami"] .swatch-preview { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 32'%3E%3Cpath d='M70 14L38 6l6 8z' fill='%23fdf6e3'/%3E%3Cpath d='M70 14L44 14l-6 12z' fill='%23e3d9c2'/%3E%3Cpath d='M70 14L44 14l-3 5z' fill='%23bfb399'/%3E%3Cpath d='M30 16h-4M20 18h-4M10 20H6' stroke='%23ff7a59' stroke-width='1.5'/%3E%3C/svg%3E") center / contain no-repeat, #0d1b24; }
 
   .hint { font-size: 11.5px; color: var(--text-dim); line-height: 1.6; }
 
@@ -2453,6 +2561,10 @@
       <button class="swatch" data-swatch="silk"><div class="swatch-preview"></div>Silk</button>
       <button class="swatch" data-swatch="contour"><div class="swatch-preview"></div>Contour</button>
       <button class="swatch" data-swatch="nocturne"><div class="swatch-preview"></div>Nocturne</button>
+      <button class="swatch" data-swatch="kintsugi"><div class="swatch-preview"></div>Kintsugi</button>
+      <button class="swatch" data-swatch="ink"><div class="swatch-preview"></div>Ink</button>
+      <button class="swatch" data-swatch="liquidchrome"><div class="swatch-preview"></div>Liquid Chrome</button>
+      <button class="swatch" data-swatch="origami"><div class="swatch-preview"></div>Origami</button>
     </div>
     <div class="color-custom">
       <div class="color-field">

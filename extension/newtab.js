@@ -546,7 +546,11 @@
     eclipse:   { type: 'eclipse', streamers: 220, stars: 40, cycle: 22 },
     silk:      { type: 'silk', density: 0.9, speed: 42, scale: 0.0022 },
     contour:   { type: 'contour', step: 14, levels: 15, scale: 0.0032 },
-    nocturne:  { type: 'nocturne', bokeh: 16, drops: 0.35, runners: 9 }
+    nocturne:  { type: 'nocturne', bokeh: 16, drops: 0.35, runners: 9 },
+    kintsugi:  { type: 'kintsugi', maxRoots: 5, seedInterval: 2600, speed: 70, branch: 0.045, life: 34 },
+    ink:       { type: 'ink', perDrop: 220, max: 1300, interval: 2600 },
+    liquidchrome: { type: 'chrome', res: 4, waves: 5, bands: 5.5 },
+    origami:   { type: 'origami', planes: 7 }
   };
 
   function clearParticles() {
@@ -1703,6 +1707,322 @@
     });
   }
 
+  // Tap or click anywhere: hands the point to an effect, and unhooks itself
+  // when the theme changes.
+  function onTap(fn) {
+    function handler(e) { fn(e.clientX, e.clientY); }
+    window.addEventListener('pointerdown', handler);
+    particleCleanups.push(function () { window.removeEventListener('pointerdown', handler); });
+  }
+
+  function hexToRgb(hex) {
+    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [200, 200, 200];
+  }
+
+  function buildKintsugi(cfg) {
+    var glaze = document.createElement('div');
+    glaze.className = 'ceramic';
+    particlesEl.appendChild(glaze);
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, now = 0;
+    var cracks = [], glint = null;
+
+    function crack(x, y, ang, width, gen, steps) {
+      cracks.push({ pts: [x, y], x: x, y: y, ang: ang, width: width, gen: gen, left: steps, born: now, growing: true, acc: 0 });
+    }
+    function seed() {
+      var roots = cracks.filter(function (k) { return k.gen === 0 && now - k.born < cfg.life; }).length;
+      if (roots >= cfg.maxRoots) return;
+      // Most seams run in from an edge, the way a dropped bowl breaks.
+      var edge = Math.floor(Math.random() * 6), x, y, ang;
+      if (edge === 0) { x = rand(0, w); y = -4; ang = Math.PI / 2; }
+      else if (edge === 1) { x = w + 4; y = rand(0, h); ang = Math.PI; }
+      else if (edge === 2) { x = rand(0, w); y = h + 4; ang = -Math.PI / 2; }
+      else if (edge === 3) { x = -4; y = rand(0, h); ang = 0; }
+      else { x = rand(0.1, 0.9) * w; y = rand(0.1, 0.9) * h; ang = rand(0, Math.PI * 2); }
+      crack(x, y, ang + rand(-0.6, 0.6), rand(1.6, 2.4), 0, Math.round(rand(70, 160)));
+    }
+    for (var n = 0; n < 4; n++) seed();
+    addTimer(seed, cfg.seedInterval);
+
+    runFrames(function (t, dt, col) {
+      now = t;
+      cracks.forEach(function (k) {
+        if (!k.growing) return;
+        k.acc += dt * cfg.speed;
+        while (k.acc > 7 && k.growing) {
+          var step = rand(5, 10);
+          k.acc -= step;
+          k.ang += rand(-0.38, 0.38);
+          k.x += Math.cos(k.ang) * step;
+          k.y += Math.sin(k.ang) * step;
+          k.pts.push(k.x, k.y);
+          if (k.gen < 2 && Math.random() < cfg.branch) {
+            crack(k.x, k.y, k.ang + (Math.random() < 0.5 ? 1 : -1) * rand(0.5, 1.1), k.width * 0.6, k.gen + 1, Math.round(k.left * rand(0.3, 0.6)));
+          }
+          if (--k.left <= 0 || k.x < -20 || k.x > w + 20 || k.y < -20 || k.y > h + 20) k.growing = false;
+        }
+      });
+      cracks = cracks.filter(function (k) { return t - k.born < cfg.life + 6; });
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.lineCap = ctx.lineJoin = 'round';
+      cracks.forEach(function (k) {
+        var age = t - k.born;
+        var a = age > cfg.life ? 1 - (age - cfg.life) / 6 : Math.min(1, age * 3);
+        ctx.beginPath();
+        ctx.moveTo(k.pts[0], k.pts[1]);
+        for (var i = 2; i < k.pts.length; i += 2) ctx.lineTo(k.pts[i], k.pts[i + 1]);
+        // Glow, then the gold itself, then a bright core where the lacquer catches light.
+        ctx.strokeStyle = col[0];
+        ctx.globalAlpha = 0.12 * a;
+        ctx.lineWidth = k.width * 5;
+        ctx.stroke();
+        ctx.globalAlpha = 0.95 * a;
+        ctx.lineWidth = k.width;
+        ctx.stroke();
+        ctx.strokeStyle = col[1];
+        ctx.globalAlpha = 0.8 * a;
+        ctx.lineWidth = k.width * 0.35;
+        ctx.stroke();
+      });
+
+      // Every few seconds a glint runs the length of one seam.
+      if (!glint || t - glint.start > 1.4) {
+        var long = cracks.filter(function (k) { return k.pts.length > 30 && t - k.born < cfg.life; });
+        if (long.length && Math.random() < dt * 0.9) glint = { k: long[Math.floor(Math.random() * long.length)], start: t };
+      }
+      if (glint && t - glint.start <= 1.4) {
+        var g = glint.k.pts, f = (t - glint.start) / 1.4;
+        var idx = Math.min(g.length / 2 - 1, Math.floor(f * (g.length / 2 - 1))) * 2;
+        var gx = g[idx], gy = g[idx + 1];
+        var rad = ctx.createRadialGradient(gx, gy, 0, gx, gy, 18);
+        rad.addColorStop(0, '#ffffff');
+        rad.addColorStop(0.25, col[1]);
+        rad.addColorStop(1, 'transparent');
+        ctx.globalAlpha = Math.sin(f * Math.PI);
+        ctx.fillStyle = rad;
+        ctx.fillRect(gx - 18, gy - 18, 36, 36);
+      }
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function buildInk(cfg) {
+    var c = makeCanvas('ink-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, TAU = Math.PI * 2, frames = 0;
+    seedNoise();
+    var parts = [];
+    function drop(x, y, ci) {
+      for (var i = 0; i < cfg.perDrop; i++) {
+        var a = rand(0, TAU), sp = rand(10, 120);
+        parts.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6 + 18, age: 0, life: rand(6, 13), c: ci, r0: rand(1, 2.4) });
+      }
+      if (parts.length > cfg.max) parts.splice(0, parts.length - cfg.max);
+    }
+    // Drops land below the clock; the plumes still drift up into view.
+    function randomDrop() { drop(rand(0.1, 0.9) * w, rand(0.4, 0.82) * h, Math.random() < 0.68 ? 0 : 1); }
+    randomDrop();
+    randomDrop();
+    addTimer(randomDrop, cfg.interval);
+    onTap(function (x, y) { drop(x, y, Math.random() < 0.5 ? 0 : 1); });
+
+    runFrames(function (t, dt, col) {
+      // Fade in coarse steps: tiny per-frame fades round away to nothing on
+      // 8-bit alpha and leave permanent ghosts.
+      if (++frames % 6 === 0) {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      for (var i = parts.length - 1; i >= 0; i--) {
+        var p = parts[i];
+        p.age += dt;
+        if (p.age > p.life) { parts.splice(i, 1); continue; }
+        // Turbulence curls the plume; drag bleeds off the burst; it sinks slowly.
+        var ang = noise2(p.x * 0.004, p.y * 0.004 - t * 0.05) * TAU * 1.6;
+        p.vx += Math.cos(ang) * 55 * dt;
+        p.vy += (Math.sin(ang) * 55 + 9) * dt;
+        p.vx *= 1 - 1.2 * dt;
+        p.vy *= 1 - 1.2 * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        var k = p.age / p.life;
+        ctx.globalAlpha = 0.07 * (1 - k);
+        ctx.fillStyle = col[p.c];
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r0 + p.age * 0.7, 0, TAU);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function buildChrome(cfg) {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var w = window.innerWidth, h = window.innerHeight, res = cfg.res;
+    var canvas = document.createElement('canvas');
+    canvas.className = 'chrome-canvas';
+    var cw = Math.ceil(w / res), ch = Math.ceil(h / res);
+    canvas.width = cw;
+    canvas.height = ch;
+    particlesEl.appendChild(canvas);
+    var ctx = canvas.getContext('2d');
+    var img = ctx.createImageData(cw, ch), data = img.data;
+
+    var waves = [];
+    for (var i = 0; i < cfg.waves; i++) {
+      var dir = rand(0, Math.PI * 2), lambda = rand(320, 900), k = Math.PI * 2 / lambda;
+      waves.push({ kx: Math.cos(dir) * k, ky: Math.sin(dir) * k, sp: rand(0.25, 0.7) * (i % 2 ? 1 : -1), amp: rand(0.18, 0.4) / k, ph: rand(0, 6) });
+    }
+    var ripples = [], now = 0, wait = 0;
+    onTap(function (x, y) { ripples.push({ x: x, y: y, t0: now }); if (ripples.length > 4) ripples.shift(); });
+
+    runFrames(function (t, dt, col) {
+      now = t;
+      wait -= dt;
+      if (wait > 0) return;
+      wait = 1 / 30;
+      ripples = ripples.filter(function (r) { return t - r.t0 < 5; });
+      var tint = hexToRgb(col[0]), silver = hexToRgb(col[1]);
+      var p = 0;
+      for (var j = 0; j < ch; j++) {
+        var Y = j * res;
+        for (var i = 0; i < cw; i++) {
+          var X = i * res, hx = 0, hy = 0;
+          for (var q = 0; q < waves.length; q++) {
+            var wv = waves[q];
+            var cs = Math.cos(wv.kx * X + wv.ky * Y + wv.sp * t + wv.ph) * wv.amp;
+            hx += cs * wv.kx;
+            hy += cs * wv.ky;
+          }
+          for (q = 0; q < ripples.length; q++) {
+            var r = ripples[q], age = t - r.t0, dx = X - r.x, dy = Y - r.y, d = Math.sqrt(dx * dx + dy * dy) + 1;
+            var front = d - age * 260;
+            if (front > 40) continue;
+            var env = Math.exp(-age * 0.9) * Math.exp(-Math.abs(front) / 160) * 0.9;
+            var der = Math.cos(front * 0.06) * env;
+            hx += der * dx / d;
+            hy += der * dy / d;
+          }
+          // A mirror shows its surroundings: slope picks which band of a
+          // striped "sky" each point reflects, and the bands are hard-edged,
+          // which is what reads as chrome rather than plastic.
+          var v = hy * 1.1 + hx * 0.4 + Y / h * 0.7;
+          var b = 0.5 + 0.5 * Math.sin(v * cfg.bands);
+          b = b * b * (3 - 2 * b);
+          var lum = 0.05 + 0.88 * Math.pow(b, 1.8);
+          var tw = Math.exp(-(b - 0.42) * (b - 0.42) / 0.03) * 0.4;
+          data[p] = 10 + (silver[0] - 10) * lum + tint[0] * tw;
+          data[p + 1] = 11 + (silver[1] - 11) * lum + tint[1] * tw;
+          data[p + 2] = 15 + (silver[2] - 15) * lum + tint[2] * tw;
+          data[p + 3] = 255;
+          p += 4;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+    });
+  }
+
+  function buildOrigami(cfg) {
+    var creases = document.createElement('div');
+    creases.className = 'origami-creases';
+    particlesEl.appendChild(creases);
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h;
+    var scale = Math.max(0.55, Math.min(1, Math.min(w, h) / 700));
+    var heroEl = document.querySelector('.hero');
+
+    // Each plane folds up out of a flat sheet: five points that start as a
+    // square folded across its diagonal and end as nose, wings, tail and keel.
+    var SHEET = [[30, -30], [-30, -30], [0, 0], [30, 30], [-30, 30]];
+    function planeVerts(ws) { return [[44, 0], [-30, -27 * ws], [-24, 0], [-30, 23 * ws], [-27, 9]]; }
+
+    function spawn(p, flying) {
+      p.depth = rand(0.35, 1);
+      p.size = (0.45 + p.depth * 0.75) * scale;
+      p.speed = 55 + p.depth * 95;
+      p.coral = Math.random() < 0.25;
+      p.wob = rand(0, Math.PI * 2);
+      p.trail = [];
+      p.trailT = 0;
+      p.x = rand(0.1, 0.9) * w;
+      p.y = rand(0.15, 0.85) * h;
+      p.heading = rand(-0.35, 0.35) + (Math.random() < 0.5 ? 0 : Math.PI);
+      p.fold = flying ? 1 : 0;
+      p.hold = flying ? 0 : rand(0.3, 0.8);
+      return p;
+    }
+    var planes = [];
+    for (var i = 0; i < cfg.planes; i++) planes.push(spawn({}, i % 2 === 0));
+
+    function shade(alpha) { ctx.fillStyle = 'rgba(0, 0, 0, ' + alpha + ')'; ctx.fill(); }
+
+    runFrames(function (t, dt, col) {
+      ctx.clearRect(0, 0, w, h);
+      var hero = heroEl.getBoundingClientRect();
+      planes.sort(function (a, b) { return a.depth - b.depth; });
+      planes.forEach(function (p) {
+        if (p.fold < 1) p.fold = Math.min(1, p.fold + dt / 1.1);
+        else if (p.hold > 0) p.hold -= dt;
+        else {
+          p.heading += Math.sin(t * 0.6 + p.wob) * 0.22 * dt;
+          p.x += Math.cos(p.heading) * p.speed * dt;
+          p.y += Math.sin(p.heading) * p.speed * dt + Math.sin(t * 1.3 + p.wob) * 14 * dt;
+          p.trailT -= dt;
+          if (p.trailT <= 0) {
+            p.trailT = 0.06;
+            p.trail.push(p.x, p.y);
+            if (p.trail.length > 70) p.trail.splice(0, 2);
+          }
+          if (p.x < -120 || p.x > w + 120 || p.y < -120 || p.y > h + 120) spawn(p, false);
+        }
+
+        var alpha = 0.35 + 0.6 * p.depth;
+        // Paper is opaque, so planes go faint while they pass behind the clock.
+        if (p.x > hero.left - 30 && p.x < hero.right + 30 && p.y > hero.top - 30 && p.y < hero.bottom + 30) alpha *= 0.35;
+        if (p.trail.length > 3) {
+          ctx.setLineDash([2, 7]);
+          ctx.strokeStyle = p.coral ? col[0] : col[1];
+          ctx.globalAlpha = 0.22 * p.depth;
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(p.trail[0], p.trail[1]);
+          for (var i = 2; i < p.trail.length; i += 2) ctx.lineTo(p.trail[i], p.trail[i + 1]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        var k = p.fold * p.fold * (3 - 2 * p.fold);
+        var ws = Math.cos(Math.sin(t * 1.7 + p.wob) * 0.45);
+        var pv = planeVerts(ws), v = SHEET.map(function (s, n) { return [s[0] + (pv[n][0] - s[0]) * k, s[1] + (pv[n][1] - s[1]) * k]; });
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.heading);
+        ctx.scale(p.size, p.size);
+        ctx.globalAlpha = alpha;
+        var paper = p.coral ? col[0] : col[1];
+        [[0, 1, 2, 0], [0, 2, 3, 0.14], [0, 2, 4, 0.32]].forEach(function (f) {
+          ctx.beginPath();
+          ctx.moveTo(v[f[0]][0], v[f[0]][1]);
+          ctx.lineTo(v[f[1]][0], v[f[1]][1]);
+          ctx.lineTo(v[f[2]][0], v[f[2]][1]);
+          ctx.closePath();
+          ctx.fillStyle = paper;
+          ctx.fill();
+          if (f[3]) shade(f[3]);
+        });
+        ctx.restore();
+      });
+      ctx.globalAlpha = 1;
+    });
+  }
+
   function renderParticles(theme) {
     clearParticles();
     var cfg = THEME_ANIM[theme];
@@ -1734,6 +2054,10 @@
     else if (cfg.type === 'silk') buildSilk(cfg);
     else if (cfg.type === 'contour') buildContour(cfg);
     else if (cfg.type === 'nocturne') buildNocturne(cfg);
+    else if (cfg.type === 'kintsugi') buildKintsugi(cfg);
+    else if (cfg.type === 'ink') buildInk(cfg);
+    else if (cfg.type === 'chrome') buildChrome(cfg);
+    else if (cfg.type === 'origami') buildOrigami(cfg);
   }
 
   function greetingFor(hour) {
