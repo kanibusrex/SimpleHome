@@ -593,10 +593,10 @@
     bloom:    { type: 'petals', petals: 40 },
     matrix:    { type: 'rain2' },
     embermatrix: { type: 'rain2' },
-    synthwave: { type: 'synth' },
-    cosmos:    { type: 'cosmos', stars: 60, shootInterval: 5200 },
-    storm:     { type: 'storm',  duration: [0.7, 1.4], interval: 60, seed: 30, flashChance: 0.45 },
-    abyss:     { type: 'bubbles', size: [4, 16], duration: [9, 18], interval: 700, seed: 18, rays: 4 },
+    synthwave: { type: 'synth2' },
+    cosmos:    { type: 'galaxy', stars: 3600, field: 160 },
+    storm:     { type: 'storm2', drops: 420 },
+    abyss:     { type: 'abyss2', bubbles: 34, plankton: 140, res: 4 },
     circuit:   { type: 'circuit', traces: 16, pulses: 22 },
     terminal:  { type: 'crt' },
     festival:  { type: 'fireworks', interval: 1900, sparks: 22 },
@@ -2958,6 +2958,394 @@
     });
   }
 
+  // Synthwave: a sliced neon sun sinking behind wireframe mountains, over a
+  // perspective grid rolling toward the viewer.
+  function buildSynth2(cfg) {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, TAU = Math.PI * 2;
+    var hy = h * 0.76, cx = w / 2;
+    var stars = [];
+    for (var i = 0; i < 90; i++) stars.push({ x: rand(0, w), y: rand(0, hy * 0.85), r: rand(0.4, 1.2), ph: rand(0, TAU) });
+    function ridge(n, amp, seed) {
+      var pts = [];
+      for (var i = 0; i <= n; i++) {
+        var x = i / n * w;
+        var d = Math.abs(x - cx) / (w / 2);
+        // Mountains rise toward the edges, leaving the sun clear in the middle.
+        var hgt = amp * Math.pow(d, 1.3) * (0.55 + 0.45 * Math.abs(Math.sin(i * 1.7 + seed))) * (i % 2 ? 1 : 0.62);
+        pts.push([x, hy - hgt]);
+      }
+      return pts;
+    }
+    var far = ridge(26, h * 0.2, 1), near = ridge(18, h * 0.13, 4);
+
+    runFrames(function (t, dt, col) {
+      ctx.clearRect(0, 0, w, h);
+      stars.forEach(function (s2) {
+        ctx.globalAlpha = 0.3 + 0.4 * (0.5 + 0.5 * Math.sin(t * 1.3 + s2.ph));
+        stamp(ctx, glowSprite('#ffffff'), s2.x, s2.y, s2.r * 2.5);
+      });
+
+      // Sun with scrolling slices across its lower half.
+      var R = Math.min(w * 0.2, h * 0.21), sy = hy - R * 0.32;
+      ctx.globalAlpha = 0.5;
+      stamp(ctx, glowSprite(col[0]), cx, sy, R * 2.3);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, sy, R, 0, TAU);
+      ctx.clip();
+      var sg = ctx.createLinearGradient(0, sy - R, 0, sy + R);
+      sg.addColorStop(0, '#ffe66d');
+      sg.addColorStop(0.45, '#ff8a3d');
+      sg.addColorStop(1, col[0]);
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle = sg;
+      ctx.fillRect(cx - R, sy - R, R * 2, R * 2);
+      ctx.globalCompositeOperation = 'destination-out';
+      var off = (t * 14) % 22;
+      for (var k = 0; k < 9; k++) {
+        var by = sy + R * 0.05 + k * 22 - off;
+        if (by < sy) continue;
+        var bh = 2 + (by - sy) / R * 9;
+        ctx.fillRect(cx - R, by, R * 2, bh);
+      }
+      ctx.restore();
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Mountains: dark fill, neon ridge line.
+      [[far, col[0], 0.55], [near, col[1], 0.9]].forEach(function (m) {
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#12002e';
+        ctx.beginPath();
+        ctx.moveTo(0, hy);
+        m[0].forEach(function (p) { ctx.lineTo(p[0], p[1]); });
+        ctx.lineTo(w, hy);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = m[1];
+        ctx.lineWidth = 1.4;
+        ctx.globalAlpha = m[2];
+        ctx.stroke();
+        ctx.lineWidth = 5;
+        ctx.globalAlpha = m[2] * 0.18;
+        ctx.stroke();
+      });
+
+      // Horizon glow and grid.
+      var hg = ctx.createLinearGradient(0, hy - 30, 0, hy + 60);
+      hg.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      hg.addColorStop(0.35, col[0]);
+      hg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.globalAlpha = 0.45;
+      ctx.fillStyle = hg;
+      ctx.fillRect(0, hy - 30, w, 90);
+
+      // Each grid pass is drawn twice, wide and faint then thin and bright,
+      // which glows like shadowBlur at a fraction of the cost.
+      ctx.strokeStyle = col[0];
+      var depth = h - hy, scroll = (t * 0.45) % 1;
+      [[5, 0.12], [1.2, 0.7]].forEach(function (pass) {
+        ctx.lineWidth = pass[0];
+        ctx.globalAlpha = pass[1] * 0.8;
+        ctx.beginPath();
+        for (var j = -18; j <= 18; j++) {
+          ctx.moveTo(cx + j * w * 0.012, hy);
+          ctx.lineTo(cx + j * w * 0.16, h + 10);
+        }
+        ctx.stroke();
+        for (var n = 0; n < 14; n++) {
+          var z = (n + 1 - scroll) / 14;
+          var y = hy + depth * Math.pow(z, 2.2);
+          ctx.globalAlpha = pass[1] * (0.2 + 0.8 * z);
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+          ctx.stroke();
+        }
+      });
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // Cosmos: a spiral galaxy of a few thousand stars turning slowly (inner
+  // stars faster, as real ones do), with a glowing core, a background field
+  // and the occasional shooting star.
+  function buildGalaxy(cfg) {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, TAU = Math.PI * 2;
+    var gx = w * (w > h ? 0.74 : 0.6), gy = h * 0.6, R = Math.max(w, h) * 0.5;
+    var tilt = 0.5, rot = -0.4, cr = Math.cos(rot), sr = Math.sin(rot);
+    var stars = [];
+    for (var i = 0; i < cfg.stars; i++) {
+      var r = 0.04 + 0.96 * Math.pow(Math.random(), 1.1);
+      var arm = i % 2;
+      // Stars cluster along two logarithmic arms, looser toward the core.
+      var a = arm * Math.PI + Math.log(r + 0.05) * 2.6 + (Math.random() + Math.random() - 1) * (0.75 - r * 0.35);
+      stars.push({ r: r, a: a, g: r < 0.1 ? 2 : (Math.random() < 0.5 ? 0 : 1), s: rand(0.5, 1.7), sc: rand(-0.04, 0.04) });
+    }
+    var field = [];
+    for (i = 0; i < cfg.field; i++) field.push({ x: rand(0, w), y: rand(0, h), r: rand(0.4, 1.3), ph: rand(0, TAU) });
+    var shoot = null, nextShoot = 3;
+
+    runFrames(function (t, dt, col) {
+      ctx.clearRect(0, 0, w, h);
+      field.forEach(function (s2) {
+        ctx.globalAlpha = 0.25 + 0.4 * (0.5 + 0.5 * Math.sin(t * 1.1 + s2.ph));
+        stamp(ctx, glowSprite('#ffffff'), s2.x, s2.y, s2.r * 2.4);
+      });
+      ctx.globalCompositeOperation = 'lighter';
+      // Nebula haze along the arms.
+      ctx.globalAlpha = 0.2;
+      stamp(ctx, glowSprite(col[0]), gx, gy, R * 0.9);
+      ctx.globalAlpha = 0.14;
+      stamp(ctx, glowSprite(col[1]), gx - R * 0.25, gy + R * 0.1, R * 0.5);
+      ctx.globalAlpha = 0.12;
+      stamp(ctx, glowSprite(col[1]), gx + R * 0.3, gy - R * 0.14, R * 0.45);
+
+      var groups = [[], [], []];
+      stars.forEach(function (s2) {
+        var ang = s2.a + t * 0.05 / (0.15 + s2.r);
+        var rr = s2.r * R, x = Math.cos(ang) * rr, y = Math.sin(ang) * rr * tilt;
+        groups[s2.g].push(gx + x * cr - y * sr, gy + x * sr + y * cr, s2.s);
+      });
+      var colors = [col[0], col[1], '#fff3d6'];
+      for (var g = 0; g < 3; g++) {
+        ctx.fillStyle = colors[g];
+        ctx.globalAlpha = g === 2 ? 0.75 : 0.5;
+        var arr = groups[g];
+        for (var k = 0; k < arr.length; k += 3) ctx.fillRect(arr[k], arr[k + 1], arr[k + 2], arr[k + 2]);
+      }
+      ctx.globalAlpha = 0.9;
+      stamp(ctx, glowSprite('#fff3d6', true), gx, gy, R * 0.1);
+
+      nextShoot -= dt;
+      if (nextShoot <= 0 && !shoot) {
+        shoot = { x: rand(0.1, 0.7) * w, y: rand(0.05, 0.35) * h, a: rand(0.35, 0.7), life: 0 };
+        nextShoot = rand(5, 10);
+      }
+      if (shoot) {
+        shoot.life += dt;
+        var d = shoot.life * 900, L = 140;
+        var hx = shoot.x + Math.cos(shoot.a) * d, hy2 = shoot.y + Math.sin(shoot.a) * d;
+        var sg = ctx.createLinearGradient(hx, hy2, hx - Math.cos(shoot.a) * L, hy2 - Math.sin(shoot.a) * L);
+        sg.addColorStop(0, '#ffffff');
+        sg.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.strokeStyle = sg;
+        ctx.lineWidth = 1.6;
+        ctx.globalAlpha = Math.max(0, 1 - shoot.life / 0.9);
+        ctx.beginPath();
+        ctx.moveTo(hx, hy2);
+        ctx.lineTo(hx - Math.cos(shoot.a) * L, hy2 - Math.sin(shoot.a) * L);
+        ctx.stroke();
+        if (shoot.life > 0.9) shoot = null;
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // Storm: wind-driven rain at two depths under drifting cloud, and
+  // branching lightning that lights the whole sky as it strikes.
+  function buildStorm2(cfg) {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h;
+    seedNoise();
+    var drops = [];
+    for (var i = 0; i < cfg.drops; i++) drops.push({ x: rand(0, w), y: rand(0, h), z: Math.random() < 0.25 ? 1 : 0.55, sp: rand(0.9, 1.15) });
+    var clouds = [];
+    for (i = 0; i < 9; i++) clouds.push({ x: rand(-0.1, 1.1) * w, y: rand(-0.12, 0.16) * h, r: rand(0.18, 0.32) * w, sp: rand(4, 10) });
+
+    function bolt(x, y, x2, y2, rough, out) {
+      if (rough < 4) { out.push([x, y, x2, y2]); return; }
+      var mx = (x + x2) / 2 + rand(-rough, rough), my = (y + y2) / 2 + rand(-rough, rough) * 0.3;
+      bolt(x, y, mx, my, rough / 2, out);
+      bolt(mx, my, x2, y2, rough / 2, out);
+      if (Math.random() < 0.18 && rough > 18) {
+        var ba = Math.atan2(y2 - y, x2 - x) + rand(-0.9, 0.9), bl = Math.hypot(x2 - x, y2 - y) * rand(0.4, 0.8);
+        bolt(mx, my, mx + Math.cos(ba) * bl, my + Math.sin(ba) * bl, rough / 2, out);
+      }
+    }
+    var strike = null, nextStrike = 2.5, flash = 0;
+
+    runFrames(function (t, dt, col) {
+      ctx.clearRect(0, 0, w, h);
+      var wind = 0.22 + noise2(t * 0.1, 2) * 0.25;
+
+      // Clouds, lit from inside during a strike.
+      clouds.forEach(function (cl) {
+        cl.x += cl.sp * dt;
+        if (cl.x - cl.r > w) cl.x = -cl.r;
+        ctx.globalAlpha = 0.5;
+        stamp(ctx, glowSprite('#1c2836'), cl.x, cl.y, cl.r);
+        if (flash > 0.02) {
+          ctx.globalAlpha = flash * 0.5;
+          stamp(ctx, glowSprite(col[1]), cl.x, cl.y, cl.r);
+        }
+      });
+
+      // Rain.
+      ctx.lineCap = 'round';
+      for (var layer = 0; layer < 2; layer++) {
+        var z = layer ? 1 : 0.55;
+        ctx.strokeStyle = col[1];
+        ctx.globalAlpha = layer ? 0.32 : 0.16;
+        ctx.lineWidth = layer ? 1.3 : 0.8;
+        ctx.beginPath();
+        drops.forEach(function (d) {
+          if (d.z !== z) return;
+          var vy = 900 * z * d.sp, vx = vy * wind;
+          d.y += vy * dt;
+          d.x += vx * dt;
+          if (d.y > h + 20) { d.y = -20 - rand(0, 60); d.x = rand(-w * 0.3, w); }
+          if (d.x > w + 20) d.x -= w + 40;
+          var L = 26 * z;
+          ctx.moveTo(d.x, d.y);
+          ctx.lineTo(d.x - wind * L, d.y - L);
+        });
+        ctx.stroke();
+      }
+
+      // Lightning.
+      nextStrike -= dt;
+      if (nextStrike <= 0 && !strike) {
+        var segs = [], sx = rand(0.1, 0.9) * w;
+        bolt(sx, -10, sx + rand(-0.2, 0.2) * w, h * rand(0.45, 0.85), w * 0.12, segs);
+        strike = { segs: segs, age: 0 };
+        nextStrike = rand(4, 9);
+      }
+      if (strike) {
+        strike.age += dt;
+        // Flickers twice, the way a real return stroke does.
+        var a = strike.age < 0.08 ? 1 : strike.age < 0.14 ? 0.25 : strike.age < 0.22 ? 0.9 : Math.max(0, 1 - (strike.age - 0.22) / 0.35);
+        flash = a;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = a * 0.12;
+        ctx.fillStyle = col[1];
+        ctx.fillRect(0, 0, w, h);
+        [[7, 0.18, col[0]], [2.4, 0.6, col[1]], [1, 1, '#ffffff']].forEach(function (pass) {
+          ctx.strokeStyle = pass[2];
+          ctx.lineWidth = pass[0];
+          ctx.globalAlpha = a * pass[1];
+          ctx.beginPath();
+          strike.segs.forEach(function (sg) { ctx.moveTo(sg[0], sg[1]); ctx.lineTo(sg[2], sg[3]); });
+          ctx.stroke();
+        });
+        ctx.globalCompositeOperation = 'source-over';
+        if (strike.age > 0.6) { strike = null; flash = 0; }
+      }
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // Abyss: caustic light rippling down from the surface, sun rays slanting
+  // into the deep, drifting plankton and bubbles wobbling up.
+  function buildAbyss2(cfg) {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var w = window.innerWidth, h = window.innerHeight, res = cfg.res;
+    var cw = Math.ceil(w / res), ch = Math.ceil(h * 0.6 / res);
+    var caus = document.createElement('canvas');
+    caus.className = 'abyss-caustics';
+    caus.width = cw;
+    caus.height = ch;
+    particlesEl.appendChild(caus);
+    var cctx = caus.getContext('2d'), img = cctx.createImageData(cw, ch), data = img.data;
+
+    var c = makeCanvas('warp-canvas');
+    var ctx = c.ctx, TAU = Math.PI * 2;
+    seedNoise();
+    var bubbles = [];
+    function bubble(b, anywhere) {
+      b.x = rand(0, w);
+      b.y = anywhere ? rand(0, h) : h + rand(10, 80);
+      b.r = Math.pow(Math.random(), 2) * 9 + 2;
+      b.ph = rand(0, TAU);
+      return b;
+    }
+    for (var i = 0; i < cfg.bubbles; i++) bubbles.push(bubble({}, true));
+    var plankton = [];
+    for (i = 0; i < cfg.plankton; i++) plankton.push({ x: rand(0, w), y: rand(0, h), r: rand(0.5, 1.6), ph: rand(0, TAU) });
+    var wait = 0;
+
+    runFrames(function (t, dt, col) {
+      wait -= dt;
+      if (wait <= 0) {
+        wait = 1 / 24;
+        var tint = hexToRgb(col[1]), q = 0;
+        for (var j = 0; j < ch; j++) {
+          var Y = j * res, fadeY = 1 - j / ch;
+          for (var i2 = 0; i2 < cw; i2++) {
+            var X = i2 * res;
+            // Two warped sine fields crossed: their bright seams are the caustic net.
+            var u = X * 0.026 + Math.sin(Y * 0.03 + t * 0.7) * 1.3 + t * 0.3;
+            var v = Y * 0.03 + Math.sin(X * 0.028 - t * 0.6) * 1.3 - t * 0.25;
+            var n1 = Math.abs(Math.sin(u) + Math.sin(v));
+            var n2 = Math.abs(Math.sin(u * 1.7 + 1.3) + Math.sin(v * 1.6 - 0.7));
+            var cst = Math.pow(Math.max(0, 1 - Math.min(n1, n2) * 0.7), 6);
+            data[q] = tint[0]; data[q + 1] = tint[1]; data[q + 2] = tint[2];
+            data[q + 3] = cst * 255 * fadeY * fadeY;
+            q += 4;
+          }
+        }
+        cctx.putImageData(img, 0, 0);
+      }
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'lighter';
+      for (var r = 0; r < 5; r++) {
+        ctx.save();
+        ctx.translate(w * (0.1 + r * 0.2) + Math.sin(t * 0.07 + r) * 40, -20);
+        ctx.rotate(0.22 + Math.sin(t * 0.05 + r * 1.7) * 0.06);
+        var g = ctx.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, col[1]);
+        g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.globalAlpha = 0.06 + 0.04 * Math.sin(t * 0.4 + r * 2);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(-12, 0);
+        ctx.lineTo(12, 0);
+        ctx.lineTo(70, h);
+        ctx.lineTo(-70, h);
+        ctx.fill();
+        ctx.restore();
+      }
+      var spr = glowSprite(col[1]);
+      plankton.forEach(function (p) {
+        var a = noise2(p.x * 0.004, p.y * 0.004 + t * 0.03) * TAU;
+        p.x += Math.cos(a) * 6 * dt;
+        p.y += Math.sin(a) * 6 * dt;
+        if (p.x < 0) p.x = w; else if (p.x > w) p.x = 0;
+        if (p.y < 0) p.y = h; else if (p.y > h) p.y = 0;
+        ctx.globalAlpha = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(t * 1.5 + p.ph));
+        stamp(ctx, spr, p.x, p.y, p.r * 3);
+      });
+      ctx.globalCompositeOperation = 'source-over';
+      bubbles.forEach(function (b) {
+        b.y -= (30 + b.r * 9) * dt;
+        b.x += Math.sin(t * 2 + b.ph) * b.r * 2.2 * dt;
+        if (b.y < -20) bubble(b, false);
+        var sq = 1 + 0.06 * Math.sin(t * 6 + b.ph);
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = col[1];
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.ellipse(b.x, b.y, b.r * sq, b.r / sq, 0, 0, TAU);
+        ctx.stroke();
+        ctx.globalAlpha = 0.08;
+        ctx.fillStyle = col[1];
+        ctx.fill();
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(b.x - b.r * 0.35, b.y - b.r * 0.4, Math.max(0.6, b.r * 0.2), 0, TAU);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    });
+  }
+
   function renderParticles(theme) {
     clearParticles();
     var cfg = THEME_ANIM[theme];
@@ -2982,6 +3370,10 @@
     else if (cfg.type === 'sky') buildSky(cfg);
     else if (cfg.type === 'petals') buildPetals(cfg);
     else if (cfg.type === 'rain2') buildRain2(cfg);
+    else if (cfg.type === 'synth2') buildSynth2(cfg);
+    else if (cfg.type === 'galaxy') buildGalaxy(cfg);
+    else if (cfg.type === 'storm2') buildStorm2(cfg);
+    else if (cfg.type === 'abyss2') buildAbyss2(cfg);
     else if (cfg.type === 'crt') buildCrt();
     else if (cfg.type === 'fireworks') buildFireworks(cfg);
     else if (cfg.type === 'ripple') buildRipple(cfg);
