@@ -31,6 +31,10 @@ Settings → History shows how many sites are remembered and clears them, with a
 
 **Touch gestures.** On a phone, where none of the keyboard shortcuts exist: swipe left or right across the page to move between groups, long-press a tile to edit it without entering edit mode, and pull down from the top of the page to jump into search. The phone's own long-press link menu is switched off on tiles so it doesn't get in the way, as is the browser's pull-to-refresh.
 
+**Docked header.** Scroll and the clock doesn't leave: it shrinks into a compact readout and pins to the top with the search bar, over a frosted-glass band, while the tiles scroll underneath — the greeting and date strip fade out on the way. The collapse is a scroll-driven CSS animation, so it moves in lockstep with your finger (browsers without scroll timelines get the same effect from a script). A page that only just overflows gets a little extra scroll room so the collapse can finish.
+
+**Finish.** The page settles in on load — clock, search and then each tile rising out of a soft blur in sequence. Tiles carry a spotlight that follows the pointer and give slightly under a press; the search results open as a frosted-glass panel.
+
 **Zen mode.** `Z` (or the ◎ button) strips everything down to just the clock and search bar, dead-centered, with the theme's background animation still running as ambience. `Esc` or `Z` again brings everything back. The state is remembered across reloads.
 
 **Scratchpad.** A persistent notes panel that saves as you type. `Shift+S` from anywhere. Lines starting with `- [ ]` are checklist items — click the brackets to check them off (toggles to `- [x]`); clicking anywhere else on the line just places the cursor like normal text.

@@ -1370,7 +1370,7 @@
     z-index: 1;
     max-width: 880px;
     margin: 0 auto;
-    padding: 8vh 24px calc(96px + env(safe-area-inset-bottom, 0px));
+    padding: 8vh 24px calc(96px + env(safe-area-inset-bottom, 0px) + var(--dock-extra, 0px));
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1393,6 +1393,94 @@
     padding-bottom: 0;
   }
   body.zen .search-wrap { margin-bottom: 0; }
+
+  /* ---- Dock: the clock and search bar stay put while the tiles scroll ----
+     The dock is sticky with a negative top, so its upper part scrolls away
+     and the rest pins. Over that same stretch of scroll the clock shrinks
+     and slides down into the pinned strip, the greeting and date fade, and
+     a frosted band fades in behind them. --dock-d (how far it scrolls before
+     pinning) and the clock's end position are measured by script. */
+  .dock {
+    position: sticky;
+    top: calc(-1 * var(--dock-d, 0px));
+    z-index: 3;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 48px;
+  }
+  .dock .search-wrap { margin-bottom: 0; }
+
+  .dock::before {
+    content: '';
+    position: absolute;
+    top: var(--dock-d, 0px);
+    bottom: -14px;
+    left: 50%;
+    width: 100vw;
+    transform: translateX(-50%);
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+    backdrop-filter: blur(22px) saturate(1.5);
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+    box-shadow: 0 22px 44px -28px rgba(0, 0, 0, 0.65);
+    opacity: 0;
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .dock.collapsible .clock { transform-origin: 50% 0; }
+  .dock.collapsible .greeting,
+  .dock.collapsible .date,
+  .dock.collapsible .clock-meta,
+  .dock.collapsible .clock,
+  .dock.collapsible::before {
+    animation: 1s linear both paused;
+    /* Without scroll-driven animations, script sets --c (0..1) and a
+       negative delay scrubs the paused animation to that point. */
+    animation-delay: calc(var(--c, 0) * -1s);
+  }
+  .dock.collapsible .greeting { animation-name: dock-fade-fast; }
+  .dock.collapsible .date,
+  .dock.collapsible .clock-meta { animation-name: dock-fade; }
+  .dock.collapsible .clock { animation-name: dock-clock; }
+  .dock.collapsible::before { animation-name: dock-glass; }
+
+  @supports (animation-timeline: scroll()) {
+    .dock.collapsible .greeting,
+    .dock.collapsible .date,
+    .dock.collapsible .clock-meta,
+    .dock.collapsible .clock,
+    .dock.collapsible::before {
+      animation-play-state: running;
+      animation-delay: 0s;
+      animation-timeline: scroll(root);
+      animation-range: 0px var(--dock-range, 1px);
+    }
+  }
+
+  @keyframes dock-fade-fast { 35%, 100% { opacity: 0; transform: translateY(-6px); } }
+  @keyframes dock-fade { 50%, 100% { opacity: 0; transform: translateY(-10px); } }
+  @keyframes dock-clock { to { transform: translateY(var(--clock-dy, 0px)) scale(var(--clock-s, 1)); } }
+  @keyframes dock-glass { 0%, 55% { opacity: 0; } 100% { opacity: 1; } }
+
+  body.zen .dock { position: relative; top: auto; margin-bottom: 0; }
+  body.zen .dock::before { display: none; }
+
+  /* ---- Opening choreography: everything settles in from a soft blur ---- */
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(18px); filter: blur(8px); }
+  }
+  @keyframes fade-in { from { opacity: 0; } }
+  body.intro .hero { animation: rise-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+  body.intro .search-wrap { animation: rise-in 0.9s 0.12s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+  body.intro .group-tabs { animation: rise-in 0.8s 0.2s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+  body.intro .tile {
+    animation: rise-in 0.75s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    animation-delay: calc(0.24s + var(--i, 0) * 40ms);
+  }
+  body.intro .toolbar { animation: fade-in 1s 0.45s ease backwards; }
 
   .icon-btn {
     background: var(--surface);
@@ -1434,8 +1522,17 @@
     max-height: 300px;
     overflow-y: auto;
     box-shadow: 0 16px 40px -12px rgba(0,0,0,0.5);
+    background: color-mix(in srgb, var(--surface) 84%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    backdrop-filter: blur(20px) saturate(1.4);
+    transform-origin: 50% 0;
+    animation: results-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .results.hidden { display: none; }
+
+  @keyframes results-in {
+    from { opacity: 0; transform: translateY(-4px) scale(0.985); }
+  }
 
   .result {
     display: flex;
@@ -1548,6 +1645,13 @@
       transition-duration: 0.001ms !important;
     }
     .particles { display: none; }
+    /* The dock collapse is scrubbed by the reader's own scrolling, not
+       played, so it keeps its real duration. */
+    .dock.collapsible .greeting,
+    .dock.collapsible .date,
+    .dock.collapsible .clock-meta,
+    .dock.collapsible .clock,
+    .dock.collapsible::before { animation-duration: 1s !important; }
   }
 
   .panel-btn {
@@ -1889,7 +1993,8 @@
     border: 1px solid var(--border);
     border-radius: 999px;
     padding: 6px 6px 6px 20px;
-    transition: border-color 0.2s ease;
+    box-shadow: 0 12px 32px -18px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    transition: border-color 0.2s ease, box-shadow 0.3s ease;
   }
   .search:focus-within {
     border-color: #0a0a0a;
@@ -2103,9 +2208,14 @@
   }
   .tile:hover {
     transform: translateY(-3px);
-    background: var(--surface-hover);
+    /* A soft spotlight that follows the pointer across the tile. */
+    background:
+      radial-gradient(130px circle at var(--mx, 50%) var(--my, 30%), color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+      var(--surface-hover);
     border-color: #0a0a0a;
+    box-shadow: 0 14px 30px -16px rgba(0, 0, 0, 0.6);
   }
+  .tile:active { transform: translateY(-1px) scale(0.97); }
 
   @property --glow-angle {
     syntax: '<angle>';
@@ -2501,6 +2611,7 @@
 </div>
 
 <div class="app">
+  <div class="dock" id="dock">
   <header class="hero">
     <div class="greeting" id="greeting"></div>
     <div class="clock" id="clock" role="timer">
@@ -2533,6 +2644,7 @@
       <button type="submit" aria-label="Search">&#8594;</button>
     </form>
     <div class="results hidden" id="results"></div>
+  </div>
   </div>
 
   <main class="shortcuts-wrap">

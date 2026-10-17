@@ -202,6 +202,7 @@
       }
       tile.draggable = editing;
       tile.dataset.index = i;
+      tile.style.setProperty('--i', viewIdx);
 
       var icon = document.createElement('div');
       icon.className = 'tile-icon';
@@ -283,7 +284,9 @@
     addTile.appendChild(addIcon);
     addTile.appendChild(addLabel);
     addTile.addEventListener('click', function () { openModal(null); });
+    addTile.style.setProperty('--i', grid.children.length);
     grid.appendChild(addTile);
+    measureDock();
   }
 
   function populateGroupSelect(selected) {
@@ -2913,6 +2916,7 @@
 
   function applyZen() {
     document.body.classList.toggle('zen', zenActive);
+    measureDock();
     zenBtn.classList.toggle('active', zenActive);
     var label = zenActive ? 'Exit zen mode (Z)' : 'Zen mode (Z)';
     zenBtn.title = label;
@@ -3095,6 +3099,84 @@
       }
     }
   });
+
+  // ---- Dock ----
+  // Measures how far the dock scrolls before it pins, and where the clock
+  // ends up: shrunk to a header-sized readout sitting just above the search
+  // bar. Layout offsets ignore transforms, so this reads the uncollapsed sizes.
+  var hasScrollTimeline = !!(window.CSS && CSS.supports && CSS.supports('animation-timeline: scroll()'));
+  var dockScrollQueued = false;
+
+  function safeTop() {
+    var probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;top:0;height:env(safe-area-inset-top,0px);visibility:hidden';
+    document.body.appendChild(probe);
+    var v = probe.offsetHeight;
+    probe.remove();
+    return v;
+  }
+
+  function measureDock() {
+    var dock = document.getElementById('dock');
+    if (!dock) return;
+    var app = document.querySelector('.app');
+    if (zenActive) {
+      dock.classList.remove('collapsible');
+      app.style.removeProperty('--dock-extra');
+      return;
+    }
+    var clockEl = document.getElementById('clock');
+    var search = dock.querySelector('.search-wrap');
+    var size = parseFloat(getComputedStyle(clockEl).fontSize) || 100;
+    var scale = Math.max(0.32, Math.min(0.85, 40 / size)); // 40px digits once collapsed
+    var pad = 10 + safeTop();
+    var d = Math.max(0, Math.round(search.offsetTop - clockEl.offsetHeight * scale - 8 - pad));
+    // The collapse plays over the scroll that takes the dock from where it
+    // sits (below the page's top padding) to pinned, d above the viewport.
+    var range = d + app.offsetTop + (parseFloat(getComputedStyle(app).paddingTop) || 0);
+    dock.style.setProperty('--dock-d', d + 'px');
+    dock.style.setProperty('--dock-range', range + 'px');
+    dock.style.setProperty('--clock-s', scale.toFixed(3));
+    dock.style.setProperty('--clock-dy', (d + pad - clockEl.offsetTop) + 'px');
+
+    // A page that overflows by only a little couldn't scroll far enough to
+    // finish collapsing, so give it just enough extra room. One that doesn't
+    // overflow at all doesn't scroll, and needs none.
+    app.style.removeProperty('--dock-extra');
+    var overflow = document.documentElement.scrollHeight - window.innerHeight;
+    if (overflow > 0 && overflow < range) app.style.setProperty('--dock-extra', (range - overflow) + 'px');
+    dock.classList.toggle('collapsible', d > 0 && overflow > 0);
+    syncDock();
+  }
+
+  function syncDock() {
+    if (hasScrollTimeline || dockScrollQueued) return;
+    dockScrollQueued = true;
+    requestAnimationFrame(function () {
+      dockScrollQueued = false;
+      var dock = document.getElementById('dock');
+      var range = parseFloat(dock.style.getPropertyValue('--dock-range')) || 1;
+      dock.style.setProperty('--c', Math.min(1, Math.max(0, window.scrollY / range)).toFixed(4));
+    });
+  }
+
+  window.addEventListener('scroll', syncDock, { passive: true });
+  window.addEventListener('resize', measureDock);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureDock);
+  measureDock();
+
+  // Tile spotlight follows the pointer.
+  grid.addEventListener('pointermove', function (e) {
+    var t = e.target.closest && e.target.closest('.tile');
+    if (!t) return;
+    var r = t.getBoundingClientRect();
+    t.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+    t.style.setProperty('--my', (e.clientY - r.top) + 'px');
+  });
+
+  // Opening choreography runs once, on first paint.
+  document.body.classList.add('intro');
+  setTimeout(function () { document.body.classList.remove('intro'); }, 1800);
 
   // ---- Touch gestures ----
   // Phones have none of the keyboard shortcuts above, so: swipe sideways to
