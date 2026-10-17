@@ -86,6 +86,10 @@ Shortcut tiles, the search bar, and the scratchpad share a hover/focus treatment
 
 **Clock.** A monospace instrument readout: 12-hour time with live seconds and an AM/PM marker stacked beneath them, an unlit `88:88` layer showing through behind the digits (`8:88` when the hour is a single digit), a blinking separator, and a bar under the readout that sweeps once per minute. Below it sits a technical strip — ISO date, ISO week number, day of year, and UTC offset. The digits aren't plain black or white — each theme defines its own `--clock` and `--clock-2` pair, and the numerals are filled with a gradient between them, so the readout carries the theme's color rather than sitting on top of it. Those pairs are hand-picked to clear WCAG's 3:1 large-text contrast bar against every background. Set `CLOCK_24H = true` near `tick()` for a 24-hour readout instead; the AM/PM marker then stays empty and collapses.
 
+The hour and minute roll into place when they change, a band of light sweeps across the digits every few seconds, and the minute bar is a hairline with a lit bead riding its leading edge.
+
+**Search bar.** Frosted glass with a lit top edge, a search icon, the engine shown as a small chip sized to its name, a "Search or type a URL" hint beside the glowing cursor, and a filled accent button. Focusing it lifts it slightly with a soft accent ring.
+
 **Time-of-day greeting** above the clock, switching between morning, afternoon, evening, and night.
 
 **Export / import.** Everything lives in `localStorage`, which is per-browser and one "clear browsing data" away from gone. Settings → Backup writes a JSON file with your shortcuts, groups, theme, custom accent colors, engine, notes, and autocomplete history, and reads it back on another machine.

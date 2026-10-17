@@ -3356,6 +3356,18 @@
   var lastDateKey = '';
   var lastGreeting = '';
 
+  // Changes a clock unit's text and replays its arrival animation. The very
+  // first fill (the '--' placeholder) doesn't animate; the page intro covers it.
+  function setUnit(el, text, cls) {
+    if (el.textContent === text) return;
+    var first = el.textContent === '--';
+    el.textContent = text;
+    if (first) return;
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+  }
+
   function tick() {
     var now = new Date();
     var h = now.getHours();
@@ -3363,9 +3375,9 @@
     var s = now.getSeconds();
 
     var shown = CLOCK_24H ? h : (h % 12 === 0 ? 12 : h % 12);
-    clockH.textContent = CLOCK_24H ? pad2(shown) : String(shown);
-    clockM.textContent = pad2(m);
-    clockS.textContent = pad2(s);
+    setUnit(clockH, CLOCK_24H ? pad2(shown) : String(shown), 'clock-roll');
+    setUnit(clockM, pad2(m), 'clock-roll');
+    setUnit(clockS, pad2(s), 'tick');
     clockMer.textContent = CLOCK_24H ? '' : (h < 12 ? 'AM' : 'PM');
     clockGhost.textContent = (CLOCK_24H || shown >= 10) ? '88:88' : '8:88';
 
@@ -4018,6 +4030,15 @@
 
   engineSelect.addEventListener('change', renderResults);
 
+  // A select is as wide as its longest option; size the chip to the engine
+  // actually chosen. The font is monospaced, so 1ch is exactly one letter.
+  function fitEngineChip() {
+    var label = engineSelect.options[engineSelect.selectedIndex].text;
+    engineSelect.style.width = 'calc(' + (label.length + 0.6) + 'ch + ' + (engineSelect.offsetWidth - engineSelect.clientWidth + 2 * (parseFloat(getComputedStyle(engineSelect).paddingLeft) || 0) + 2) + 'px)';
+  }
+  engineSelect.addEventListener('change', fitEngineChip);
+  fitEngineChip();
+
   searchForm.addEventListener('submit', function (e) {
     e.preventDefault();
     activateSelection();
@@ -4301,6 +4322,7 @@
           if (found) {
             engineSelect.value = data.engine;
             localStorage.setItem(STORAGE_ENGINE, data.engine);
+            fitEngineChip();
           }
         }
 
