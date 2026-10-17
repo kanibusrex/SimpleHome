@@ -542,7 +542,11 @@
     carbon:    { type: 'carbon' },
     pulse:     { type: 'pulse', speed: 230, beat: 280 },
     shard:     { type: 'shard', count: 11 },
-    hive:      { type: 'hive', cell: 22, waveInterval: 1900, waveSpeed: 300 }
+    hive:      { type: 'hive', cell: 22, waveInterval: 1900, waveSpeed: 300 },
+    eclipse:   { type: 'eclipse', streamers: 220, stars: 40, cycle: 22 },
+    silk:      { type: 'silk', density: 0.9, speed: 42, scale: 0.0022 },
+    contour:   { type: 'contour', step: 14, levels: 15, scale: 0.0032 },
+    nocturne:  { type: 'nocturne', bokeh: 16, drops: 0.35, runners: 9 }
   };
 
   function clearParticles() {
@@ -1351,6 +1355,354 @@
     particleFrame = requestAnimationFrame(frame);
   }
 
+  // Classic 2D Perlin gradient noise, roughly -0.7..0.7, for the generative
+  // themes. The permutation is reshuffled per build, so every load differs.
+  var noisePerm = [];
+  function seedNoise() {
+    var p = [];
+    for (var i = 0; i < 256; i++) p[i] = i;
+    for (i = 255; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1)), t = p[i];
+      p[i] = p[j];
+      p[j] = t;
+    }
+    noisePerm = p.concat(p);
+  }
+  function noiseGrad(hash, dx, dy) {
+    switch (hash & 3) {
+      case 0: return dx + dy;
+      case 1: return -dx + dy;
+      case 2: return dx - dy;
+      default: return -dx - dy;
+    }
+  }
+  function noiseFade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+  function noise2(x, y) {
+    var X = Math.floor(x), Y = Math.floor(y);
+    var xf = x - X, yf = y - Y, p = noisePerm;
+    X &= 255;
+    Y &= 255;
+    var aa = noiseGrad(p[p[X] + Y], xf, yf), ba = noiseGrad(p[p[X + 1] + Y], xf - 1, yf);
+    var ab = noiseGrad(p[p[X] + Y + 1], xf, yf - 1), bb = noiseGrad(p[p[X + 1] + Y + 1], xf - 1, yf - 1);
+    var u = noiseFade(xf), v = noiseFade(yf);
+    var top = aa + u * (ba - aa), bottom = ab + u * (bb - ab);
+    return top + v * (bottom - top);
+  }
+
+  // Runs a canvas effect's frame function with the elapsed and delta seconds,
+  // re-reading the accent colours now and then so the pickers apply live.
+  function runFrames(onFrame) {
+    var start = null, last = null, frames = 0;
+    var colors = [themeColor('--accent'), themeColor('--accent-2')];
+    function frame(now) {
+      if (start === null) start = last = now;
+      var dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      if (++frames % 30 === 0) colors = [themeColor('--accent'), themeColor('--accent-2')];
+      onFrame((now - start) / 1000, dt, colors);
+      particleFrame = requestAnimationFrame(frame);
+    }
+    particleFrame = requestAnimationFrame(frame);
+  }
+
+  function buildEclipse(cfg) {
+    spawnStars(cfg.stars);
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, TAU = Math.PI * 2;
+    var clockEl = document.getElementById('clock');
+    var heroEl = document.querySelector('.hero');
+    var streamers = [];
+    for (var i = 0; i < cfg.streamers; i++) {
+      streamers.push({ a: rand(0, TAU), len: Math.pow(Math.random(), 1.6), wid: rand(1, 4.5), ph: rand(0, TAU), sp: rand(0.15, 0.6) });
+    }
+    var beadAngle = -2.3;
+
+    runFrames(function (t, dt, col) {
+      ctx.clearRect(0, 0, w, h);
+      // The moon frames the whole clock block, greeting to date strip, so its
+      // rim never cuts through text. Zen mode and scrolling both move it.
+      var rect = clockEl.getBoundingClientRect(), hero = heroEl.getBoundingClientRect();
+      if (!rect.width) return;
+      // It may tuck behind the search bar (which is opaque) but never off the top.
+      var R = Math.min(Math.max(hero.height / 2 + 14, rect.width * 0.5), w * 0.48);
+      var cx = rect.left + rect.width / 2, cy = Math.max((hero.top + hero.bottom) / 2, R + 8);
+
+      var glow = ctx.createRadialGradient(cx, cy, R * 0.9, cx, cy, R * 3.4);
+      glow.addColorStop(0, col[1]);
+      glow.addColorStop(0.25, col[0]);
+      glow.addColorStop(1, 'transparent');
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, w, h);
+
+      // Corona: streamers whose lengths breathe independently. Each is drawn
+      // twice, long and faint then short and brighter, so it tapers outward.
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = col[1];
+      for (var pass = 0; pass < 2; pass++) {
+        ctx.globalAlpha = pass ? 0.09 : 0.045;
+        for (var i = 0; i < streamers.length; i++) {
+          var s = streamers[i];
+          var flick = 0.6 + 0.4 * Math.sin(t * s.sp + s.ph);
+          var L = R * (0.12 + s.len * 1.25 * flick) * (pass ? 0.45 : 1);
+          var a = s.a + t * 0.012, ca = Math.cos(a), sa = Math.sin(a);
+          ctx.lineWidth = s.wid;
+          ctx.beginPath();
+          ctx.moveTo(cx + ca * R * 0.97, cy + sa * R * 0.97);
+          ctx.lineTo(cx + ca * (R + L), cy + sa * (R + L));
+          ctx.stroke();
+        }
+      }
+      ctx.globalCompositeOperation = 'source-over';
+
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#020203';
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = col[1];
+      ctx.lineWidth = 1.4;
+      ctx.shadowColor = col[0];
+      ctx.shadowBlur = 16;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Diamond ring: once a cycle a bead of sunlight flares on the limb.
+      var phase = (t % cfg.cycle) / cfg.cycle;
+      if (phase < 0.02) beadAngle = rand(-2.8, -0.4);
+      if (phase > 0.82) {
+        var k = Math.sin((phase - 0.82) / 0.18 * Math.PI);
+        var bx = cx + Math.cos(beadAngle) * R, by = cy + Math.sin(beadAngle) * R;
+        ctx.globalCompositeOperation = 'lighter';
+        var bead = ctx.createRadialGradient(bx, by, 0, bx, by, R * 0.55 * k + 1);
+        bead.addColorStop(0, '#ffffff');
+        bead.addColorStop(0.12, col[1]);
+        bead.addColorStop(1, 'transparent');
+        ctx.globalAlpha = k;
+        ctx.fillStyle = bead;
+        ctx.fillRect(bx - R, by - R, R * 2, R * 2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.2;
+        ctx.globalAlpha = k * 0.7;
+        var ray = R * 0.9 * k;
+        ctx.beginPath();
+        ctx.moveTo(bx - ray, by);
+        ctx.lineTo(bx + ray, by);
+        ctx.moveTo(bx, by - ray * 0.6);
+        ctx.lineTo(bx, by + ray * 0.6);
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
+    });
+  }
+
+  function buildSilk(cfg) {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, sc = cfg.scale;
+    seedNoise();
+    var parts = [];
+    function respawn(p) {
+      p.x = rand(-20, w + 20);
+      p.y = rand(-20, h + 20);
+      p.life = rand(2, 8);
+      return p;
+    }
+    var n = Math.round(cfg.density * w * h / 1000);
+    for (var i = 0; i < n; i++) parts.push(respawn({ c: i % 2 }));
+
+    // Threads follow a slowly changing flow field and are never cleared, only
+    // faded, so their paths build up into strands.
+    runFrames(function (t, dt, col) {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.022)';
+      ctx.fillRect(0, 0, w, h);
+      // Additive, so where strands cross they brighten like sheen on fabric.
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineWidth = 0.8;
+      ctx.globalAlpha = 0.3;
+      for (var group = 0; group < 2; group++) {
+        ctx.strokeStyle = col[group];
+        ctx.beginPath();
+        for (var i = group; i < parts.length; i += 2) {
+          var p = parts[i];
+          var ang = (noise2(p.x * sc, p.y * sc + t * 0.035) + 0.45 * noise2(p.x * sc * 2.3 - t * 0.025, p.y * sc * 2.3)) * Math.PI * 2.4;
+          var nx = p.x + Math.cos(ang) * cfg.speed * dt, ny = p.y + Math.sin(ang) * cfg.speed * dt;
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(nx, ny);
+          p.x = nx;
+          p.y = ny;
+          p.life -= dt;
+          if (p.life < 0 || nx < -30 || nx > w + 30 || ny < -30 || ny > h + 30) respawn(p);
+        }
+        ctx.stroke();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function buildContour(cfg) {
+    var c = makeCanvas('contour-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, st = cfg.step, sc = cfg.scale;
+    seedNoise();
+    var cols = Math.ceil(w / st) + 1, rows = Math.ceil(h / st) + 1;
+    var field = new Float32Array(cols * rows);
+    var wait = 1;
+
+    // Marching squares: for each cell, which edges a contour crosses, as pairs
+    // of edges (0 top, 1 right, 2 bottom, 3 left), indexed by corners above
+    // the level (8 top-left, 4 top-right, 2 bottom-right, 1 bottom-left).
+    var CASES = [[], [3, 2], [2, 1], [3, 1], [0, 1], [3, 0, 2, 1], [0, 2], [3, 0],
+      [3, 0], [0, 2], [0, 1, 3, 2], [0, 1], [3, 1], [2, 1], [3, 2], []];
+
+    function edgePoint(e, x, y, a, b, cc, d, th) {
+      if (e === 0) return [x + st * (th - a) / (b - a), y];
+      if (e === 1) return [x + st, y + st * (th - b) / (cc - b)];
+      if (e === 2) return [x + st * (th - d) / (cc - d), y + st];
+      return [x, y + st * (th - a) / (d - a)];
+    }
+
+    runFrames(function (t, dt, col) {
+      // The terrain moves slowly, so redrawing at ~20fps looks the same and costs a third.
+      wait -= dt;
+      if (wait > 0) return;
+      wait = 0.05;
+      for (var r = 0; r < rows; r++) {
+        for (var q = 0; q < cols; q++) {
+          var x = q * st, y = r * st;
+          field[r * cols + q] = noise2(x * sc + t * 0.018, y * sc - t * 0.011) +
+            0.35 * noise2(x * sc * 2.2 - t * 0.013, y * sc * 2.2 + 40);
+        }
+      }
+      ctx.clearRect(0, 0, w, h);
+      for (var li = 0; li < cfg.levels; li++) {
+        var th = -0.7 + 1.4 * (li + 0.5) / cfg.levels;
+        var major = li % 4 === 1;
+        ctx.strokeStyle = major ? col[1] : col[0];
+        ctx.globalAlpha = major ? 0.5 : 0.2;
+        ctx.lineWidth = major ? 1.3 : 0.8;
+        ctx.beginPath();
+        for (r = 0; r < rows - 1; r++) {
+          for (q = 0; q < cols - 1; q++) {
+            var a = field[r * cols + q], b = field[r * cols + q + 1];
+            var d = field[(r + 1) * cols + q], cc = field[(r + 1) * cols + q + 1];
+            var segs = CASES[(a > th ? 8 : 0) | (b > th ? 4 : 0) | (cc > th ? 2 : 0) | (d > th ? 1 : 0)];
+            for (var k = 0; k < segs.length; k += 2) {
+              var p1 = edgePoint(segs[k], q * st, r * st, a, b, cc, d, th);
+              var p2 = edgePoint(segs[k + 1], q * st, r * st, a, b, cc, d, th);
+              ctx.moveTo(p1[0], p1[1]);
+              ctx.lineTo(p2[0], p2[1]);
+            }
+          }
+        }
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function buildNocturne(cfg) {
+    var lights = ['var(--accent)', 'var(--accent-2)', '#ff5d8f', '#fff1d6', 'var(--accent)'];
+    for (var i = 0; i < cfg.bokeh; i++) {
+      var b = document.createElement('div');
+      b.className = 'bokeh';
+      var size = rand(70, 240);
+      b.style.width = b.style.height = size + 'px';
+      b.style.left = rand(-5, 95) + 'vw';
+      b.style.top = rand(-5, 95) + 'vh';
+      b.style.setProperty('--b', lights[i % lights.length]);
+      b.style.setProperty('--bx', rand(-30, 30) + 'px');
+      b.style.setProperty('--by', rand(-20, 20) + 'px');
+      b.style.setProperty('--o0', rand(0.12, 0.3).toFixed(2));
+      b.style.setProperty('--o1', rand(0.35, 0.6).toFixed(2));
+      var dur = rand(6, 14);
+      b.style.animationDuration = dur + 's';
+      b.style.animationDelay = '-' + rand(0, dur) + 's';
+      particlesEl.appendChild(b);
+    }
+
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, TAU = Math.PI * 2;
+    var maxDrops = Math.round(cfg.drops * w * h / 1000);
+    function tinyR() { return 0.8 + Math.pow(Math.random(), 2.2) * 4.2; }
+    var drops = [];
+    for (i = 0; i < maxDrops * 0.8; i++) drops.push({ x: rand(0, w), y: rand(0, h), r: tinyR() });
+    function newRunner(r) {
+      r.x = rand(0, w);
+      r.y = rand(-h * 0.6, h * 0.9);
+      r.r = rand(5, 8.5);
+      r.v = 0;
+      r.pause = rand(0.5, 4);
+      return r;
+    }
+    var runners = [];
+    for (i = 0; i < cfg.runners; i++) runners.push(newRunner({}));
+
+    function drawDrop(x, y, r, ry, light) {
+      ctx.globalAlpha = 1;
+      if (r < 1.5) {
+        ctx.fillStyle = 'rgba(220, 230, 255, 0.28)';
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, TAU);
+        ctx.fill();
+        return;
+      }
+      // A drop on glass reads as a dark lens with the light behind it caught
+      // upside down along its lower edge, and a small highlight on top.
+      ctx.fillStyle = 'rgba(8, 10, 18, 0.5)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, ry, 0, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = light;
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = Math.max(1, r * 0.22);
+      ctx.beginPath();
+      ctx.ellipse(x, y, r * 0.78, ry * 0.78, 0, 0.2 * Math.PI, 0.8 * Math.PI);
+      ctx.stroke();
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(x - r * 0.32, y - ry * 0.38, Math.max(0.6, r * 0.18), 0, TAU);
+      ctx.fill();
+    }
+
+    runFrames(function (t, dt, col) {
+      if (drops.length < maxDrops && Math.random() < dt * 30) drops.push({ x: rand(0, w), y: rand(0, h), r: tinyR() });
+
+      runners.forEach(function (rn) {
+        if (rn.pause > 0) { rn.pause -= dt; return; }
+        // Stick-slip: a drop runs, catches on the glass, then lets go again.
+        rn.v = Math.min(rn.v + 260 * dt, 90 + rn.r * 22);
+        rn.y += rn.v * dt;
+        rn.x += Math.sin(rn.y * 0.045 + rn.r) * 0.35;
+        if (Math.random() < dt * 0.5) { rn.pause = rand(0.2, 1.4); rn.v = 0; }
+        if (Math.random() < dt * 9) drops.push({ x: rn.x + rand(-1, 1), y: rn.y - rn.r * 1.6, r: rand(0.7, Math.max(0.8, rn.r * 0.32)) });
+        for (var i = drops.length - 1; i >= 0; i--) {
+          var d = drops[i];
+          if (Math.abs(d.x - rn.x) < rn.r && Math.abs(d.y - rn.y) < rn.r * 1.2 && d.y > rn.y - rn.r) {
+            drops.splice(i, 1);
+            rn.r = Math.min(rn.r + 0.05, 12);
+          }
+        }
+        if (rn.y - rn.r * 2 > h) { newRunner(rn); rn.y = -rand(10, 120); rn.pause = rand(0, 2); }
+      });
+
+      ctx.clearRect(0, 0, w, h);
+      for (var i = 0; i < drops.length; i++) drawDrop(drops[i].x, drops[i].y, drops[i].r, drops[i].r * 1.08, col[i % 2]);
+      runners.forEach(function (rn, k) { drawDrop(rn.x, rn.y, rn.r, rn.r * 1.28, col[k % 2]); });
+      ctx.globalAlpha = 1;
+    });
+  }
+
   function renderParticles(theme) {
     clearParticles();
     var cfg = THEME_ANIM[theme];
@@ -1378,6 +1730,10 @@
     else if (cfg.type === 'pulse') buildPulse(cfg);
     else if (cfg.type === 'shard') buildShard(cfg);
     else if (cfg.type === 'hive') buildHive(cfg);
+    else if (cfg.type === 'eclipse') buildEclipse(cfg);
+    else if (cfg.type === 'silk') buildSilk(cfg);
+    else if (cfg.type === 'contour') buildContour(cfg);
+    else if (cfg.type === 'nocturne') buildNocturne(cfg);
   }
 
   function greetingFor(hour) {

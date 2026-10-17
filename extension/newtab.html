@@ -423,6 +423,66 @@
     --clock-2: #ff1f3d;
   }
 
+  html[data-theme="eclipse"] {
+    --bg: #040406;
+    --bg-gradient: radial-gradient(ellipse 70% 55% at 50% 22%, #10131f, #040406 62%);
+    --surface: #0d0e14;
+    --surface-hover: #151722;
+    --border: #252838;
+    --text: #f4f1ea;
+    --text-dim: #9b98a8;
+    --accent: #ffcf7a;
+    --accent-2: #fff3d6;
+    --shadow: rgba(255, 207, 122, 0.25);
+    --clock: #ffffff;
+    --clock-2: #ffd28a;
+  }
+
+  html[data-theme="silk"] {
+    --bg: #070912;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #151a33, #070912 65%);
+    --surface: #0e1120;
+    --surface-hover: #151a2e;
+    --border: #262c48;
+    --text: #f3eee8;
+    --text-dim: #a49eb4;
+    --accent: #f2d3ae;
+    --accent-2: #e889a6;
+    --shadow: rgba(232, 137, 166, 0.25);
+    --clock: #fbe7cf;
+    --clock-2: #ee98b2;
+  }
+
+  html[data-theme="contour"] {
+    --bg: #0f1011;
+    --bg-gradient: linear-gradient(180deg, #17191b, #0f1011 70%);
+    --surface: #17181a;
+    --surface-hover: #1f2023;
+    --border: #2e3033;
+    --text: #efeae4;
+    --text-dim: #a29a90;
+    --accent: #d9895b;
+    --accent-2: #f0c29a;
+    --shadow: rgba(217, 137, 91, 0.28);
+    --clock: #f6d6b8;
+    --clock-2: #e0925f;
+  }
+
+  html[data-theme="nocturne"] {
+    --bg: #06070b;
+    --bg-gradient: radial-gradient(ellipse 90% 60% at 50% 120%, #1a1420, #06070b 70%);
+    --surface: #0e0f15;
+    --surface-hover: #15161f;
+    --border: #262836;
+    --text: #eef0f6;
+    --text-dim: #9499ab;
+    --accent: #ffb35c;
+    --accent-2: #5ad1ff;
+    --shadow: rgba(255, 179, 92, 0.25);
+    --clock: #ffe1b8;
+    --clock-2: #ffb35c;
+  }
+
   * { box-sizing: border-box; }
 
   html, body {
@@ -1130,6 +1190,29 @@
     inset: 0;
     width: 100%;
     height: 100%;
+  }
+
+  /* ---- Contour: the lines are drawn on a canvas; keep them quiet behind the clock ---- */
+  .contour-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    -webkit-mask: radial-gradient(ellipse 42% 30% at 50% 24%, rgba(0, 0, 0, 0.3), #000 75%);
+    mask: radial-gradient(ellipse 42% 30% at 50% 24%, rgba(0, 0, 0, 0.3), #000 75%);
+  }
+
+  /* ---- Nocturne: out-of-focus city lights behind rain on the glass ---- */
+  .bokeh {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--b) 0%, color-mix(in srgb, var(--b) 55%, transparent) 42%, transparent 70%);
+    animation: bokeh-drift ease-in-out infinite alternate;
+  }
+
+  @keyframes bokeh-drift {
+    from { transform: translate(0, 0) scale(1); opacity: var(--o0, 0.3); }
+    to { transform: translate(var(--bx, 20px), var(--by, 10px)) scale(1.15); opacity: var(--o1, 0.55); }
   }
 
   /* ---- Velvet: a morphing mesh gradient under film grain ---- */
@@ -2157,6 +2240,14 @@
   .swatch[data-swatch="shard"] .swatch-preview { background: linear-gradient(115deg, #2a2a30 40%, #c8102e 41%, #c8102e 43%, #18181c 44%, #232328 70%, #8a8a94 71%, #111114 72%); }
   .swatch[data-swatch="hive"] { background: #161619; }
   .swatch[data-swatch="hive"] .swatch-preview { background: radial-gradient(circle at 30% 50%, #ff1f3d, transparent 55%), #0c0c0e; }
+  .swatch[data-swatch="eclipse"] { background: #0d0e14; }
+  .swatch[data-swatch="eclipse"] .swatch-preview { background: radial-gradient(circle at 50% 50%, #000 0 11px, #fff3d6 12px, #ffcf7a 15px, transparent 26px), #040406; }
+  .swatch[data-swatch="silk"] { background: #0e1120; }
+  .swatch[data-swatch="silk"] .swatch-preview { background: linear-gradient(120deg, #151a33 15%, #e889a6 42%, #f2d3ae 55%, #151a33 85%); }
+  .swatch[data-swatch="contour"] { background: #17181a; }
+  .swatch[data-swatch="contour"] .swatch-preview { background: repeating-radial-gradient(ellipse at 30% 70%, #0f1011 0 5px, #d9895b 5px 6px); }
+  .swatch[data-swatch="nocturne"] { background: #0e0f15; }
+  .swatch[data-swatch="nocturne"] .swatch-preview { background: radial-gradient(circle at 25% 45%, #ffb35c 0 4px, transparent 12px), radial-gradient(circle at 70% 60%, #5ad1ff 0 3px, transparent 10px), radial-gradient(circle at 52% 30%, #ff5d8f 0 2px, transparent 8px), #06070b; }
 
   .hint { font-size: 11.5px; color: var(--text-dim); line-height: 1.6; }
 
@@ -2358,6 +2449,10 @@
       <button class="swatch" data-swatch="pulse"><div class="swatch-preview"></div>Pulse</button>
       <button class="swatch" data-swatch="shard"><div class="swatch-preview"></div>Shard</button>
       <button class="swatch" data-swatch="hive"><div class="swatch-preview"></div>Hive</button>
+      <button class="swatch" data-swatch="eclipse"><div class="swatch-preview"></div>Eclipse</button>
+      <button class="swatch" data-swatch="silk"><div class="swatch-preview"></div>Silk</button>
+      <button class="swatch" data-swatch="contour"><div class="swatch-preview"></div>Contour</button>
+      <button class="swatch" data-swatch="nocturne"><div class="swatch-preview"></div>Nocturne</button>
     </div>
     <div class="color-custom">
       <div class="color-field">
