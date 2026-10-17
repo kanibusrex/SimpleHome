@@ -4325,6 +4325,7 @@
       wasOpen = open;
       panelScrim.classList.toggle('visible',
         !settingsPanel.classList.contains('hidden') || !scratchPanel.classList.contains('hidden'));
+      settingsBtn.classList.toggle('active', !settingsPanel.classList.contains('hidden'));
     }).observe(panel, { attributes: true, attributeFilter: ['class'] });
     panel.addEventListener('scroll', function () {
       panel.classList.toggle('scrolled', panel.scrollTop > 4);
@@ -4361,7 +4362,7 @@
     measureDock();
     zenBtn.classList.toggle('active', zenActive);
     var label = zenActive ? 'Exit zen mode (Z)' : 'Zen mode (Z)';
-    zenBtn.title = label;
+    zenBtn.dataset.tip = label.replace(' (Z)', ' · Z');
     zenBtn.setAttribute('aria-label', label);
   }
 

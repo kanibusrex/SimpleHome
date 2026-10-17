@@ -27,7 +27,7 @@ Settings → History shows how many sites are remembered and clears them, with a
 
 **Tile hotkeys.** `Alt+1` through `Alt+9` open the first nine visible tiles in a new tab. Hold `Alt` to see the numbers.
 
-**Toolbar.** Scratchpad, edit, settings and zen sit in a floating bar at the bottom right, over a blurred ground so it reads as a bar above the page. It used to be pinned top right, where the clock — which is sized to the viewport — grew into it below 900px wide and genuinely overlapped it on a phone in landscape. The bottom is also the easier end of a phone to reach.
+**Toolbar.** Scratchpad, edit, settings and zen sit in a frosted floating bar at the bottom right, drawn as line icons that lift on hover with a label above them; whichever is open glows in the accent. On a phone it becomes a full-width tab bar with labels. It used to be pinned top right, where the clock — which is sized to the viewport — grew into it below 900px wide and genuinely overlapped it on a phone in landscape. The bottom is also the easier end of a phone to reach.
 
 **Touch gestures.** On a phone, where none of the keyboard shortcuts exist: swipe left or right across the page to move between groups, long-press a tile to edit it without entering edit mode, and pull down from the top of the page to jump into search. The phone's own long-press link menu is switched off on tiles so it doesn't get in the way, as is the browser's pull-to-refresh.
 
