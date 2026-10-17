@@ -2953,6 +2953,38 @@
     }
   });
 
+  // ---- Panel chrome ----
+  // Watches both panels rather than every place that opens or closes them:
+  // the scrim follows whichever is open, a panel that has just opened plays
+  // its entrance, and its header picks up a rule once content scrolls under.
+  var panelScrim = document.getElementById('panelScrim');
+  function closePanels() {
+    settingsPanel.classList.add('hidden');
+    closeScratch();
+  }
+  panelScrim.addEventListener('click', closePanels);
+  [settingsPanel, scratchPanel].forEach(function (panel) {
+    var wasOpen = !panel.classList.contains('hidden');
+    var enterTimer = null;
+    new MutationObserver(function () {
+      var open = !panel.classList.contains('hidden');
+      if (open && !wasOpen) {
+        panel.scrollTop = 0;
+        panel.classList.remove('entering');
+        void panel.offsetWidth;
+        panel.classList.add('entering');
+        clearTimeout(enterTimer);
+        enterTimer = setTimeout(function () { panel.classList.remove('entering'); }, 900);
+      }
+      wasOpen = open;
+      panelScrim.classList.toggle('visible',
+        !settingsPanel.classList.contains('hidden') || !scratchPanel.classList.contains('hidden'));
+    }).observe(panel, { attributes: true, attributeFilter: ['class'] });
+    panel.addEventListener('scroll', function () {
+      panel.classList.toggle('scrolled', panel.scrollTop > 4);
+    }, { passive: true });
+  });
+
   function openScratch() {
     settingsPanel.classList.add('hidden');
     scratchPanel.classList.remove('hidden');

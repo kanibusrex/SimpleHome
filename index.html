@@ -1687,7 +1687,7 @@
   .scratch-panel textarea {
     display: block;
     width: 100%;
-    height: calc(100vh - 190px);
+    height: calc(100vh - 230px);
     resize: none;
     background: var(--bg);
     border: 1px solid var(--border);
@@ -2357,21 +2357,103 @@
   }
   .tile.add-tile .tile-icon { background: transparent; border: 1px dashed var(--border); font-size: 20px; }
 
+  /* Panels are floating frosted sheets on a wide screen and full-height on a
+     phone. They glide in on a long ease-out and leave on a short ease-in,
+     so opening feels deliberate and closing feels instant. */
   .panel {
     position: fixed;
-    top: 0;
-    right: 0;
-    height: 100%;
-    width: min(320px, 100%);
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: min(340px, calc(100% - 24px));
     background: var(--surface);
-    border-left: 1px solid var(--border);
-    padding: 28px 24px;
+    background: color-mix(in srgb, var(--surface) 86%, transparent);
+    -webkit-backdrop-filter: blur(26px) saturate(1.5);
+    backdrop-filter: blur(26px) saturate(1.5);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    padding: 0 24px 28px;
     z-index: 20;
-    transform: translateX(0);
-    transition: transform 0.25s ease;
+    transform: none;
+    opacity: 1;
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease, visibility 0s;
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
-  .panel.hidden { transform: translateX(100%); }
+  .panel.hidden {
+    transform: translateX(calc(100% + 28px)) scale(0.98);
+    opacity: 0;
+    visibility: hidden;
+    transition: transform 0.28s cubic-bezier(0.4, 0, 1, 1), opacity 0.28s ease, visibility 0s 0.28s;
+  }
+
+  @media (max-width: 600px) {
+    .panel {
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      border-radius: 0;
+      border-width: 0 0 0 1px;
+    }
+  }
+
+  /* The title and close button ride along at the top of the sheet, so it can
+     be closed from anywhere in it. */
+  .panel-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 -24px 18px;
+    padding: calc(20px + env(safe-area-inset-top, 0px)) 24px 14px;
+    background: color-mix(in srgb, var(--surface) 97%, transparent);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .panel.scrolled .panel-head {
+    border-bottom-color: var(--border);
+    box-shadow: 0 10px 24px -18px rgba(0, 0, 0, 0.6);
+  }
+  .panel .panel-head h2 { margin: 0; line-height: 1.2; }
+  .panel-head .panel-close { position: static; flex-shrink: 0; }
+
+  .panel-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 19;
+    background: rgba(0, 0, 0, 0.32);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0s 0.3s;
+  }
+  .panel-scrim.visible {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.4s ease, visibility 0s;
+  }
+
+  /* Each section settles in a beat after the one above it. */
+  .panel.entering > :not(.panel-head) {
+    animation: panel-item-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+  .panel.entering > :nth-child(2) { animation-delay: 0.08s; }
+  .panel.entering > :nth-child(3) { animation-delay: 0.13s; }
+  .panel.entering > :nth-child(4) { animation-delay: 0.18s; }
+  .panel.entering > :nth-child(5) { animation-delay: 0.23s; }
+  .panel.entering > :nth-child(6) { animation-delay: 0.28s; }
+  .panel.entering > :nth-child(n+7) { animation-delay: 0.32s; }
+  @keyframes panel-item-in {
+    from { opacity: 0; transform: translateX(16px); filter: blur(4px); }
+  }
 
   .panel h2 {
     font-family: 'Sora', sans-serif;
@@ -2382,7 +2464,7 @@
 
   .panel-close {
     position: absolute;
-    top: 24px;
+    top: 20px;
     right: 24px;
   }
 
@@ -2688,9 +2770,13 @@
   </main>
 </div>
 
+<div class="panel-scrim" id="panelScrim" aria-hidden="true"></div>
+
 <div class="panel hidden" id="settingsPanel">
-  <button class="icon-btn panel-close" id="panelClose" aria-label="Close settings">&times;</button>
-  <h2>Settings</h2>
+  <div class="panel-head">
+    <h2>Settings</h2>
+    <button class="icon-btn panel-close" id="panelClose" aria-label="Close settings">&times;</button>
+  </div>
   <div class="panel-section">
     <h3>Theme</h3>
     <div class="theme-grid" id="themeGrid">
@@ -2784,8 +2870,10 @@
 </div>
 
 <div class="panel scratch-panel hidden" id="scratchPanel">
-  <button class="icon-btn panel-close" id="scratchClose" aria-label="Close scratchpad">&times;</button>
-  <h2>Scratchpad</h2>
+  <div class="panel-head">
+    <h2>Scratchpad</h2>
+    <button class="icon-btn panel-close" id="scratchClose" aria-label="Close scratchpad">&times;</button>
+  </div>
   <div class="scratch-field">
     <textarea id="scratchText" placeholder="Anything you need to hang onto…"></textarea>
   </div>
@@ -5772,6 +5860,38 @@
       scratchStatus.textContent = 'Cleared';
       scratchText.focus();
     }
+  });
+
+  // ---- Panel chrome ----
+  // Watches both panels rather than every place that opens or closes them:
+  // the scrim follows whichever is open, a panel that has just opened plays
+  // its entrance, and its header picks up a rule once content scrolls under.
+  var panelScrim = document.getElementById('panelScrim');
+  function closePanels() {
+    settingsPanel.classList.add('hidden');
+    closeScratch();
+  }
+  panelScrim.addEventListener('click', closePanels);
+  [settingsPanel, scratchPanel].forEach(function (panel) {
+    var wasOpen = !panel.classList.contains('hidden');
+    var enterTimer = null;
+    new MutationObserver(function () {
+      var open = !panel.classList.contains('hidden');
+      if (open && !wasOpen) {
+        panel.scrollTop = 0;
+        panel.classList.remove('entering');
+        void panel.offsetWidth;
+        panel.classList.add('entering');
+        clearTimeout(enterTimer);
+        enterTimer = setTimeout(function () { panel.classList.remove('entering'); }, 900);
+      }
+      wasOpen = open;
+      panelScrim.classList.toggle('visible',
+        !settingsPanel.classList.contains('hidden') || !scratchPanel.classList.contains('hidden'));
+    }).observe(panel, { attributes: true, attributeFilter: ['class'] });
+    panel.addEventListener('scroll', function () {
+      panel.classList.toggle('scrolled', panel.scrollTop > 4);
+    }, { passive: true });
   });
 
   function openScratch() {
