@@ -289,8 +289,8 @@
   }
 
   html[data-theme="lava"] {
-    --bg: #0d0410;
-    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #2a0a20, #0d0410 65%);
+    --bg: #0c0310;
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #240a26, #0c0310 65%);
     --surface: #170720;
     --surface-hover: #210c2d;
     --border: #3b1543;
@@ -1009,26 +1009,28 @@
     to { transform: scale(1); opacity: 0; }
   }
 
-  /* ---- Lava: metaballs ---- */
-  /* The merge comes from an SVG filter that blurs then hard-thresholds the
-     ALPHA channel. CSS contrast() would do it on colour instead, which wrecks
-     the hue and leaves hard-edged rings rather than soft necks. */
-  .lava-field {
+  /* ---- Lava: a lava lamp, shaded on a canvas ---- */
+  .lava-canvas {
     position: absolute;
     inset: 0;
-    filter: url(#goo);
-    opacity: 0.45;
+    width: 100%;
+    height: 100%;
+    -webkit-mask: radial-gradient(ellipse 46% 34% at 50% 25%, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.5) 55%, #000 100%);
+    mask: radial-gradient(ellipse 46% 34% at 50% 25%, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.5) 55%, #000 100%);
   }
 
-  .lava-blob {
+  .lava-heat {
     position: absolute;
-    border-radius: 50%;
-    animation: lava-float ease-in-out infinite alternate;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 45vh;
+    background: radial-gradient(ellipse 70% 100% at 50% 100%, color-mix(in srgb, var(--accent-2) 30%, transparent), transparent 70%);
+    animation: lava-heat 6s ease-in-out infinite alternate;
   }
-
-  @keyframes lava-float {
-    0% { transform: translateY(8vh) scale(0.9); }
-    100% { transform: translateY(-70vh) scale(1.15); }
+  @keyframes lava-heat {
+    from { opacity: 0.55; }
+    to { opacity: 1; }
   }
 
   /* ---- Hyperdrive: warp starfield, drawn on a canvas ---- */

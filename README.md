@@ -63,7 +63,7 @@ Settings → History shows how many sites are remembered and clears them, with a
 | Terminal | Amber on black | CRT phosphor — scanlines, a rolling refresh bar, and a faint flicker |
 | Festival | Night blue / multicolour | Rockets climbing and bursting into falling sparks |
 | Ripple | Pale blue light | Rings spreading outward like rain on still water |
-| Lava | Plum / magenta | Metaball blobs rising and merging, lava-lamp style |
+| Lava | Plum / magenta / molten orange | A lava lamp: glossy wax blobs, lit from within, rise off a glowing heater, cool from orange to magenta as they climb, and merge and split as they pass — shaded on a canvas with a specular highlight and a hot rim |
 | Hyperdrive | Cyan / magenta on deep space | A warp-speed starfield drawn on a canvas — cruising streaks that surge into a light-speed jump every thirteen seconds |
 | Gilded | Black / gold | Art-deco sunburst rocking slowly from below, drifting gold dust, four-point glints, and a light sheen sweeping across |
 | Prism | Violet / teal iridescent | Two counter-rotating holographic colour fields with tinted stage beams swinging through them |
