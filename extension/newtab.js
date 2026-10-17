@@ -584,10 +584,10 @@
 
   var THEME_ANIM = {
     ember:    { type: 'embers', count: 110, bokeh: 12 },
-    forest:   { type: 'firefly', color: 'var(--accent-2)', count: 12,    size: [2, 4] },
-    noir:     { type: 'twinkle', count: 45,                size: [1, 2] },
-    aurora:   { type: 'aurora',  stars: 20 },
-    daybreak: { type: 'firefly', color: 'var(--accent-2)', count: 14,    size: [1.5, 3] },
+    forest:   { type: 'forest', flies: 40 },
+    noir:     { type: 'blinds', slats: 7, motes: 170 },
+    aurora:   { type: 'aurora2', stars: 140 },
+    daybreak: { type: 'sunrise', motes: 70 },
     frost:    { type: 'fall',    color: '#a9c9e6',         size: [2, 4], duration: [8, 15],  interval: 750, seed: 6 },
     sunset:   { type: 'clouds' },
     bloom:    { type: 'fall',    color: 'var(--accent-2)', size: [6, 10], duration: [9, 16],  interval: 1000, seed: 5, petal: true },
@@ -2359,6 +2359,296 @@
     });
   }
 
+  // A soft round glow, pre-rendered once per colour and stamped with
+  // drawImage: far cheaper than a fresh radial gradient per particle.
+  var glowCache = {};
+  function glowSprite(color, core) {
+    var key = color + '|' + (core || 0);
+    if (glowCache[key]) return glowCache[key];
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    var g = cv.getContext('2d');
+    var gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, core ? '#ffffff' : color);
+    gr.addColorStop(core ? 0.12 : 0.05, color);
+    gr.addColorStop(0.35, color);
+    gr.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    g.globalAlpha = 1;
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 64, 64);
+    // Fade the outer stops to transparent without darkening them.
+    g.globalCompositeOperation = 'destination-in';
+    var m = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    m.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    m.addColorStop(0.3, 'rgba(0, 0, 0, 0.55)');
+    m.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    g.fillStyle = m;
+    g.fillRect(0, 0, 64, 64);
+    glowCache[key] = cv;
+    return cv;
+  }
+  function stamp(ctx, sprite, x, y, r) { ctx.drawImage(sprite, x - r, y - r, r * 2, r * 2); }
+
+  // Noir: light through venetian blinds raking across a dark wall, with
+  // dust drifting through it that only shows where it catches the light.
+  function buildBlinds(cfg) {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h;
+    seedNoise();
+    var ang = -0.5, ca = Math.cos(ang), sa = Math.sin(ang);
+    var cx = w * 0.42, cy = h * 0.4, span = Math.hypot(w, h);
+    var motes = [];
+    for (var i = 0; i < cfg.motes; i++) motes.push({ x: rand(0, w), y: rand(0, h), r: rand(0.6, 1.8), ph: rand(0, 6.3), sp: rand(4, 14) });
+
+    function lightAt(x, y, t, period, band, off) {
+      var v = -(x - cx) * sa + (y - cy) * ca - off;
+      var f = ((v % period) + period) % period;
+      var inBand = f < band ? Math.sin(f / band * Math.PI) : 0;
+      var u = (x - cx) * ca + (y - cy) * sa;
+      var pool = Math.exp(-Math.pow((u + span * 0.05) / (span * 0.38), 2) - Math.pow(v / (span * 0.42), 2));
+      return inBand * pool;
+    }
+
+    runFrames(function (t, dt, col) {
+      ctx.clearRect(0, 0, w, h);
+      var period = span / (cfg.slats * 1.25);
+      var band = period * (0.62 + 0.08 * Math.sin(t * 0.21));
+      var off = Math.sin(t * 0.07) * period * 0.8;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(ang);
+      for (var k = -cfg.slats; k <= cfg.slats; k++) {
+        var y0 = k * period + off;
+        var g = ctx.createLinearGradient(0, y0, 0, y0 + band);
+        g.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        g.addColorStop(0.5, col[0]);
+        g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = g;
+        ctx.globalAlpha = 0.3;
+        ctx.fillRect(-span, y0, span * 2, band);
+      }
+      ctx.restore();
+      // Fall-off: the light is a pool, brightest near the window.
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'destination-in';
+      var m = ctx.createRadialGradient(w * 0.38, h * 0.36, 0, w * 0.38, h * 0.36, span * 0.62);
+      m.addColorStop(0, 'rgba(0, 0, 0, 1)');
+      m.addColorStop(0.4, 'rgba(0, 0, 0, 0.6)');
+      m.addColorStop(0.85, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = m;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.globalCompositeOperation = 'lighter';
+      var spr = glowSprite(col[0]);
+      motes.forEach(function (p) {
+        var a = noise2(p.x * 0.004, p.y * 0.004 + t * 0.03) * 6.3;
+        p.x += Math.cos(a) * p.sp * dt;
+        p.y += (Math.sin(a) * p.sp + 3) * dt;
+        if (p.x < -10) p.x = w + 10; else if (p.x > w + 10) p.x = -10;
+        if (p.y > h + 10) p.y = -10; else if (p.y < -10) p.y = h + 10;
+        var lit = lightAt(p.x, p.y, t, period, band, off);
+        var tw = 0.75 + 0.25 * Math.sin(t * 2 + p.ph);
+        ctx.globalAlpha = (0.05 + lit * 0.9) * tw;
+        stamp(ctx, spr, p.x, p.y, p.r * 3.2);
+      });
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // Aurora: curtains of light, each a run of vertical rays whose height and
+  // brightness ripple with noise, over a slowly turning starfield.
+  function buildAurora2(cfg) {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h;
+    seedNoise();
+    var stars = [];
+    for (var i = 0; i < cfg.stars; i++) stars.push({ x: rand(0, w), y: rand(0, h), r: rand(0.4, 1.3), ph: rand(0, 6.3), sp: rand(0.5, 2) });
+    var sprite = null, spriteKey = '';
+    function makeSprite(col) {
+      var cv = document.createElement('canvas');
+      cv.width = 4;
+      cv.height = 256;
+      var g = cv.getContext('2d');
+      var gr = g.createLinearGradient(0, 0, 0, 256);
+      gr.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      gr.addColorStop(0.25, col[1]);
+      gr.addColorStop(0.75, col[0]);
+      gr.addColorStop(0.92, col[0]);
+      gr.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      g.fillStyle = gr;
+      g.fillRect(0, 0, 4, 256);
+      return cv;
+    }
+    var step = 2;
+
+    runFrames(function (t, dt, col) {
+      if (spriteKey !== col.join()) { spriteKey = col.join(); sprite = makeSprite(col); }
+      ctx.clearRect(0, 0, w, h);
+      var star = glowSprite('#ffffff');
+      stars.forEach(function (s2) {
+        ctx.globalAlpha = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(t * s2.sp + s2.ph));
+        stamp(ctx, star, s2.x, s2.y, s2.r * 2.4);
+      });
+      ctx.globalCompositeOperation = 'lighter';
+      for (var layer = 0; layer < 2; layer++) {
+        var lo = layer * 37.7;
+        for (var x = -step; x < w + step; x += step) {
+          // The curtain's lower hem snakes across the sky; rays brighten and
+          // fade along it, and the whole sheet folds in and out of view.
+          var base = h * (0.4 + layer * 0.1) + noise2(x * 0.0035 + lo, t * 0.05) * h * 0.2 + Math.sin(x * 0.006 + t * 0.12 + lo) * h * 0.05;
+          var tall = h * (0.2 + 0.14 * (0.5 + noise2(x * 0.004 + lo, t * 0.06 + 9)));
+          var ray = 0.55 + 0.6 * noise2(x * 0.011 - t * 0.22 + lo, t * 0.15) + 0.25 * noise2(x * 0.045 + lo, t * 0.4);
+          var fold = 0.5 + 0.5 * Math.sin(x * 0.0035 + t * 0.2 + layer * 2.4);
+          var a = Math.pow(Math.max(0, ray), 2) * (0.2 + 0.8 * fold) * (layer ? 0.16 : 0.24);
+          if (a < 0.008) continue;
+          ctx.globalAlpha = a;
+          ctx.drawImage(sprite, x - step, base - tall, step * 3, tall);
+        }
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // Forest: fireflies wandering and blinking at different depths, mist
+  // drifting along the forest floor, and light shafts from the canopy.
+  function buildForest(cfg) {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h;
+    seedNoise();
+    var flies = [];
+    for (var i = 0; i < cfg.flies; i++) {
+      var near = i < 5;
+      flies.push({ x: rand(0, w), y: rand(h * 0.2, h), z: near ? rand(2.4, 3.6) : rand(0.6, 1.4), ph: rand(0, 50), per: rand(3, 7), seed: rand(0, 100) });
+    }
+    var mist = [];
+    for (i = 0; i < 6; i++) mist.push({ x: rand(0, w), y: h * rand(0.7, 1.02), rx: rand(0.35, 0.6) * w, ry: rand(0.07, 0.14) * h, sp: rand(6, 16) * (i % 2 ? 1 : -1) });
+
+    runFrames(function (t, dt, col) {
+      ctx.clearRect(0, 0, w, h);
+      // Light shafts from the canopy.
+      for (var r = 0; r < 3; r++) {
+        var bx = w * (0.18 + r * 0.3) + Math.sin(t * 0.05 + r) * 30;
+        ctx.save();
+        ctx.translate(bx, -20);
+        ctx.rotate(0.28 + Math.sin(t * 0.04 + r * 2) * 0.03);
+        var g = ctx.createLinearGradient(0, 0, 0, h * 0.9);
+        g.addColorStop(0, col[1]);
+        g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.globalAlpha = 0.045 + 0.02 * Math.sin(t * 0.3 + r);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(-18, 0);
+        ctx.lineTo(18, 0);
+        ctx.lineTo(90, h * 0.9);
+        ctx.lineTo(-90, h * 0.9);
+        ctx.fill();
+        ctx.restore();
+      }
+      // Mist.
+      var mistSpr = glowSprite('#9fb8a0');
+      mist.forEach(function (m) {
+        m.x += m.sp * dt;
+        if (m.x - m.rx > w) m.x = -m.rx; else if (m.x + m.rx < 0) m.x = w + m.rx;
+        ctx.globalAlpha = 0.07;
+        ctx.drawImage(mistSpr, m.x - m.rx, m.y - m.ry, m.rx * 2, m.ry * 2);
+      });
+      // Fireflies: a slow pulse that holds dark for a while, then a soft flash.
+      ctx.globalCompositeOperation = 'lighter';
+      var spr = glowSprite(col[1], true);
+      flies.forEach(function (f) {
+        var a = noise2(f.x * 0.003 + f.seed, f.y * 0.003 + t * 0.06) * 6.3;
+        var sp = 14 / f.z;
+        f.x += Math.cos(a) * sp * dt;
+        f.y += Math.sin(a) * sp * dt * 0.7;
+        if (f.x < -40) f.x = w + 40; else if (f.x > w + 40) f.x = -40;
+        if (f.y < h * 0.12) f.y = h * 0.12; else if (f.y > h + 30) f.y = h + 30;
+        var cyc = ((t + f.ph) % f.per) / f.per;
+        var on = cyc < 0.45 ? Math.sin(cyc / 0.45 * Math.PI) : 0;
+        var glow = 0.08 + 0.92 * on;
+        ctx.globalAlpha = glow * (f.z > 2 ? 0.35 : 0.95);
+        stamp(ctx, spr, f.x, f.y, (f.z > 2 ? 22 : 9) * f.z * (0.7 + 0.3 * on));
+      });
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // Daybreak: a low sun breathing light into the corner, rays turning slowly
+  // around it, a faint lens-flare chain, and golden dust in the air.
+  function buildSunrise(cfg) {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, TAU = Math.PI * 2;
+    seedNoise();
+    var motes = [];
+    for (var i = 0; i < cfg.motes; i++) motes.push({ x: rand(0, w), y: rand(0, h), r: rand(0.8, 2.4), ph: rand(0, 6.3) });
+    var rays = [];
+    for (i = 0; i < 14; i++) rays.push({ a: rand(0, TAU), wd: rand(0.03, 0.09), len: rand(0.7, 1.2), ph: rand(0, 6.3) });
+
+    runFrames(function (t, dt, col) {
+      ctx.clearRect(0, 0, w, h);
+      var sx = w * 0.86, sy = h * 0.08, R = Math.max(w, h) * 1.1;
+      var breathe = 0.85 + 0.15 * Math.sin(t * 0.35);
+      var g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R * 0.55);
+      g.addColorStop(0, 'rgba(255, 246, 220, 0.95)');
+      g.addColorStop(0.15, col[1]);
+      g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.globalAlpha = 0.3 * breathe;
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+
+      // Rays.
+      rays.forEach(function (r) {
+        var a = r.a + t * 0.012;
+        var L = R * r.len;
+        var rg = ctx.createRadialGradient(sx, sy, 0, sx, sy, L);
+        rg.addColorStop(0, col[1]);
+        rg.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.globalAlpha = (0.07 + 0.05 * Math.sin(t * 0.5 + r.ph)) * breathe;
+        ctx.fillStyle = rg;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.arc(sx, sy, L, a - r.wd / 2, a + r.wd / 2);
+        ctx.closePath();
+        ctx.fill();
+      });
+
+      // Lens-flare ghosts on the line from the sun through the centre.
+      var fx = w / 2 - sx, fy = h / 2 - sy;
+      [[0.55, 26, 0.1], [0.9, 12, 0.14], [1.25, 44, 0.06], [1.55, 18, 0.1]].forEach(function (gh, k) {
+        var gx = sx + fx * gh[0], gy = sy + fy * gh[0];
+        var gg = ctx.createRadialGradient(gx, gy, gh[1] * 0.6, gx, gy, gh[1]);
+        gg.addColorStop(0, k % 2 ? col[1] : col[0]);
+        gg.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.globalAlpha = gh[2] * breathe;
+        ctx.fillStyle = gg;
+        ctx.beginPath();
+        ctx.arc(gx, gy, gh[1], 0, TAU);
+        ctx.fill();
+      });
+
+      // Golden dust, brighter the nearer it is to the sun.
+      var spr = glowSprite(col[1], true);
+      motes.forEach(function (p) {
+        var a = noise2(p.x * 0.003, p.y * 0.003 + t * 0.03) * 6.3;
+        p.x += Math.cos(a) * 9 * dt;
+        p.y += (Math.sin(a) * 9 - 2) * dt;
+        if (p.x < -10) p.x = w + 10; else if (p.x > w + 10) p.x = -10;
+        if (p.y < -10) p.y = h + 10; else if (p.y > h + 10) p.y = -10;
+        var near = 1 - Math.min(1, Math.hypot(p.x - sx, p.y - sy) / (R * 0.75));
+        ctx.globalAlpha = (0.25 + 0.6 * near) * (0.6 + 0.4 * Math.sin(t * 1.7 + p.ph));
+        stamp(ctx, spr, p.x, p.y, p.r * 3.5);
+      });
+      ctx.globalAlpha = 1;
+    });
+  }
+
   function renderParticles(theme) {
     clearParticles();
     var cfg = THEME_ANIM[theme];
@@ -2375,6 +2665,10 @@
     else if (cfg.type === 'bubbles') buildAbyss(cfg);
     else if (cfg.type === 'circuit') buildCircuit(cfg);
     else if (cfg.type === 'embers') buildEmbers(cfg);
+    else if (cfg.type === 'blinds') buildBlinds(cfg);
+    else if (cfg.type === 'aurora2') buildAurora2(cfg);
+    else if (cfg.type === 'forest') buildForest(cfg);
+    else if (cfg.type === 'sunrise') buildSunrise(cfg);
     else if (cfg.type === 'crt') buildCrt();
     else if (cfg.type === 'fireworks') buildFireworks(cfg);
     else if (cfg.type === 'ripple') buildRipple(cfg);
