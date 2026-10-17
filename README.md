@@ -45,7 +45,7 @@ Settings → History shows how many sites are remembered and clears them, with a
 
 | Theme | Palette | Animation |
 |---|---|---|
-| Ember | Dark red / black | Embers rising |
+| Ember | Dark red / black | Fire embers rising on a canvas — each spark is born white-hot, cools through orange to deep red as it climbs, flickers and is pushed about by turbulence, with out-of-focus embers drifting near the camera and firelight breathing up from below |
 | Aurora | Dark teal / violet | Drifting waves over stars |
 | Forest | Dark green | Wandering fireflies |
 | Noir | Dark neutral | Twinkling starfield |
@@ -59,7 +59,7 @@ Settings → History shows how many sites are remembered and clears them, with a
 | Cosmos | Indigo / violet | A deep starfield with drifting nebula clouds and periodic shooting stars |
 | Storm | Slate blue | Wind-driven rain streaks with occasional sheet lightning |
 | Abyss | Deep sea cyan | Bubbles wobbling up through swaying shafts of light |
-| Circuit | Slate / lime | Pulses travelling along etched right-angle board traces |
+| Circuit | Slate / lime | A circuit board drawn on a canvas — chamfered copper traces and solder pads, with glowing data pulses and their tails racing along them and pads flashing as they pass |
 | Terminal | Amber on black | CRT phosphor — scanlines, a rolling refresh bar, and a faint flicker |
 | Festival | Night blue / multicolour | Rockets climbing and bursting into falling sparks |
 | Ripple | Pale blue light | Rings spreading outward like rain on still water |

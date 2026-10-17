@@ -20,7 +20,7 @@
 
   html[data-theme="ember"] {
     --bg: #0a0606;
-    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #2a0d0d, #0a0606 65%);
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #2a0d0d, #0a0606 65%), radial-gradient(ellipse 90% 50% at 50% 110%, #2b0c06, transparent 70%);
     --surface: #160b0b;
     --surface-hover: #220f0f;
     --border: #3a1414;
@@ -858,47 +858,6 @@
     100% { transform: rotate(13deg) scaleX(1.4); opacity: 0.13; }
   }
 
-  /* ---- Circuit: pulses travelling along etched traces ---- */
-  .circuit-svg {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-  }
-
-  .circuit-trace {
-    fill: none;
-    stroke: var(--accent);
-    stroke-width: 1;
-    opacity: 0.12;
-  }
-
-  .circuit-pulse {
-    fill: none;
-    stroke: var(--accent-2);
-    stroke-width: 1.6;
-    stroke-linecap: round;
-    filter: drop-shadow(0 0 4px var(--accent-2));
-    animation: trace-pulse linear infinite;
-  }
-
-  /* --dash is the full travel distance, set per-path from getTotalLength(). */
-  @keyframes trace-pulse {
-    from { stroke-dashoffset: 0; }
-    to { stroke-dashoffset: var(--dash); }
-  }
-
-  .circuit-node {
-    fill: var(--accent);
-    opacity: 0.3;
-    animation: node-pulse ease-in-out infinite alternate;
-  }
-
-  @keyframes node-pulse {
-    0% { opacity: 0.15; }
-    100% { opacity: 0.7; }
-  }
-
   /* ---- Terminal: amber CRT ---- */
   .crt-scanlines {
     position: absolute;
@@ -1007,6 +966,24 @@
 
   @keyframes ripple-out {
     to { transform: scale(1); opacity: 0; }
+  }
+
+  /* ---- Ember: firelight breathing up from below the page ---- */
+  .ember-glow {
+    position: absolute;
+    left: -10%;
+    right: -10%;
+    bottom: -8vh;
+    height: 60vh;
+    background:
+      radial-gradient(ellipse 55% 70% at 50% 100%, color-mix(in srgb, var(--accent-2) 38%, transparent), transparent 70%),
+      radial-gradient(ellipse 95% 95% at 50% 100%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 75%);
+    animation: ember-breathe 4.5s ease-in-out infinite alternate;
+  }
+  @keyframes ember-breathe {
+    0% { opacity: 0.6; transform: scaleY(0.94); }
+    40% { opacity: 0.9; }
+    100% { opacity: 1; transform: scaleY(1.04); }
   }
 
   /* ---- Lava: a lava lamp, shaded on a canvas ---- */

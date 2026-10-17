@@ -19,7 +19,7 @@
 
   html[data-theme="ember"] {
     --bg: #0a0606;
-    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #2a0d0d, #0a0606 65%);
+    --bg-gradient: radial-gradient(ellipse 80% 60% at 50% -10%, #2a0d0d, #0a0606 65%), radial-gradient(ellipse 90% 50% at 50% 110%, #2b0c06, transparent 70%);
     --surface: #160b0b;
     --surface-hover: #220f0f;
     --border: #3a1414;
@@ -857,47 +857,6 @@
     100% { transform: rotate(13deg) scaleX(1.4); opacity: 0.13; }
   }
 
-  /* ---- Circuit: pulses travelling along etched traces ---- */
-  .circuit-svg {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-  }
-
-  .circuit-trace {
-    fill: none;
-    stroke: var(--accent);
-    stroke-width: 1;
-    opacity: 0.12;
-  }
-
-  .circuit-pulse {
-    fill: none;
-    stroke: var(--accent-2);
-    stroke-width: 1.6;
-    stroke-linecap: round;
-    filter: drop-shadow(0 0 4px var(--accent-2));
-    animation: trace-pulse linear infinite;
-  }
-
-  /* --dash is the full travel distance, set per-path from getTotalLength(). */
-  @keyframes trace-pulse {
-    from { stroke-dashoffset: 0; }
-    to { stroke-dashoffset: var(--dash); }
-  }
-
-  .circuit-node {
-    fill: var(--accent);
-    opacity: 0.3;
-    animation: node-pulse ease-in-out infinite alternate;
-  }
-
-  @keyframes node-pulse {
-    0% { opacity: 0.15; }
-    100% { opacity: 0.7; }
-  }
-
   /* ---- Terminal: amber CRT ---- */
   .crt-scanlines {
     position: absolute;
@@ -1006,6 +965,24 @@
 
   @keyframes ripple-out {
     to { transform: scale(1); opacity: 0; }
+  }
+
+  /* ---- Ember: firelight breathing up from below the page ---- */
+  .ember-glow {
+    position: absolute;
+    left: -10%;
+    right: -10%;
+    bottom: -8vh;
+    height: 60vh;
+    background:
+      radial-gradient(ellipse 55% 70% at 50% 100%, color-mix(in srgb, var(--accent-2) 38%, transparent), transparent 70%),
+      radial-gradient(ellipse 95% 95% at 50% 100%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 75%);
+    animation: ember-breathe 4.5s ease-in-out infinite alternate;
+  }
+  @keyframes ember-breathe {
+    0% { opacity: 0.6; transform: scaleY(0.94); }
+    40% { opacity: 0.9; }
+    100% { opacity: 1; transform: scaleY(1.04); }
   }
 
   /* ---- Lava: a lava lamp, shaded on a canvas ---- */
@@ -3494,7 +3471,7 @@
   function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
 
   var THEME_ANIM = {
-    ember:    { type: 'rise',    color: 'var(--accent-2)', size: [2, 4], duration: [6, 12],  interval: 850, seed: 6 },
+    ember:    { type: 'embers', count: 110, bokeh: 12 },
     forest:   { type: 'firefly', color: 'var(--accent-2)', count: 12,    size: [2, 4] },
     noir:     { type: 'twinkle', count: 45,                size: [1, 2] },
     aurora:   { type: 'aurora',  stars: 20 },
@@ -3508,7 +3485,7 @@
     cosmos:    { type: 'cosmos', stars: 60, shootInterval: 5200 },
     storm:     { type: 'storm',  duration: [0.7, 1.4], interval: 60, seed: 30, flashChance: 0.45 },
     abyss:     { type: 'bubbles', size: [4, 16], duration: [9, 18], interval: 700, seed: 18, rays: 4 },
-    circuit:   { type: 'circuit', traces: 14, nodes: 16 },
+    circuit:   { type: 'circuit', traces: 16, pulses: 22 },
     terminal:  { type: 'crt' },
     festival:  { type: 'fireworks', interval: 1900, sparks: 22 },
     ripple:    { type: 'ripple', interval: 1100 },
@@ -3795,55 +3772,150 @@
     return { d: d, points: pts };
   }
 
+  // A circuit board: copper traces with chamfered corners and solder pads,
+  // drawn once to a layer, with data pulses running along them on top.
   function buildCircuit(cfg) {
-    var w = window.innerWidth;
-    var h = window.innerHeight;
-    var svg = document.createElementNS(SVG_NS, 'svg');
-    svg.setAttribute('class', 'circuit-svg');
-    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
-    var joints = [];
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, TAU = Math.PI * 2;
+
+    function makeTrace() {
+      var x = Math.random() < 0.5 ? -10 : w + 10, y = rand(0.04, 0.96) * h;
+      var dir = x < 0 ? 1 : -1, pts = [[x, y]];
+      var n = randInt(3, 6);
+      for (var i = 0; i < n; i++) {
+        x += dir * rand(w * 0.07, w * 0.2);
+        pts.push([x, y]);
+        // Diagonal jog, as PCB routing does, rather than a square corner.
+        var dy = (Math.random() < 0.5 ? -1 : 1) * rand(h * 0.04, h * 0.14);
+        x += dir * Math.abs(dy);
+        y += dy;
+        pts.push([x, y]);
+      }
+      var seg = [], len = 0;
+      for (i = 1; i < pts.length; i++) {
+        var l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+        seg.push(l);
+        len += l;
+      }
+      return { pts: pts, seg: seg, len: len, flash: new Float32Array(pts.length) };
+    }
+    function pointAt(tr, d) {
+      for (var i = 0; i < tr.seg.length; i++) {
+        if (d <= tr.seg[i]) {
+          var f = d / tr.seg[i], a = tr.pts[i], b = tr.pts[i + 1];
+          return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, i];
+        }
+        d -= tr.seg[i];
+      }
+      var e = tr.pts[tr.pts.length - 1];
+      return [e[0], e[1], tr.seg.length - 1];
+    }
+
+    var traces = [];
+    for (var i = 0; i < cfg.traces; i++) traces.push(makeTrace());
+
+    var board = document.createElement('canvas');
+    board.width = c.canvas.width;
+    board.height = c.canvas.height;
+    var bctx = board.getContext('2d');
+    bctx.scale(c.dpr, c.dpr);
+    function drawBoard(col) {
+      bctx.clearRect(0, 0, w, h);
+      bctx.strokeStyle = col[0];
+      bctx.lineJoin = 'round';
+      bctx.globalAlpha = 0.16;
+      bctx.lineWidth = 1.4;
+      traces.forEach(function (tr) {
+        bctx.beginPath();
+        bctx.moveTo(tr.pts[0][0], tr.pts[0][1]);
+        tr.pts.forEach(function (p) { bctx.lineTo(p[0], p[1]); });
+        bctx.stroke();
+      });
+      bctx.globalAlpha = 0.3;
+      bctx.lineWidth = 1.2;
+      traces.forEach(function (tr) {
+        tr.pts.forEach(function (p, k) {
+          if (k === 0 || k % 2) return;
+          bctx.beginPath();
+          bctx.arc(p[0], p[1], 3, 0, TAU);
+          bctx.stroke();
+        });
+      });
+      bctx.globalAlpha = 1;
+    }
+    var boardColor = '';
+
     var pulses = [];
-
-    for (var i = 0; i < cfg.traces; i++) {
-      var t = tracePath(w, h);
-      joints = joints.concat(t.points);
-
-      var base = document.createElementNS(SVG_NS, 'path');
-      base.setAttribute('class', 'circuit-trace');
-      base.setAttribute('d', t.d);
-      svg.appendChild(base);
-
-      var pulse = document.createElementNS(SVG_NS, 'path');
-      pulse.setAttribute('class', 'circuit-pulse');
-      pulse.setAttribute('d', t.d);
-      svg.appendChild(pulse);
-
-      // getTotalLength needs the node in the document, so measure after append.
-      pulses.push(pulse);
+    function newPulse(p, anywhere) {
+      p.tr = traces[Math.floor(Math.random() * traces.length)];
+      p.d = anywhere ? rand(0, p.tr.len) : 0;
+      p.sp = rand(140, 320);
+      p.tail = rand(60, 140);
+      p.c = Math.random() < 0.7 ? 1 : 0;
+      p.lastSeg = -1;
+      return p;
     }
+    for (i = 0; i < cfg.pulses; i++) pulses.push(newPulse({}, true));
 
-    particlesEl.appendChild(svg);
+    runFrames(function (t, dt, col) {
+      if (boardColor !== col[0]) { boardColor = col[0]; drawBoard(col); }
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(board, 0, 0, w, h);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
 
-    pulses.forEach(function (p) {
-      var len = p.getTotalLength();
-      var dash = 55;
-      p.style.strokeDasharray = dash + ' ' + len;
-      p.style.setProperty('--dash', -(len + dash) + 'px');
-      p.style.animationDuration = rand(3, 8) + 's';
-      p.style.animationDelay = '-' + rand(0, 6) + 's';
+      pulses.forEach(function (p) {
+        p.d += p.sp * dt;
+        if (p.d - p.tail > p.tr.len) { newPulse(p, false); return; }
+        var head = pointAt(p.tr, Math.min(p.d, p.tr.len));
+        if (head[2] !== p.lastSeg) { p.tr.flash[head[2]] = 1; p.lastSeg = head[2]; }
+        // Tail: a run of short segments fading out behind the head.
+        var steps = 10, prev = null;
+        for (var s2 = 0; s2 <= steps; s2++) {
+          var d = p.d - p.tail * s2 / steps;
+          if (d < 0) break;
+          var q = pointAt(p.tr, Math.min(d, p.tr.len));
+          if (prev) {
+            ctx.strokeStyle = col[p.c];
+            ctx.globalAlpha = 0.9 * (1 - s2 / steps);
+            ctx.lineWidth = 2.2 * (1 - s2 / steps) + 0.6;
+            ctx.beginPath();
+            ctx.moveTo(prev[0], prev[1]);
+            ctx.lineTo(q[0], q[1]);
+            ctx.stroke();
+          }
+          prev = q;
+        }
+        if (p.d <= p.tr.len) {
+          var g = ctx.createRadialGradient(head[0], head[1], 0, head[0], head[1], 14);
+          g.addColorStop(0, '#ffffff');
+          g.addColorStop(0.3, col[p.c]);
+          g.addColorStop(1, 'transparent');
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = g;
+          ctx.fillRect(head[0] - 14, head[1] - 14, 28, 28);
+        }
+      });
+
+      // Pads light up as a pulse passes through them, then fade.
+      traces.forEach(function (tr) {
+        for (var k = 0; k < tr.flash.length; k++) {
+          var f = tr.flash[k];
+          if (f < 0.02) continue;
+          tr.flash[k] = f * Math.pow(0.08, dt);
+          var pt = tr.pts[k];
+          var g2 = ctx.createRadialGradient(pt[0], pt[1], 0, pt[0], pt[1], 18);
+          g2.addColorStop(0, col[1]);
+          g2.addColorStop(1, 'transparent');
+          ctx.globalAlpha = f * 0.6;
+          ctx.fillStyle = g2;
+          ctx.fillRect(pt[0] - 18, pt[1] - 18, 36, 36);
+        }
+      });
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
     });
-
-    for (var n = 0; n < cfg.nodes && n < joints.length; n++) {
-      var j = joints[Math.floor(Math.random() * joints.length)];
-      var c = document.createElementNS(SVG_NS, 'circle');
-      c.setAttribute('class', 'circuit-node');
-      c.setAttribute('cx', j[0]);
-      c.setAttribute('cy', j[1]);
-      c.setAttribute('r', rand(2, 3.5));
-      c.style.animationDuration = rand(2, 5) + 's';
-      c.style.animationDelay = '-' + rand(0, 4) + 's';
-      svg.appendChild(c);
-    }
   }
 
   function buildCrt() {
@@ -5079,6 +5151,102 @@
     });
   }
 
+  // Fire embers: each spark is born white-hot, cools through the accent
+  // colours as it climbs, flickers, and is pushed about by turbulence. A few
+  // big out-of-focus embers drift close to the camera.
+  function buildEmbers(cfg) {
+    var glow = document.createElement('div');
+    glow.className = 'ember-glow';
+    particlesEl.appendChild(glow);
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, TAU = Math.PI * 2;
+    seedNoise();
+
+    function spawn(p, anywhere) {
+      p.x = rand(-0.05, 1.05) * w;
+      p.y = anywhere ? rand(0, h) : h + rand(5, 40);
+      p.vy = -rand(40, 110);
+      p.vx = rand(-10, 10);
+      p.r = rand(1, 2.6);
+      p.life = rand(4, 9);
+      p.age = anywhere ? rand(0, p.life * 0.7) : 0;
+      p.fl = rand(0, TAU);
+      p.fs = rand(8, 20);
+      return p;
+    }
+    var sparks = [];
+    for (var i = 0; i < cfg.count; i++) sparks.push(spawn({}, true));
+    var bokeh = [];
+    for (i = 0; i < cfg.bokeh; i++) {
+      bokeh.push({ x: rand(0, w), y: rand(0, h), r: rand(14, 38), vy: -rand(8, 22), ph: rand(0, TAU), c: i % 3 ? 1 : 0 });
+    }
+
+    function mix(a, b, f) {
+      return 'rgb(' + Math.round(a[0] + (b[0] - a[0]) * f) + ',' + Math.round(a[1] + (b[1] - a[1]) * f) + ',' + Math.round(a[2] + (b[2] - a[2]) * f) + ')';
+    }
+
+    runFrames(function (t, dt, col) {
+      var hot = hexToRgb(col[1]), cool = hexToRgb(col[0]), white = [255, 244, 214];
+      ctx.clearRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'lighter';
+
+      bokeh.forEach(function (b) {
+        b.y += b.vy * dt;
+        b.x += Math.sin(t * 0.3 + b.ph) * 6 * dt;
+        if (b.y < -b.r * 2) { b.y = h + b.r * 2; b.x = rand(0, w); }
+        // Out of focus: a flat disc with a slightly brighter rim, like lens bokeh.
+        var a = 0.07 + 0.04 * Math.sin(t * 0.8 + b.ph);
+        var g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
+        g.addColorStop(0, b.c ? col[1] : col[0]);
+        g.addColorStop(0.7, b.c ? col[1] : col[0]);
+        g.addColorStop(0.86, 'rgba(255, 214, 160, 0.55)');
+        g.addColorStop(1, 'rgba(255, 214, 160, 0)');
+        ctx.globalAlpha = a;
+        ctx.fillStyle = g;
+        ctx.fillRect(b.x - b.r, b.y - b.r, b.r * 2, b.r * 2);
+      });
+
+      ctx.lineCap = 'round';
+      sparks.forEach(function (p) {
+        p.age += dt;
+        if (p.age > p.life || p.y < -20) { spawn(p, false); return; }
+        var ang = noise2(p.x * 0.006, p.y * 0.006 - t * 0.2) * TAU;
+        p.vx += Math.cos(ang) * 90 * dt;
+        p.vy += (Math.sin(ang) * 40 - 12) * dt;
+        p.vx *= 1 - 0.9 * dt;
+        var ox = p.x, oy = p.y;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+
+        var k = p.age / p.life;
+        var flick = 0.65 + 0.35 * Math.sin(t * p.fs + p.fl);
+        var fade = (k < 0.08 ? k / 0.08 : 1) * (1 - k * k);
+        var color = k < 0.35 ? mix(white, hot, k / 0.35) : mix(hot, cool, (k - 0.35) / 0.65);
+        var r = p.r * (1.2 - k * 0.6);
+
+        // Glow, then a short streak along the direction of travel.
+        var gr = r * 9;
+        var g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, gr);
+        g.addColorStop(0, color);
+        g.addColorStop(0.25, color);
+        g.addColorStop(1, 'transparent');
+        ctx.globalAlpha = 0.28 * fade * flick;
+        ctx.fillStyle = g;
+        ctx.fillRect(p.x - gr, p.y - gr, gr * 2, gr * 2);
+        ctx.globalAlpha = fade * flick;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = r;
+        ctx.beginPath();
+        ctx.moveTo(ox - (p.x - ox) * 2, oy - (p.y - oy) * 2);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      });
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    });
+  }
+
   function renderParticles(theme) {
     clearParticles();
     var cfg = THEME_ANIM[theme];
@@ -5094,6 +5262,7 @@
     else if (cfg.type === 'storm') buildStorm(cfg);
     else if (cfg.type === 'bubbles') buildAbyss(cfg);
     else if (cfg.type === 'circuit') buildCircuit(cfg);
+    else if (cfg.type === 'embers') buildEmbers(cfg);
     else if (cfg.type === 'crt') buildCrt();
     else if (cfg.type === 'fireworks') buildFireworks(cfg);
     else if (cfg.type === 'ripple') buildRipple(cfg);
