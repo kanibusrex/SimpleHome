@@ -1,6 +1,6 @@
 # SimpleHome
 
-A custom browser home page. One HTML file, no build step, no dependencies, no tracking — clock, launcher search, editable shortcuts, a scratchpad, and twenty-three themes with animated backgrounds and customizable accent colors.
+A custom browser home page. One HTML file, no build step, no dependencies, no tracking — clock, launcher search, editable shortcuts, a scratchpad, and twenty-seven themes with animated backgrounds and customizable accent colors.
 
 Optionally, an accompanying Chrome extension puts it on your new tab page and blocks ads using EasyList.
 
@@ -37,7 +37,7 @@ Settings → History shows how many sites are remembered and clears them, with a
 
 **Custom accent colors.** Settings → Theme has two color pickers — Accent and Accent 2 — that recolor the active theme's glow, particles, and clock digits live. Each theme remembers its own override independently, so switching themes never clobbers another theme's custom colors, and "Reset colors" drops back to that theme's defaults. Overrides travel with the export/import backup.
 
-**Twenty-three themes**, each with its own background animation:
+**Twenty-seven themes**, each with its own background animation:
 
 | Theme | Palette | Animation |
 |---|---|---|
@@ -64,6 +64,10 @@ Settings → History shows how many sites are remembered and clears them, with a
 | Gilded | Black / gold | Art-deco sunburst rocking slowly from below, drifting gold dust, four-point glints, and a light sheen sweeping across |
 | Prism | Violet / teal iridescent | Two counter-rotating holographic colour fields with tinted stage beams swinging through them |
 | Velvet | Crimson / violet / orange | A slowly morphing mesh gradient under a fine, animated film grain |
+| Carbon | Graphite / crimson | Carbon-fibre weave with a crimson light bar scanning down it and ambient edge lighting that breathes |
+| Pulse | Graphite / crimson | A glowing heart-monitor trace sweeping across a faint grid, with a red flash on every beat |
+| Shard | Graphite / crimson / silver | Broken glass shards drifting and turning, light chasing round their edges |
+| Hive | Graphite / crimson | A honeycomb grid lit by crimson waves — tap or click anywhere to send one out from that point |
 
 Shortcut tiles, the search bar, and the scratchpad share a hover/focus treatment: a dark outline with a gradient glow that travels around the perimeter, colored from the active theme's accent.
 

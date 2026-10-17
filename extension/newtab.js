@@ -500,6 +500,7 @@
   // so timers are tracked as a list and torn down together.
   var particleTimers = [];
   var particleFrame = null; // the canvas effects run on requestAnimationFrame instead
+  var particleCleanups = []; // listeners an effect added outside the particles layer
 
   function addTimer(fn, ms) { particleTimers.push(setInterval(fn, ms)); }
   function stopTimers() {
@@ -507,6 +508,8 @@
     particleTimers = [];
     if (particleFrame !== null) cancelAnimationFrame(particleFrame);
     particleFrame = null;
+    particleCleanups.forEach(function (fn) { fn(); });
+    particleCleanups = [];
   }
 
   function rand(min, max) { return min + Math.random() * (max - min); }
@@ -535,7 +538,11 @@
     hyperdrive: { type: 'warp', stars: 240, cruise: 0.12, jump: 1.1, cycle: 13 },
     gilded:    { type: 'gilded', dust: 30, glintInterval: 1400 },
     prism:     { type: 'prism', beams: 4 },
-    velvet:    { type: 'mesh', orbs: ['var(--accent)', '#7b2cff', 'var(--accent-2)', '#c2185b', '#4a148c'] }
+    velvet:    { type: 'mesh', orbs: ['var(--accent)', '#7b2cff', 'var(--accent-2)', '#c2185b', '#4a148c'] },
+    carbon:    { type: 'carbon' },
+    pulse:     { type: 'pulse', speed: 230, beat: 280 },
+    shard:     { type: 'shard', count: 11 },
+    hive:      { type: 'hive', cell: 22, waveInterval: 1900, waveSpeed: 300 }
   };
 
   function clearParticles() {
@@ -1114,6 +1121,236 @@
     particlesEl.appendChild(grain);
   }
 
+  // Canvas effects share the setup: a full-screen canvas at device resolution,
+  // or nothing at all for anyone who has asked for reduced motion.
+  function makeCanvas(className) {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
+    var canvas = document.createElement('canvas');
+    canvas.className = className;
+    particlesEl.appendChild(canvas);
+    var ctx = canvas.getContext('2d');
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = window.innerWidth, h = window.innerHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+    return { canvas: canvas, ctx: ctx, w: w, h: h, dpr: dpr };
+  }
+
+  function themeColor(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function buildCarbon() {
+    ['carbon-weave', 'carbon-scan', 'carbon-edge'].forEach(function (cls) {
+      var el = document.createElement('div');
+      el.className = cls;
+      particlesEl.appendChild(el);
+    });
+  }
+
+  // One heartbeat as a height (-1..1) at phase p (0..1): P wave, QRS spike, T wave.
+  function ecg(p) {
+    function bump(c, wd, a) { var d = (p - c) / wd; return Math.abs(d) < 1 ? a * (1 + Math.cos(d * Math.PI)) / 2 : 0; }
+    return bump(0.16, 0.06, 0.12) + bump(0.3, 0.015, -0.14) + bump(0.335, 0.022, 1) +
+      bump(0.37, 0.02, -0.32) + bump(0.58, 0.09, 0.24);
+  }
+
+  function buildPulse(cfg) {
+    var grid = document.createElement('div');
+    grid.className = 'pulse-grid';
+    particlesEl.appendChild(grid);
+    var flash = document.createElement('div');
+    flash.className = 'pulse-flash';
+    particlesEl.appendChild(flash);
+
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h;
+    var base = h * 0.78, amp = Math.min(h * 0.16, 120);
+    var head = 0, last = null, color = themeColor('--accent'), frames = 0, firedBeat = -1;
+    function yAt(x) { return base - ecg((x % cfg.beat) / cfg.beat) * amp; }
+
+    function frame(now) {
+      if (last === null) last = now;
+      var dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      if (++frames % 30 === 0) color = themeColor('--accent');
+
+      // Fade what's already drawn rather than clearing it: that's the phosphor trail.
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.035)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'source-over';
+
+      var from = head, to = head + cfg.speed * dt;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.2;
+      ctx.lineJoin = ctx.lineCap = 'round';
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.moveTo(from % w, yAt(from));
+      for (var x = from + 2; x <= to; x += 2) {
+        if (Math.floor(x / w) !== Math.floor((x - 2) / w)) ctx.moveTo(x % w, yAt(x)); // wrapped to the left edge
+        else ctx.lineTo(x % w, yAt(x));
+      }
+      // Finish exactly at the head, or the next frame's segment starts from a
+      // point this one never reached and the steep spike breaks into dashes.
+      if (Math.floor(to / w) === Math.floor((x - 2) / w)) ctx.lineTo(to % w, yAt(to));
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      head = to;
+
+      var beatIdx = Math.floor((head - cfg.beat * 0.335) / cfg.beat);
+      if (beatIdx !== firedBeat) {
+        firedBeat = beatIdx;
+        flash.classList.remove('beat');
+        void flash.offsetWidth;
+        flash.classList.add('beat');
+      }
+      particleFrame = requestAnimationFrame(frame);
+    }
+    particleFrame = requestAnimationFrame(frame);
+  }
+
+  function buildShard(cfg) {
+    var w = window.innerWidth, h = window.innerHeight;
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'shard-svg');
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    svg.innerHTML =
+      '<defs><linearGradient id="shardFill" x1="0" y1="0" x2="1" y2="1">' +
+      '<stop offset="0" stop-color="#3a3a42" stop-opacity="0.55"/>' +
+      '<stop offset="0.55" stop-color="#1c1c21" stop-opacity="0.35"/>' +
+      '<stop offset="1" stop-color="#0e0e11" stop-opacity="0.15"/>' +
+      '</linearGradient></defs>';
+    var edges = [];
+    var big = Math.max(w, h);
+    for (var i = 0; i < cfg.count; i++) {
+      // A long, thin, irregular triangle or quad, like a broken pane.
+      var cx = rand(-0.05, 1.05) * w, cy = rand(-0.05, 1.05) * h;
+      var len = rand(0.18, 0.42) * big, wid = len * rand(0.18, 0.4), ang = rand(0, Math.PI);
+      var ca = Math.cos(ang), sa = Math.sin(ang);
+      var local = [[-len / 2, rand(-0.2, 0.2) * wid], [len / 2, rand(-0.3, 0.3) * wid], [rand(-0.2, 0.3) * len, wid / 2]];
+      if (Math.random() < 0.5) local.push([rand(-0.3, 0.2) * len, -wid / 2]);
+      var pts = local.map(function (q) { return (cx + q[0] * ca - q[1] * sa).toFixed(1) + ',' + (cy + q[0] * sa + q[1] * ca).toFixed(1); }).join(' ');
+
+      var g = document.createElementNS(SVG_NS, 'g');
+      g.setAttribute('class', 'shard');
+      var r0 = rand(-6, 6);
+      g.style.setProperty('--r0', r0 + 'deg');
+      g.style.setProperty('--r1', (r0 + rand(-14, 14)) + 'deg');
+      g.style.setProperty('--tx', rand(-40, 40) + 'px');
+      g.style.setProperty('--ty', rand(-50, 50) + 'px');
+      g.style.animationDuration = rand(16, 30) + 's';
+      g.style.animationDelay = '-' + rand(0, 16) + 's';
+
+      var face = document.createElementNS(SVG_NS, 'polygon');
+      face.setAttribute('class', 'shard-face');
+      face.setAttribute('points', pts);
+      face.setAttribute('fill', 'url(#shardFill)');
+      g.appendChild(face);
+
+      var edge = document.createElementNS(SVG_NS, 'polygon');
+      edge.setAttribute('class', 'shard-edge');
+      edge.setAttribute('points', pts);
+      g.appendChild(edge);
+      edges.push(edge);
+      svg.appendChild(g);
+    }
+    particlesEl.appendChild(svg);
+
+    // A short run of light chasing round each edge; lengths need the node in the document.
+    edges.forEach(function (e) {
+      var perim = e.getTotalLength();
+      var run = perim * rand(0.08, 0.16);
+      e.style.strokeDasharray = run + ' ' + (perim - run);
+      e.style.setProperty('--dash', -perim + 'px');
+      e.style.animationDuration = rand(4, 9) + 's';
+      e.style.animationDelay = '-' + rand(0, 8) + 's';
+    });
+  }
+
+  function buildHive(cfg) {
+    var c = makeCanvas('hive-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h;
+    var r = cfg.cell, dx = Math.sqrt(3) * r, dy = 1.5 * r;
+
+    var cells = [];
+    for (var row = -1; row * dy < h + r; row++) {
+      for (var col = -1; col * dx < w + dx; col++) {
+        cells.push({ x: col * dx + (row % 2 ? dx / 2 : 0), y: row * dy });
+      }
+    }
+    function hexPath(g, x, y, rr) {
+      g.moveTo(x + rr * Math.cos(Math.PI / 6), y + rr * Math.sin(Math.PI / 6));
+      for (var k = 1; k < 6; k++) {
+        var a = Math.PI / 6 + k * Math.PI / 3;
+        g.lineTo(x + rr * Math.cos(a), y + rr * Math.sin(a));
+      }
+      g.closePath();
+    }
+
+    // The idle grid never changes, so draw it once and stamp it each frame.
+    var baseLayer = document.createElement('canvas');
+    baseLayer.width = c.canvas.width;
+    baseLayer.height = c.canvas.height;
+    var bctx = baseLayer.getContext('2d');
+    bctx.scale(c.dpr, c.dpr);
+    bctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    bctx.lineWidth = 1;
+    bctx.beginPath();
+    cells.forEach(function (cell) { hexPath(bctx, cell.x, cell.y, r - 2); });
+    bctx.stroke();
+
+    var waves = [], color = themeColor('--accent'), frames = 0, last = null;
+    function addWave(x, y) { waves.push({ x: x, y: y, t: 0 }); }
+    addWave(w * 0.5, h * 0.35);
+    addTimer(function () { addWave(rand(0, w), rand(0, h)); }, cfg.waveInterval);
+
+    // Tapping anywhere sends a wave out from the finger.
+    function onDown(e) { addWave(e.clientX, e.clientY); }
+    window.addEventListener('pointerdown', onDown);
+    particleCleanups.push(function () { window.removeEventListener('pointerdown', onDown); });
+
+    var maxR = Math.hypot(w, h);
+    function frame(now) {
+      if (last === null) last = now;
+      var dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      if (++frames % 30 === 0) color = themeColor('--accent');
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(baseLayer, 0, 0, w, h);
+      waves.forEach(function (wv) { wv.t += dt; });
+      waves = waves.filter(function (wv) { return wv.t * cfg.waveSpeed < maxR + 60; });
+      if (waves.length) {
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        for (var i = 0; i < cells.length; i++) {
+          var cell = cells[i], lit = 0;
+          for (var j = 0; j < waves.length; j++) {
+            var wv = waves[j], rad = wv.t * cfg.waveSpeed;
+            var d = Math.abs(Math.hypot(cell.x - wv.x, cell.y - wv.y) - rad);
+            if (d < 70) lit = Math.max(lit, (1 - d / 70) * Math.max(0, 1 - rad / maxR));
+          }
+          if (lit < 0.03) continue;
+          ctx.globalAlpha = lit * 0.35;
+          ctx.beginPath();
+          hexPath(ctx, cell.x, cell.y, r - 2);
+          ctx.fill();
+          ctx.globalAlpha = lit * 0.9;
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+      particleFrame = requestAnimationFrame(frame);
+    }
+    particleFrame = requestAnimationFrame(frame);
+  }
+
   function renderParticles(theme) {
     clearParticles();
     var cfg = THEME_ANIM[theme];
@@ -1137,6 +1374,10 @@
     else if (cfg.type === 'gilded') buildGilded(cfg);
     else if (cfg.type === 'prism') buildPrism(cfg);
     else if (cfg.type === 'mesh') buildMesh(cfg);
+    else if (cfg.type === 'carbon') buildCarbon();
+    else if (cfg.type === 'pulse') buildPulse(cfg);
+    else if (cfg.type === 'shard') buildShard(cfg);
+    else if (cfg.type === 'hive') buildHive(cfg);
   }
 
   function greetingFor(hour) {
