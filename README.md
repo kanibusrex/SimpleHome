@@ -1,6 +1,6 @@
 # SimpleHome
 
-A custom browser home page. One HTML file, no build step, no dependencies, no tracking — clock, launcher search, editable shortcuts, a scratchpad, and thirty-five themes with animated backgrounds and customizable accent colors.
+A custom browser home page. One HTML file, no build step, no dependencies, no tracking — clock, launcher search, editable shortcuts, a scratchpad, and thirty-six themes with animated backgrounds and customizable accent colors.
 
 Optionally, an accompanying Chrome extension puts it on your new tab page and blocks ads using EasyList.
 
@@ -37,7 +37,7 @@ Settings → History shows how many sites are remembered and clears them, with a
 
 **Custom accent colors.** Settings → Theme has two color pickers — Accent and Accent 2 — that recolor the active theme's glow, particles, and clock digits live. Each theme remembers its own override independently, so switching themes never clobbers another theme's custom colors, and "Reset colors" drops back to that theme's defaults. Overrides travel with the export/import backup.
 
-**Thirty-five themes**, each with its own background animation:
+**Thirty-six themes**, each with its own background animation:
 
 | Theme | Palette | Animation |
 |---|---|---|
@@ -75,6 +75,7 @@ Settings → History shows how many sites are remembered and clears them, with a
 | Kintsugi | Gold on raku black | Gold seams crack in from the edges and branch across dark glazed ceramic, glints running along them; old seams fade as new ones form |
 | Ink | Indigo / vermilion on paper | Ink drops blooming and curling through water — tap or click anywhere to drop more |
 | Liquid Chrome | Silver / ice blue | A rippling mirrored surface with hard-edged chrome reflections — tap or click to send a ripple across it |
+| Liquid Crimson | Dark grey / crimson | Liquid Chrome's rippling mirror in gunmetal, with a crimson sheen along the reflections — tap or click for a ripple |
 | Origami | Cream / coral on deep teal | Sheets of paper fold themselves into planes, then glide and bank across the page trailing dotted flight paths |
 
 Shortcut tiles, the search bar, and the scratchpad share a hover/focus treatment: a dark outline with a gradient glow that travels around the perimeter, colored from the active theme's accent.

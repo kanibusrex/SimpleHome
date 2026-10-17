@@ -542,6 +542,21 @@
     --clock-2: #ff9a7a;
   }
 
+  html[data-theme="liquidcrimson"] {
+    --bg: #0d0d0f;
+    --bg-gradient: linear-gradient(180deg, #18181b, #0d0d0f 70%);
+    --surface: #17171a;
+    --surface-hover: #202024;
+    --border: #2e2e33;
+    --text: #ececef;
+    --text-dim: #9a9aa2;
+    --accent: #dc143c;
+    --accent-2: #8e8e96;
+    --shadow: rgba(220, 20, 60, 0.3);
+    --clock: #ececf0;
+    --clock-2: #ff2e50;
+  }
+
   * { box-sizing: border-box; }
 
   html, body {
@@ -2353,6 +2368,8 @@
   .swatch[data-swatch="ink"] .swatch-preview { background: radial-gradient(circle at 35% 45%, #2b3a8c 0 4px, rgba(43, 58, 140, 0.35) 9px, transparent 18px), radial-gradient(circle at 70% 60%, #c0392b 0 3px, rgba(192, 57, 43, 0.3) 7px, transparent 13px), #f3efe6; }
   .swatch[data-swatch="liquidchrome"] { background: #14161c; }
   .swatch[data-swatch="liquidchrome"] .swatch-preview { background: linear-gradient(180deg, #f1f5f9, #6b7280 30%, #0b0c10 48%, #9ecbff 62%, #e6ebf2 74%, #1b1e26); }
+  .swatch[data-swatch="liquidcrimson"] { background: #17171a; }
+  .swatch[data-swatch="liquidcrimson"] .swatch-preview { background: linear-gradient(180deg, #8e8e96, #3a3a40 30%, #0d0d0f 48%, #dc143c 62%, #a3a3ab 74%, #18181b); }
   .swatch[data-swatch="origami"] { background: #12232d; }
   .swatch[data-swatch="origami"] .swatch-preview { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 32'%3E%3Cpath d='M70 14L38 6l6 8z' fill='%23fdf6e3'/%3E%3Cpath d='M70 14L44 14l-6 12z' fill='%23e3d9c2'/%3E%3Cpath d='M70 14L44 14l-3 5z' fill='%23bfb399'/%3E%3Cpath d='M30 16h-4M20 18h-4M10 20H6' stroke='%23ff7a59' stroke-width='1.5'/%3E%3C/svg%3E") center / contain no-repeat, #0d1b24; }
 
@@ -2563,6 +2580,7 @@
       <button class="swatch" data-swatch="kintsugi"><div class="swatch-preview"></div>Kintsugi</button>
       <button class="swatch" data-swatch="ink"><div class="swatch-preview"></div>Ink</button>
       <button class="swatch" data-swatch="liquidchrome"><div class="swatch-preview"></div>Liquid Chrome</button>
+      <button class="swatch" data-swatch="liquidcrimson"><div class="swatch-preview"></div>Liquid Crimson</button>
       <button class="swatch" data-swatch="origami"><div class="swatch-preview"></div>Origami</button>
     </div>
     <div class="color-custom">
@@ -3204,7 +3222,8 @@
     nocturne:  { type: 'nocturne', bokeh: 16, drops: 0.35, runners: 9 },
     kintsugi:  { type: 'kintsugi', maxRoots: 5, seedInterval: 2600, speed: 70, branch: 0.045, life: 34 },
     ink:       { type: 'ink', perDrop: 220, max: 1300, interval: 2600 },
-    liquidchrome: { type: 'chrome', res: 4, waves: 5, bands: 5.5 },
+    liquidchrome: { type: 'chrome', res: 4, waves: 5, bands: 5.5, tint: 0.4 },
+    liquidcrimson: { type: 'chrome', res: 4, waves: 5, bands: 5.5, tint: 0.7 },
     origami:   { type: 'origami', planes: 7 }
   };
 
@@ -4571,7 +4590,7 @@
           var b = 0.5 + 0.5 * Math.sin(v * cfg.bands);
           b = b * b * (3 - 2 * b);
           var lum = 0.05 + 0.88 * Math.pow(b, 1.8);
-          var tw = Math.exp(-(b - 0.42) * (b - 0.42) / 0.03) * 0.4;
+          var tw = Math.exp(-(b - 0.42) * (b - 0.42) / 0.03) * cfg.tint;
           data[p] = 10 + (silver[0] - 10) * lum + tint[0] * tw;
           data[p + 1] = 11 + (silver[1] - 11) * lum + tint[1] * tw;
           data[p + 2] = 15 + (silver[2] - 15) * lum + tint[2] * tw;

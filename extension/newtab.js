@@ -549,7 +549,8 @@
     nocturne:  { type: 'nocturne', bokeh: 16, drops: 0.35, runners: 9 },
     kintsugi:  { type: 'kintsugi', maxRoots: 5, seedInterval: 2600, speed: 70, branch: 0.045, life: 34 },
     ink:       { type: 'ink', perDrop: 220, max: 1300, interval: 2600 },
-    liquidchrome: { type: 'chrome', res: 4, waves: 5, bands: 5.5 },
+    liquidchrome: { type: 'chrome', res: 4, waves: 5, bands: 5.5, tint: 0.4 },
+    liquidcrimson: { type: 'chrome', res: 4, waves: 5, bands: 5.5, tint: 0.7 },
     origami:   { type: 'origami', planes: 7 }
   };
 
@@ -1916,7 +1917,7 @@
           var b = 0.5 + 0.5 * Math.sin(v * cfg.bands);
           b = b * b * (3 - 2 * b);
           var lum = 0.05 + 0.88 * Math.pow(b, 1.8);
-          var tw = Math.exp(-(b - 0.42) * (b - 0.42) / 0.03) * 0.4;
+          var tw = Math.exp(-(b - 0.42) * (b - 0.42) / 0.03) * cfg.tint;
           data[p] = 10 + (silver[0] - 10) * lum + tint[0] * tw;
           data[p + 1] = 11 + (silver[1] - 11) * lum + tint[1] * tw;
           data[p + 2] = 15 + (silver[2] - 15) * lum + tint[2] * tw;
