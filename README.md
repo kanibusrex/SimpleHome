@@ -46,23 +46,23 @@ Settings → History shows how many sites are remembered and clears them, with a
 | Theme | Palette | Animation |
 |---|---|---|
 | Ember | Dark red / black | Fire embers rising on a canvas — each spark is born white-hot, cools through orange to deep red as it climbs, flickers and is pushed about by turbulence, with out-of-focus embers drifting near the camera and firelight breathing up from below |
-| Aurora | Dark teal / violet | Drifting waves over stars |
-| Forest | Dark green | Wandering fireflies |
-| Noir | Dark neutral | Twinkling starfield |
-| Daybreak | Warm light | Floating light motes |
-| Frost | Cool light | Falling snow |
-| Sunset | Pink / peach | Drifting clouds |
-| Bloom | Lavender / pink | Falling petals |
-| Matrix | Phosphor green / black | Digital rain — katakana columns falling at staggered speeds, each led by a bright white glyph, with the trailing characters churning as they fall |
-| Ember Matrix | Ember orange / black | The same digital rain as Matrix, recolored to Ember's orange-and-amber palette |
-| Synthwave | Magenta / cyan on deep purple | A perspective grid scrolling toward the horizon under a striped, slowly pulsing sun |
-| Cosmos | Indigo / violet | A deep starfield with drifting nebula clouds and periodic shooting stars |
-| Storm | Slate blue | Wind-driven rain streaks with occasional sheet lightning |
-| Abyss | Deep sea cyan | Bubbles wobbling up through swaying shafts of light |
+| Aurora | Teal / violet | Curtains of northern lights — rays rippling along a snaking hem — over a twinkling starfield |
+| Forest | Deep green / lime | Fireflies blinking at different depths, light shafts from the canopy, mist drifting along the floor |
+| Noir | Graphite / steel blue | Light through venetian blinds raking across a dark wall, with dust that only shows where it catches the light |
+| Daybreak | Warm light | A low sun breathing light into the corner, slowly turning rays, a lens-flare chain and golden dust |
+| Frost | Cool light | Snow at three depths in gusting wind, out-of-focus flakes near the lens, and ice crystals grown into the corners |
+| Sunset | Pink / peach | Soft clouds at three depths, lit warm underneath, drifting past a glowing low sun, with birds crossing now and then |
+| Bloom | Lavender / pink | Cherry-blossom petals tumbling in 3D as they fall, over drifting soft light |
+| Matrix | Phosphor green / black | Digital rain at two depths, each stream led by a bright glowing glyph with a fading trail |
+| Ember Matrix | Ember orange / black | The same digital rain as Matrix, in Ember's orange and amber |
+| Synthwave | Magenta / cyan on deep purple | A sliced neon sun sinking behind wireframe mountains over a perspective grid rolling toward you |
+| Cosmos | Indigo / violet | A spiral galaxy of thousands of stars turning slowly, inner stars faster, with a glowing core and shooting stars |
+| Storm | Slate blue | Wind-driven rain at two depths under drifting cloud, and branching lightning that flickers and lights the sky |
+| Abyss | Deep sea cyan | Caustic light rippling down from the surface, slanting sun rays, drifting plankton and wobbling bubbles |
 | Circuit | Slate / lime | A circuit board drawn on a canvas — chamfered copper traces and solder pads, with glowing data pulses and their tails racing along them and pads flashing as they pass |
-| Terminal | Amber on black | CRT phosphor — scanlines, a rolling refresh bar, and a faint flicker |
-| Festival | Night blue / multicolour | Rockets climbing and bursting into falling sparks |
-| Ripple | Pale blue light | Rings spreading outward like rain on still water |
+| Terminal | Amber on black | CRT phosphor — scanlines and flicker — over a system log typing itself out |
+| Festival | Night blue / multicolour | A fireworks show: peonies, rings and golden willows bursting, falling under gravity and crackling out |
+| Ripple | Pale blue light | Rain on still water at a low angle — ring trains with crest and trough — and drifting glints; tap to drop a pebble |
 | Lava | Plum / magenta / molten orange | A lava lamp: glossy wax blobs, lit from within, rise off a glowing heater, cool from orange to magenta as they climb, and merge and split as they pass — shaded on a canvas with a specular highlight and a hot rim |
 | Hyperdrive | Cyan / magenta on deep space | A warp-speed starfield drawn on a canvas — cruising streaks that surge into a light-speed jump every thirteen seconds |
 | Gilded | Black / gold | Art-deco sunburst rocking slowly from below, drifting gold dust, four-point glints, and a light sheen sweeping across |

@@ -968,6 +968,16 @@
     to { transform: scale(1); opacity: 0; }
   }
 
+  /* ---- Terminal: the log fades out toward the top, and stays quiet behind the clock ---- */
+  .term-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    -webkit-mask: linear-gradient(180deg, transparent 2%, #000 40%, #000 100%);
+    mask: linear-gradient(180deg, transparent 2%, #000 40%, #000 100%);
+  }
+
   /* ---- Abyss: caustics rendered small and scaled up, fading with depth ---- */
   .abyss-caustics {
     position: absolute;

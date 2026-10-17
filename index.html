@@ -967,6 +967,16 @@
     to { transform: scale(1); opacity: 0; }
   }
 
+  /* ---- Terminal: the log fades out toward the top, and stays quiet behind the clock ---- */
+  .term-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    -webkit-mask: linear-gradient(180deg, transparent 2%, #000 40%, #000 100%);
+    mask: linear-gradient(180deg, transparent 2%, #000 40%, #000 100%);
+  }
+
   /* ---- Abyss: caustics rendered small and scaled up, fading with depth ---- */
   .abyss-caustics {
     position: absolute;
@@ -3496,9 +3506,9 @@
     storm:     { type: 'storm2', drops: 420 },
     abyss:     { type: 'abyss2', bubbles: 34, plankton: 140, res: 4 },
     circuit:   { type: 'circuit', traces: 16, pulses: 22 },
-    terminal:  { type: 'crt' },
-    festival:  { type: 'fireworks', interval: 1900, sparks: 22 },
-    ripple:    { type: 'ripple', interval: 1100 },
+    terminal:  { type: 'crt2' },
+    festival:  { type: 'fireworks2' },
+    ripple:    { type: 'water', interval: 0.9 },
     lava:      { type: 'lava', blobs: 8, res: 5 },
     hyperdrive: { type: 'warp', stars: 240, cruise: 0.12, jump: 1.1, cycle: 13 },
     gilded:    { type: 'gilded', dust: 30, glintInterval: 1400 },
@@ -3524,29 +3534,6 @@
     stopTimers();
   }
 
-  function spawnRiseOrFall(cfg, kind) {
-    function spawn() {
-      var p = document.createElement('div');
-      p.className = kind === 'rise' ? 'ember-particle' : ('fall-particle' + (cfg.petal ? ' petal' : ''));
-      var size = rand(cfg.size[0], cfg.size[1]);
-      var duration = rand(cfg.duration[0], cfg.duration[1]);
-      var drift = rand(-30, 30) + 'px';
-      p.style.left = rand(0, 100) + 'vw';
-      p.style.width = size + 'px';
-      p.style.height = size + 'px';
-      p.style.setProperty('--drift', drift);
-      p.style.setProperty('--particle-color', cfg.color);
-      if (cfg.petal) p.style.setProperty('--spin', rand(180, 540) + 'deg');
-      p.style.background = cfg.color;
-      p.style.boxShadow = cfg.petal ? 'none' : ('0 0 6px 1px ' + cfg.color);
-      p.style.animationDuration = duration + 's';
-      particlesEl.appendChild(p);
-      setTimeout(function () { p.remove(); }, duration * 1000);
-    }
-    for (var i = 0; i < cfg.seed; i++) setTimeout(spawn, i * (cfg.interval * 0.7));
-    addTimer(spawn, cfg.interval);
-  }
-
   function spawnStars(count) {
     for (var i = 0; i < count; i++) {
       var s = document.createElement('div');
@@ -3562,62 +3549,6 @@
     }
   }
 
-  function spawnFireflies(cfg) {
-    for (var i = 0; i < cfg.count; i++) {
-      var f = document.createElement('div');
-      f.className = 'firefly';
-      var size = rand(cfg.size[0], cfg.size[1]);
-      f.style.left = rand(0, 100) + 'vw';
-      f.style.top = rand(10, 85) + 'vh';
-      f.style.width = size + 'px';
-      f.style.height = size + 'px';
-      f.style.setProperty('--particle-color', cfg.color);
-      f.style.background = cfg.color;
-      f.style.setProperty('--fx1', rand(-30, 30) + 'px');
-      f.style.setProperty('--fy1', rand(-30, 30) + 'px');
-      f.style.setProperty('--fx2', rand(-30, 30) + 'px');
-      f.style.setProperty('--fy2', rand(-30, 30) + 'px');
-      f.style.setProperty('--fx3', rand(-30, 30) + 'px');
-      f.style.setProperty('--fy3', rand(-30, 30) + 'px');
-      f.style.animationDuration = rand(7, 13) + 's, ' + rand(2, 4) + 's';
-      f.style.animationDelay = rand(0, 4) + 's';
-      particlesEl.appendChild(f);
-    }
-  }
-
-  function buildClouds() {
-    var count = 4;
-    for (var i = 0; i < count; i++) {
-      var c = document.createElement('div');
-      c.className = 'cloud';
-      var size = rand(140, 300);
-      c.style.top = rand(4, 34) + 'vh';
-      c.style.width = size + 'px';
-      c.style.height = size * 0.5 + 'px';
-      c.style.animationDuration = rand(45, 80) + 's';
-      c.style.animationDelay = '-' + rand(0, 60) + 's';
-      particlesEl.appendChild(c);
-    }
-  }
-
-  function buildAurora() {
-    var colors = ['var(--accent)', 'var(--accent-2)', 'var(--accent)'];
-    for (var i = 0; i < 3; i++) {
-      var b = document.createElement('div');
-      b.className = 'aurora-blob';
-      var size = rand(260, 420);
-      b.style.width = size + 'px';
-      b.style.height = size + 'px';
-      b.style.left = rand(-10, 70) + 'vw';
-      b.style.top = rand(-10, 20) + 'vh';
-      b.style.background = colors[i];
-      b.style.opacity = 0.35;
-      b.style.animationDuration = rand(14, 22) + 's';
-      b.style.animationDelay = '-' + rand(0, 15) + 's';
-      particlesEl.appendChild(b);
-    }
-  }
-
   // Half-width katakana, the glyphs the film's rain is built from, plus digits.
   var RAIN_GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789';
 
@@ -3625,163 +3556,9 @@
     return RAIN_GLYPHS.charAt(Math.floor(Math.random() * RAIN_GLYPHS.length));
   }
 
-  function buildRain(cfg) {
-    var colWidth = 10;
-    var cols = Math.min(cfg.maxColumns, Math.ceil(window.innerWidth / colWidth));
-    var columns = [];
-
-    for (var i = 0; i < cols; i++) {
-      var col = document.createElement('div');
-      col.className = 'rain-column';
-      col.style.left = (i * colWidth) + 'px';
-      col.style.animationDuration = rand(cfg.duration[0], cfg.duration[1]) + 's';
-      // Negative delays start each column mid-fall, so nothing lines up.
-      col.style.animationDelay = '-' + rand(0, 14) + 's';
-      col.style.opacity = rand(0.3, 0.62);
-
-      var len = randInt(cfg.length[0], cfg.length[1]);
-      var glyphs = [];
-      for (var j = 0; j < len; j++) glyphs.push(randGlyph());
-      col.dataset.len = len;
-      paintColumn(col, glyphs);
-      col._glyphs = glyphs;
-
-      particlesEl.appendChild(col);
-      columns.push(col);
-    }
-
-    // Churn a few glyphs per frame-ish rather than redrawing every column.
-    addTimer(function () {
-      for (var n = 0; n < cfg.churn; n++) {
-        var col = columns[Math.floor(Math.random() * columns.length)];
-        if (!col || !col._glyphs) continue;
-        col._glyphs[Math.floor(Math.random() * col._glyphs.length)] = randGlyph();
-        paintColumn(col, col._glyphs);
-      }
-    }, 120);
-  }
-
-  function paintColumn(col, glyphs) {
-    var body = glyphs.slice(0, -1).join('\n');
-    col.innerHTML = '';
-    col.appendChild(document.createTextNode(body + '\n'));
-    var head = document.createElement('span');
-    head.className = 'rain-head';
-    head.textContent = glyphs[glyphs.length - 1];
-    col.appendChild(head);
-  }
-
-  function buildSynthwave() {
-    var sun = document.createElement('div');
-    sun.className = 'synth-sun';
-    particlesEl.appendChild(sun);
-    var grid = document.createElement('div');
-    grid.className = 'synth-grid';
-    particlesEl.appendChild(grid);
-  }
-
-  function buildCosmos(cfg) {
-    spawnStars(cfg.stars);
-    for (var i = 0; i < 2; i++) {
-      var b = document.createElement('div');
-      b.className = 'aurora-blob';
-      var size = rand(300, 460);
-      b.style.width = size + 'px';
-      b.style.height = size + 'px';
-      b.style.left = rand(-5, 65) + 'vw';
-      b.style.top = rand(-15, 25) + 'vh';
-      b.style.background = i === 0 ? 'var(--accent)' : 'var(--accent-2)';
-      b.style.opacity = 0.22;
-      b.style.animationDuration = rand(20, 30) + 's';
-      b.style.animationDelay = '-' + rand(0, 20) + 's';
-      particlesEl.appendChild(b);
-    }
-    addTimer(function () {
-      var s = document.createElement('div');
-      s.className = 'shooting-star';
-      s.style.left = rand(-10, 45) + 'vw';
-      s.style.top = rand(2, 40) + 'vh';
-      var dur = rand(0.9, 1.6);
-      s.style.animationDuration = dur + 's';
-      particlesEl.appendChild(s);
-      setTimeout(function () { s.remove(); }, dur * 1000);
-    }, cfg.shootInterval);
-  }
-
-  function buildStorm(cfg) {
-    function spawn() {
-      var s = document.createElement('div');
-      s.className = 'rain-streak';
-      var duration = rand(cfg.duration[0], cfg.duration[1]);
-      s.style.left = rand(0, 120) + 'vw';
-      s.style.height = rand(40, 90) + 'px';
-      s.style.setProperty('--drift', rand(-16, -10) + 'vw');
-      s.style.animationDuration = duration + 's';
-      particlesEl.appendChild(s);
-      setTimeout(function () { s.remove(); }, duration * 1000);
-    }
-    for (var i = 0; i < cfg.seed; i++) setTimeout(spawn, i * 60);
-    addTimer(spawn, cfg.interval);
-
-    addTimer(function () {
-      if (Math.random() > cfg.flashChance) return;
-      var f = document.createElement('div');
-      f.className = 'lightning';
-      particlesEl.appendChild(f);
-      setTimeout(function () { f.remove(); }, 260);
-    }, 3000);
-  }
-
-  function buildAbyss(cfg) {
-    for (var r = 0; r < cfg.rays; r++) {
-      var ray = document.createElement('div');
-      ray.className = 'water-ray';
-      ray.style.left = rand(0, 95) + 'vw';
-      ray.style.animationDuration = rand(9, 16) + 's';
-      ray.style.animationDelay = '-' + rand(0, 10) + 's';
-      particlesEl.appendChild(ray);
-    }
-    // A bubble takes up to 18s to cross, so the seeded ones start mid-climb via
-    // a negative delay -- otherwise the water is empty for the first while.
-    function spawn(preroll) {
-      var b = document.createElement('div');
-      b.className = 'bubble';
-      var size = rand(cfg.size[0], cfg.size[1]);
-      var duration = rand(cfg.duration[0], cfg.duration[1]);
-      var offset = preroll === true ? rand(0, duration) : 0;
-      b.style.left = rand(0, 100) + 'vw';
-      b.style.width = size + 'px';
-      b.style.height = size + 'px';
-      b.style.setProperty('--wobble', rand(-28, 28) + 'px');
-      b.style.animationDuration = duration + 's';
-      if (offset) b.style.animationDelay = '-' + offset + 's';
-      particlesEl.appendChild(b);
-      setTimeout(function () { b.remove(); }, (duration - offset) * 1000);
-    }
-    for (var i = 0; i < cfg.seed; i++) spawn(true);
-    addTimer(spawn, cfg.interval);
-  }
-
   var SVG_NS = 'http://www.w3.org/2000/svg';
 
   // Builds an orthogonal trace: a few right-angle segments, like a PCB track.
-  function tracePath(w, h) {
-    var x = Math.random() < 0.5 ? 0 : w;
-    var y = rand(0, h);
-    var d = 'M' + x.toFixed(1) + ' ' + y.toFixed(1);
-    var dir = x === 0 ? 1 : -1;
-    var segments = randInt(3, 6);
-    var pts = [];
-    for (var i = 0; i < segments; i++) {
-      x += dir * rand(w * 0.08, w * 0.22);
-      d += ' L' + x.toFixed(1) + ' ' + y.toFixed(1);
-      y += (Math.random() < 0.5 ? -1 : 1) * rand(h * 0.04, h * 0.16);
-      d += ' L' + x.toFixed(1) + ' ' + y.toFixed(1);
-      pts.push([x, y]);
-    }
-    return { d: d, points: pts };
-  }
-
   // A circuit board: copper traces with chamfered corners and solder pads,
   // drawn once to a layer, with data pulses running along them on top.
   function buildCircuit(cfg) {
@@ -3937,77 +3714,6 @@
   }
 
   var FIREWORK_COLORS = ['#ffd166', '#ef476f', '#06d6a0', '#8ecae6', '#c77dff', '#ff9f1c'];
-
-  function buildFireworks(cfg) {
-    function burst(x, y, color) {
-      var flash = document.createElement('div');
-      flash.className = 'burst-flash';
-      flash.style.left = x + 'px';
-      flash.style.top = y + 'px';
-      flash.style.setProperty('--spark-color', color);
-      particlesEl.appendChild(flash);
-      setTimeout(function () { flash.remove(); }, 430);
-
-      for (var i = 0; i < cfg.sparks; i++) {
-        var angle = (Math.PI * 2 * i) / cfg.sparks + rand(-0.12, 0.12);
-        var dist = rand(75, 175);
-        var s = document.createElement('div');
-        s.className = 'spark';
-        s.style.left = x + 'px';
-        s.style.top = y + 'px';
-        s.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
-        s.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
-        s.style.setProperty('--spark-color', color);
-        var dur = rand(1.1, 1.8);
-        s.style.animationDuration = dur + 's';
-        particlesEl.appendChild(s);
-        (function (el, ms) { setTimeout(function () { el.remove(); }, ms); })(s, dur * 1000);
-      }
-    }
-
-    function launch() {
-      var color = FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)];
-      var x = rand(window.innerWidth * 0.12, window.innerWidth * 0.88);
-      var peak = rand(window.innerHeight * 0.12, window.innerHeight * 0.45);
-      var climb = window.innerHeight - peak;
-      var r = document.createElement('div');
-      r.className = 'rocket';
-      r.style.left = x + 'px';
-      r.style.top = window.innerHeight + 'px';
-      r.style.setProperty('--climb', -climb + 'px');
-      r.style.setProperty('--spark-color', color);
-      var climbMs = rand(900, 1300);
-      r.style.animationDuration = climbMs + 'ms';
-      particlesEl.appendChild(r);
-      setTimeout(function () { r.remove(); burst(x, peak, color); }, climbMs);
-    }
-
-    launch();
-    addTimer(launch, cfg.interval);
-  }
-
-  function buildRipple(cfg) {
-    function drop() {
-      var x = rand(5, 95);
-      var y = rand(8, 92);
-      // Two rings offset in time read as one spreading disturbance.
-      for (var i = 0; i < 2; i++) {
-        var ring = document.createElement('div');
-        ring.className = 'ripple-ring';
-        var size = rand(160, 340);
-        var dur = rand(2.8, 4.4);
-        ring.style.left = x + 'vw';
-        ring.style.top = y + 'vh';
-        ring.style.setProperty('--r', size + 'px');
-        ring.style.animationDuration = dur + 's';
-        ring.style.animationDelay = (i * 0.35) + 's';
-        particlesEl.appendChild(ring);
-        (function (el, ms) { setTimeout(function () { el.remove(); }, ms); })(ring, (dur + i * 0.35) * 1000 + 100);
-      }
-    }
-    drop();
-    addTimer(drop, cfg.interval);
-  }
 
   function buildLava(cfg) {
     var heat = document.createElement('div');
@@ -6244,21 +5950,244 @@
     });
   }
 
+  // Terminal: a system log typing itself out behind the CRT glass.
+  var TERM_LINES = [
+    '[ OK ] Started Network Time Synchronization.',
+    '[ OK ] Reached target Graphical Interface.',
+    'kernel: usb 1-2: new high-speed USB device number 4',
+    'sshd[1182]: Accepted publickey for operator from 10.0.4.17',
+    'cron[904]: (root) CMD (/usr/local/bin/backup --incremental)',
+    'mounting /dev/nvme0n1p2 on /srv ... done',
+    'net: link eth0 up, 10000 Mbps full duplex',
+    '$ uptime',
+    ' 21:14:07 up 412 days,  3:02,  2 users,  load average: 0.08, 0.11, 0.09',
+    '$ df -h /srv',
+    '/dev/nvme0n1p2  3.6T  1.1T  2.4T  31% /srv',
+    'syncing 2,418 objects ............................ ok',
+    'checksum 7f3a9c21e04b88d6 verified',
+    '[ OK ] Started Daily Cleanup of Temporary Directories.',
+    'thermald: zone0 at 41C, nominal',
+    '$ tail -f /var/log/messages',
+    'heartbeat: all 12 nodes responding (avg 0.42 ms)',
+    'scheduler: queue empty, idling',
+    'tls: certificate renewed, valid for 89 days',
+    'gc: reclaimed 184.2 MiB in 37 ms'
+  ];
+  function buildTermLog() {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var c = makeCanvas('term-canvas');
+    var ctx = c.ctx, w = c.w, h = c.h;
+    var fs = w < 600 ? 11 : 13, lh = fs * 1.55, x0 = w < 600 ? 14 : 28;
+    var maxLines = Math.ceil(h / lh) + 1;
+    var lines = [], idx = randInt(0, TERM_LINES.length - 1), typing = '', target = '', pause = 0, typed = 0;
+    for (var i = 0; i < maxLines - 4; i++) lines.push(TERM_LINES[(idx + i) % TERM_LINES.length]);
+    idx += maxLines;
+    function next() { target = TERM_LINES[idx++ % TERM_LINES.length]; typed = 0; typing = ''; }
+    next();
+    var wait = 0;
+
+    runFrames(function (t, dt, col) {
+      if (pause > 0) pause -= dt;
+      else {
+        // Commands type at a human pace; output lands in quick bursts.
+        typed += dt * (target.charAt(0) === '$' ? 22 : 140);
+        typing = target.slice(0, Math.floor(typed));
+        if (typed >= target.length) {
+          lines.push(target);
+          if (lines.length > maxLines) lines.shift();
+          pause = target.charAt(0) === '$' ? rand(0.6, 1.2) : rand(0.05, 0.5);
+          next();
+        }
+      }
+      wait -= dt;
+      if (wait > 0) return;
+      wait = 1 / 30;
+      ctx.clearRect(0, 0, w, h);
+      ctx.font = fs + 'px "IBM Plex Mono", monospace';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = col[0];
+      ctx.shadowColor = col[0];
+      ctx.shadowBlur = 6;
+      var all = lines.concat([typing]);
+      var y = h - lh * 1.5;
+      for (var k = all.length - 1; k >= 0 && y > -lh; k--, y -= lh) {
+        ctx.globalAlpha = k === all.length - 1 ? 0.34 : 0.14;
+        ctx.fillText(all[k], x0, y);
+      }
+      // Block cursor.
+      if (Math.floor(t * 2) % 2 === 0) {
+        var cw = ctx.measureText(typing).width;
+        ctx.globalAlpha = 0.6;
+        ctx.fillRect(x0 + cw + 2, h - lh * 1.5, fs * 0.6, fs * 1.1);
+      }
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // Festival: a fireworks show. Rockets climb on a sputtering trail and burst
+  // as peonies, rings or drooping golden willows, falling under gravity and
+  // drag and crackling as they die; the trails hang in the air as smoke.
+  function buildFireworks2() {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, TAU = Math.PI * 2;
+    var rockets = [], sparks = [], flashes = [], nextLaunch = 0.4, frames = 0;
+    var PALETTE = ['#ffd166', '#ef476f', '#7dd3fc', '#c4b5fd', '#ffffff', '#86efac'];
+
+    function burst(x, y, col) {
+      var kind = Math.random(), color = Math.random() < 0.5 ? col[Math.floor(Math.random() * 2)] : PALETTE[Math.floor(Math.random() * PALETTE.length)];
+      var willow = kind > 0.78, ring = kind > 0.55 && !willow;
+      var n = willow ? 100 : ring ? 70 : 130, speed = rand(230, 340);
+      for (var i = 0; i < n; i++) {
+        var a = ring ? i / n * TAU : rand(0, TAU);
+        var v = ring ? speed : speed * Math.cbrt(Math.random());
+        sparks.push({ x: x, y: y, px: x, py: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v * (ring ? 0.55 : 1),
+          life: willow ? rand(2.2, 3.2) : rand(1.1, 1.9), age: 0, color: willow ? '#ffcf7a' : color,
+          drag: willow ? 1.6 : 2.2, crackle: Math.random() < 0.3 });
+      }
+      flashes.push({ x: x, y: y, age: 0, color: color });
+    }
+
+    runFrames(function (t, dt, col) {
+      // Smoke: the trails fade instead of clearing.
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+      ctx.fillRect(0, 0, w, h);
+      if (++frames % 30 === 0) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+        ctx.globalAlpha = 0.03;
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalAlpha = 1;
+      }
+      ctx.globalCompositeOperation = 'lighter';
+
+      nextLaunch -= dt;
+      if (nextLaunch <= 0) {
+        var x0 = rand(0.12, 0.88) * w;
+        rockets.push({ x: x0, y: h + 10, vx: rand(-30, 30), vy: -rand(h * 0.9, h * 1.15), top: h * rand(0.12, 0.42) });
+        nextLaunch = Math.random() < 0.2 ? rand(0.08, 0.2) : rand(0.5, 1.3);
+      }
+      for (var i = rockets.length - 1; i >= 0; i--) {
+        var r = rockets[i];
+        var ox = r.x, oy = r.y;
+        r.vy += 260 * dt;
+        r.x += r.vx * dt;
+        r.y += r.vy * dt;
+        ctx.strokeStyle = '#ffe2b0';
+        ctx.globalAlpha = 0.9;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(ox, oy);
+        ctx.lineTo(r.x, r.y);
+        ctx.stroke();
+        if (Math.random() < 0.6) sparks.push({ x: r.x, y: r.y, px: r.x, py: r.y, vx: rand(-20, 20), vy: rand(20, 60), life: 0.5, age: 0, color: '#ffb46b', drag: 3, crackle: false });
+        if (r.y <= r.top || r.vy >= -40) { burst(r.x, r.y, col); rockets.splice(i, 1); }
+      }
+
+      ctx.lineCap = 'round';
+      for (i = sparks.length - 1; i >= 0; i--) {
+        var p = sparks[i];
+        p.age += dt;
+        if (p.age > p.life) { sparks.splice(i, 1); continue; }
+        var k = Math.exp(-p.drag * dt);
+        p.vx *= k;
+        p.vy = p.vy * k + 70 * dt;
+        p.px = p.x;
+        p.py = p.y;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        var f = p.age / p.life;
+        var a = (1 - f * f) * (p.crackle && f > 0.6 ? (Math.random() < 0.5 ? 1 : 0.15) : 1);
+        ctx.strokeStyle = p.color;
+        ctx.globalAlpha = a;
+        ctx.lineWidth = 1.8 * (1 - f) + 0.6;
+        ctx.beginPath();
+        ctx.moveTo(p.px, p.py);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      }
+      for (i = flashes.length - 1; i >= 0; i--) {
+        var fl = flashes[i];
+        fl.age += dt;
+        if (fl.age > 0.35) { flashes.splice(i, 1); continue; }
+        ctx.globalAlpha = (1 - fl.age / 0.35) * 0.5;
+        stamp(ctx, glowSprite(fl.color, true), fl.x, fl.y, 70);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // Ripple: rain on still water seen at a low angle. Each drop sends out a
+  // train of rings, drawn as a dark trough and a bright crest so they read
+  // as refraction; soft glints drift on the surface. Tap to drop a pebble.
+  function buildWater(cfg) {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, TAU = Math.PI * 2;
+    var drops = [], next = 0, now = 0;
+    var tilt = 0.5;
+    function drop(x, y, big) { drops.push({ x: x, y: y, t0: now, big: big ? 1.6 : rand(0.7, 1.1) }); }
+    onTap(function (x, y) { drop(x, y, true); });
+    var glints = [];
+    for (var i = 0; i < 14; i++) glints.push({ x: rand(0, w), y: rand(0, h), len: rand(40, 140), ph: rand(0, TAU), sp: rand(6, 14) });
+
+    runFrames(function (t, dt, col) {
+      now = t;
+      next -= dt;
+      if (next <= 0) { drop(rand(0, w), rand(0.05, 1) * h); next = cfg.interval * rand(0.4, 1.4); }
+      ctx.clearRect(0, 0, w, h);
+
+      // Surface glints: faint horizontal highlights wobbling on the water.
+      ctx.lineCap = 'round';
+      glints.forEach(function (g) {
+        g.x += g.sp * dt;
+        if (g.x - g.len > w) g.x = -g.len;
+        ctx.strokeStyle = col[1];
+        ctx.globalAlpha = 0.12 + 0.08 * Math.sin(t * 0.8 + g.ph);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(g.x - g.len / 2, g.y + Math.sin(t + g.ph) * 2);
+        ctx.lineTo(g.x + g.len / 2, g.y + Math.sin(t + g.ph + 1) * 2);
+        ctx.stroke();
+      });
+
+      drops = drops.filter(function (d) { return t - d.t0 < 4.5; });
+      drops.forEach(function (d) {
+        var age = t - d.t0;
+        for (var k = 0; k < 4; k++) {
+          var ra = (age - k * 0.22) * 70 * d.big;
+          if (ra <= 0) continue;
+          var fade = Math.max(0, 1 - age / 4.5) * (1 - k * 0.2);
+          // Trough below, crest above: the ring looks pressed into the water.
+          ctx.globalAlpha = fade * 0.42;
+          ctx.strokeStyle = col[0];
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.ellipse(d.x, d.y + 1.5, ra, ra * tilt, 0, 0, TAU);
+          ctx.stroke();
+          ctx.globalAlpha = fade * 0.9;
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.ellipse(d.x, d.y - 1, ra, ra * tilt, 0, Math.PI * 1.05, Math.PI * 1.95);
+          ctx.stroke();
+        }
+        if (age < 0.25) {
+          ctx.globalAlpha = (1 - age / 0.25) * 0.8;
+          stamp(ctx, glowSprite(col[1], true), d.x, d.y - age * 40, 6 * d.big);
+        }
+      });
+      ctx.globalAlpha = 1;
+    });
+  }
+
   function renderParticles(theme) {
     clearParticles();
     var cfg = THEME_ANIM[theme];
     if (!cfg) return;
-    if (cfg.type === 'rise' || cfg.type === 'fall') spawnRiseOrFall(cfg, cfg.type);
-    else if (cfg.type === 'twinkle') spawnStars(cfg.count);
-    else if (cfg.type === 'firefly') spawnFireflies(cfg);
-    else if (cfg.type === 'clouds') buildClouds();
-    else if (cfg.type === 'aurora') { buildAurora(); spawnStars(cfg.stars); }
-    else if (cfg.type === 'rain') buildRain(cfg);
-    else if (cfg.type === 'synth') buildSynthwave();
-    else if (cfg.type === 'cosmos') buildCosmos(cfg);
-    else if (cfg.type === 'storm') buildStorm(cfg);
-    else if (cfg.type === 'bubbles') buildAbyss(cfg);
-    else if (cfg.type === 'circuit') buildCircuit(cfg);
+    if (cfg.type === 'circuit') buildCircuit(cfg);
     else if (cfg.type === 'embers') buildEmbers(cfg);
     else if (cfg.type === 'blinds') buildBlinds(cfg);
     else if (cfg.type === 'aurora2') buildAurora2(cfg);
@@ -6272,9 +6201,9 @@
     else if (cfg.type === 'galaxy') buildGalaxy(cfg);
     else if (cfg.type === 'storm2') buildStorm2(cfg);
     else if (cfg.type === 'abyss2') buildAbyss2(cfg);
-    else if (cfg.type === 'crt') buildCrt();
-    else if (cfg.type === 'fireworks') buildFireworks(cfg);
-    else if (cfg.type === 'ripple') buildRipple(cfg);
+    else if (cfg.type === 'crt2') { buildCrt(); buildTermLog(cfg); }
+    else if (cfg.type === 'fireworks2') buildFireworks2(cfg);
+    else if (cfg.type === 'water') buildWater(cfg);
     else if (cfg.type === 'lava') buildLava(cfg);
     else if (cfg.type === 'warp') buildWarp(cfg);
     else if (cfg.type === 'gilded') buildGilded(cfg);
