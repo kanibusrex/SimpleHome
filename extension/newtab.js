@@ -139,6 +139,7 @@
   function renderGroupTabs() {
     var oldPill = groupTabsEl.querySelector('.group-pill');
     var from = oldPill && oldPill.offsetWidth ? [oldPill.offsetLeft, oldPill.offsetTop, oldPill.offsetWidth, oldPill.offsetHeight] : null;
+    var keepScroll = groupTabsEl.scrollLeft;
     groupTabsEl.innerHTML = '';
     groupTabsEl.classList.toggle('hidden', groups.length === 0 && !editing);
 
@@ -148,6 +149,11 @@
       var text = document.createElement('span');
       text.textContent = label;
       btn.appendChild(text);
+      var n = id === 'all' ? shortcuts.length : shortcuts.filter(function (s) { return (s.group || '') === id; }).length;
+      var count = document.createElement('span');
+      count.className = 'group-count';
+      count.textContent = n;
+      btn.appendChild(count);
 
       if (removable) {
         var rm = document.createElement('span');
@@ -175,7 +181,8 @@
 
     var addTab = document.createElement('button');
     addTab.className = 'group-tab group-tab-add';
-    addTab.textContent = '+';
+    addTab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+    addTab.title = 'New group';
     addTab.setAttribute('aria-label', 'Add group');
     addTab.addEventListener('click', function () {
       var name = prompt('New group name');
@@ -199,6 +206,10 @@
     pill.style.width = to[2] + 'px';
     pill.style.height = to[3] + 'px';
     groupTabsEl.insertBefore(pill, groupTabsEl.firstChild);
+    // Keep the row where it was, then make sure the active tab is in view.
+    groupTabsEl.scrollLeft = keepScroll;
+    if (to[0] < groupTabsEl.scrollLeft + 8) groupTabsEl.scrollLeft = to[0] - 24;
+    else if (to[0] + to[2] > groupTabsEl.scrollLeft + groupTabsEl.clientWidth - 8) groupTabsEl.scrollLeft = to[0] + to[2] - groupTabsEl.clientWidth + 24;
     if (from && from.join() !== to.join() && pill.animate && !reducedMotion()) {
       pill.animate([
         { left: from[0] + 'px', top: from[1] + 'px', width: from[2] + 'px', height: from[3] + 'px' },
