@@ -2071,6 +2071,23 @@
     .search { padding-right: 8px; }
     .search button { display: none; }
   }
+
+  /* On a phone the floating pill lands on a tile whatever the layout, so it
+     docks as a full-width bar instead, the way an app's tab bar does. The page
+     already reserves enough room below the tiles for them to scroll clear.
+     Zen mode keeps the pill, since only its one button is left. */
+  @media (max-width: 600px) {
+    body:not(.zen) .toolbar {
+      left: 0;
+      right: 0;
+      bottom: 0;
+      justify-content: space-around;
+      padding: 6px 12px calc(6px + env(safe-area-inset-bottom, 0px));
+      border-radius: 0;
+      border-width: 1px 0 0;
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+    }
+  }
 </style>
 </head>
 <body>
