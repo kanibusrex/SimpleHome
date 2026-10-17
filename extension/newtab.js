@@ -130,15 +130,15 @@
       .filter(function (e) { return activeGroup === 'all' || (e.s.group || '') === activeGroup; });
   }
 
+  function setActiveGroup(id) {
+    activeGroup = id;
+    localStorage.setItem(STORAGE_ACTIVE_GROUP, activeGroup);
+    renderShortcuts();
+  }
+
   function renderGroupTabs() {
     groupTabsEl.innerHTML = '';
     groupTabsEl.classList.toggle('hidden', groups.length === 0 && !editing);
-
-    function setActiveGroup(id) {
-      activeGroup = id;
-      localStorage.setItem(STORAGE_ACTIVE_GROUP, activeGroup);
-      renderShortcuts();
-    }
 
     function makeTab(id, label, removable) {
       var btn = document.createElement('button');
@@ -2012,6 +2012,102 @@
         toggleZen();
       }
     }
+  });
+
+  // ---- Touch gestures ----
+  // Phones have none of the keyboard shortcuts above, so: swipe sideways to
+  // change group, long-press a tile to edit it, pull down from the top to search.
+  var LONG_PRESS_MS = 500;
+  var gesture = null;
+  var longPressTimer = null;
+  var suppressClickUntil = 0;
+
+  function stepGroup(delta) {
+    var order = ['all'].concat(groups);
+    var next = order.indexOf(activeGroup) + delta;
+    if (!groups.length || zenActive || next < 0 || next >= order.length) return false;
+    setActiveGroup(order[next]);
+    grid.classList.remove('slide-left', 'slide-right');
+    void grid.offsetWidth; // restart the animation on a quick second swipe
+    grid.classList.add(delta > 0 ? 'slide-left' : 'slide-right');
+    return true;
+  }
+
+  function gestureBlocked(target) {
+    return editing ||
+      !modalOverlay.classList.contains('hidden') ||
+      !settingsPanel.classList.contains('hidden') ||
+      !scratchPanel.classList.contains('hidden') ||
+      !!target.closest('input, textarea, select, button, .results, .toolbar');
+  }
+
+  function endPress() {
+    clearTimeout(longPressTimer);
+    if (gesture && gesture.tile) gesture.tile.classList.remove('pressing');
+  }
+
+  document.addEventListener('touchstart', function (e) {
+    endPress();
+    gesture = null;
+    if (e.touches.length !== 1 || gestureBlocked(e.target)) return;
+    var t = e.touches[0];
+    gesture = {
+      x: t.clientX,
+      y: t.clientY,
+      atTop: window.scrollY <= 0,
+      tile: e.target.closest('.tile:not(.add-tile)'),
+      longPressed: false
+    };
+    if (!gesture.tile) return;
+    var g = gesture;
+    g.tile.classList.add('pressing');
+    longPressTimer = setTimeout(function () {
+      g.tile.classList.remove('pressing');
+      g.longPressed = true;
+      if (navigator.vibrate) navigator.vibrate(10);
+      openModal(parseInt(g.tile.dataset.index, 10));
+    }, LONG_PRESS_MS);
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function (e) {
+    if (!gesture) return;
+    var t = e.touches[0];
+    if (Math.abs(t.clientX - gesture.x) > 10 || Math.abs(t.clientY - gesture.y) > 10) endPress();
+  }, { passive: true });
+
+  document.addEventListener('touchend', function (e) {
+    endPress();
+    var g = gesture;
+    gesture = null;
+    if (!g) return;
+    // Lifting the finger still sends a click to whatever is under it — the
+    // tile behind a swipe, or the modal that a long-press just opened.
+    if (g.longPressed) { suppressClickUntil = Date.now() + 600; return; }
+    var t = e.changedTouches[0];
+    var dx = t.clientX - g.x, dy = t.clientY - g.y;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (stepGroup(dx < 0 ? 1 : -1)) suppressClickUntil = Date.now() + 600;
+    } else if (g.atTop && dy > 80 && dy > Math.abs(dx) * 1.5) {
+      searchInput.focus();
+      searchInput.select();
+    }
+  });
+
+  document.addEventListener('touchcancel', function () {
+    endPress();
+    gesture = null;
+  });
+
+  document.addEventListener('click', function (e) {
+    if (Date.now() > suppressClickUntil) return;
+    suppressClickUntil = 0;
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
+
+  // Android raises its link menu partway through a long-press.
+  document.addEventListener('contextmenu', function (e) {
+    if (gesture && gesture.tile) e.preventDefault();
   });
 
   var commandListEl = document.getElementById('commandList');

@@ -310,6 +310,10 @@
     margin: 0;
   }
 
+  /* Pulling down from the top focuses search, so the browser's own
+     pull-to-refresh would fight it. */
+  html, body { overscroll-behavior-y: contain; }
+
   body {
     background: var(--bg-gradient), var(--bg);
     color: var(--text);
@@ -1599,6 +1603,16 @@
     align-items: center;
     justify-content: center;
   }
+  /* Long-press edits a tile, so the phone's own long-press menu (link
+     preview, copy link) is switched off on tiles. */
+  .tile { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  .tile.pressing { transform: scale(0.94); }
+
+  .shortcuts-grid.slide-left { animation: grid-in-left 0.22s ease; }
+  .shortcuts-grid.slide-right { animation: grid-in-right 0.22s ease; }
+  @keyframes grid-in-left { from { opacity: 0; transform: translateX(24px); } }
+  @keyframes grid-in-right { from { opacity: 0; transform: translateX(-24px); } }
+
   body.editing .tile-remove { display: flex; }
   body.editing .tile { cursor: grab; }
   body.editing .tile.dragging { opacity: 0.4; }
