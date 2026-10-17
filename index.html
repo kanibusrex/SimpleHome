@@ -3476,11 +3476,11 @@
     noir:     { type: 'blinds', slats: 7, motes: 170 },
     aurora:   { type: 'aurora2', stars: 140 },
     daybreak: { type: 'sunrise', motes: 70 },
-    frost:    { type: 'fall',    color: '#a9c9e6',         size: [2, 4], duration: [8, 15],  interval: 750, seed: 6 },
-    sunset:   { type: 'clouds' },
-    bloom:    { type: 'fall',    color: 'var(--accent-2)', size: [6, 10], duration: [9, 16],  interval: 1000, seed: 5, petal: true },
-    matrix:    { type: 'rain',   maxColumns: 600, length: [8, 26], duration: [6, 16], churn: 5 },
-    embermatrix: { type: 'rain', maxColumns: 600, length: [8, 26], duration: [6, 16], churn: 5 },
+    frost:    { type: 'snow', flakes: 220 },
+    sunset:   { type: 'sky', clouds: 11 },
+    bloom:    { type: 'petals', petals: 40 },
+    matrix:    { type: 'rain2' },
+    embermatrix: { type: 'rain2' },
     synthwave: { type: 'synth' },
     cosmos:    { type: 'cosmos', stars: 60, shootInterval: 5200 },
     storm:     { type: 'storm',  duration: [0.7, 1.4], interval: 60, seed: 30, flashChance: 0.45 },
@@ -5257,10 +5257,11 @@
     cv.width = cv.height = 64;
     var g = cv.getContext('2d');
     var gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    // Solid colour throughout; the fade comes from the mask below, so the
+    // edge never picks up grey from blending toward transparent black.
     gr.addColorStop(0, core ? '#ffffff' : color);
     gr.addColorStop(core ? 0.12 : 0.05, color);
-    gr.addColorStop(0.35, color);
-    gr.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    gr.addColorStop(1, color);
     g.globalAlpha = 1;
     g.fillStyle = gr;
     g.fillRect(0, 0, 64, 64);
@@ -5537,6 +5538,314 @@
     });
   }
 
+  // Frost: snow at three depths pushed about by gusting wind, and ice
+  // crystals grown into the corners of the glass.
+  function buildSnow(cfg) {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, TAU = Math.PI * 2;
+    seedNoise();
+
+    // Frost: dendrites branching at sixty degrees, drawn once.
+    var frost = document.createElement('canvas');
+    frost.width = c.canvas.width;
+    frost.height = c.canvas.height;
+    var fctx = frost.getContext('2d');
+    fctx.scale(c.dpr, c.dpr);
+    fctx.lineCap = 'round';
+    function dendrite(x, y, a, len, depth) {
+      if (depth > 4 || len < 3) return;
+      var x2 = x + Math.cos(a) * len, y2 = y + Math.sin(a) * len;
+      fctx.globalAlpha = 0.5 - depth * 0.08;
+      fctx.lineWidth = Math.max(0.5, 1.6 - depth * 0.3);
+      fctx.beginPath();
+      fctx.moveTo(x, y);
+      fctx.lineTo(x2, y2);
+      fctx.stroke();
+      var n = 3;
+      for (var i = 1; i <= n; i++) {
+        var f = i / (n + 1), bx = x + (x2 - x) * f, by = y + (y2 - y) * f;
+        var bl = len * (0.45 - f * 0.25) * rand(0.7, 1.1);
+        dendrite(bx, by, a + Math.PI / 3, bl, depth + 1);
+        dendrite(bx, by, a - Math.PI / 3, bl, depth + 1);
+      }
+      dendrite(x2, y2, a + rand(-0.2, 0.2), len * 0.55, depth + 1);
+    }
+    var corners = [[0, 0, 0.8], [w, 0, 2.35], [0, h, -0.8], [w, h, -2.35]];
+    function drawFrost(color) {
+      fctx.clearRect(0, 0, w, h);
+      fctx.strokeStyle = color;
+      corners.forEach(function (k) {
+        for (var i = 0; i < 6; i++) dendrite(k[0], k[1], k[2] + rand(-0.7, 0.7), Math.min(w, h) * rand(0.08, 0.16), 0);
+      });
+    }
+    var frostColor = '';
+
+    var flakes = [];
+    for (var i = 0; i < cfg.flakes; i++) {
+      var z = i < 14 ? rand(3, 5) : Math.pow(Math.random(), 1.8) * 1.8 + 0.4;
+      flakes.push({ x: rand(0, w), y: rand(0, h), z: z, ph: rand(0, TAU) });
+    }
+
+    runFrames(function (t, dt, col) {
+      if (frostColor !== col[0]) { frostColor = col[0]; drawFrost('#9cbfe0'); }
+      ctx.clearRect(0, 0, w, h);
+      ctx.globalAlpha = 0.85;
+      ctx.drawImage(frost, 0, 0, w, h);
+      var gust = noise2(t * 0.08, 3.3) * 70;
+      var spr = glowSprite('#7fa6cf'), core = glowSprite('#ffffff');
+      flakes.forEach(function (f) {
+        var sway = Math.sin(t * 0.8 + f.ph) * 12;
+        f.y += (18 + f.z * 22) * dt;
+        f.x += (gust * f.z * 0.6 + sway) * dt;
+        if (f.y > h + 20) { f.y = -20; f.x = rand(-50, w + 50); }
+        if (f.x > w + 30) f.x = -30; else if (f.x < -30) f.x = w + 30;
+        var r = f.z * 1.6;
+        if (f.z > 2.5) {
+          // Out-of-focus flakes right in front of the lens.
+          ctx.globalAlpha = 0.16;
+          stamp(ctx, spr, f.x, f.y, r * 4);
+        } else {
+          ctx.globalAlpha = 0.35 + f.z * 0.25;
+          stamp(ctx, spr, f.x, f.y, r * 2.2);
+          ctx.globalAlpha = 0.9;
+          stamp(ctx, core, f.x, f.y, r);
+        }
+      });
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // Sunset: soft clouds at three depths drifting past a low, glowing sun,
+  // each lit warm along its underside, and now and then birds crossing.
+  function buildSky(cfg) {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, TAU = Math.PI * 2;
+
+    function makeCloud(col, scale) {
+      var cw = Math.round(260 * scale), ch = Math.round(120 * scale);
+      var cv = document.createElement('canvas');
+      cv.width = cw;
+      cv.height = ch;
+      var g = cv.getContext('2d');
+      var puffs = randInt(6, 10);
+      for (var i = 0; i < puffs; i++) {
+        var px = cw * rand(0.2, 0.8), py = ch * rand(0.45, 0.7), pr = ch * rand(0.18, 0.34);
+        var gr = g.createRadialGradient(px, py - pr * 0.3, 0, px, py, pr);
+        gr.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+        gr.addColorStop(0.7, 'rgba(255, 250, 245, 0.8)');
+        gr.addColorStop(1, 'rgba(255, 250, 245, 0)');
+        g.fillStyle = gr;
+        g.beginPath();
+        g.arc(px, py, pr, 0, TAU);
+        g.fill();
+      }
+      // Warm light on the underside, from the sun low in the sky.
+      g.globalCompositeOperation = 'source-atop';
+      var under = g.createLinearGradient(0, 0, 0, ch);
+      under.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      under.addColorStop(0.55, 'rgba(255, 255, 255, 0)');
+      under.addColorStop(1, col);
+      g.fillStyle = under;
+      g.fillRect(0, 0, cw, ch);
+      return cv;
+    }
+    var clouds = [], cloudKey = '';
+    function buildClouds(col) {
+      clouds = [];
+      for (var i = 0; i < cfg.clouds; i++) {
+        var layer = i % 3, scale = [0.7, 1.1, 1.8][layer];
+        clouds.push({ img: makeCloud(i % 2 ? col[1] : col[0], scale), x: rand(-0.2, 1) * w, y: h * rand(0.05, 0.75), sp: [5, 9, 15][layer], a: [0.55, 0.7, 0.8][layer], layer: layer });
+      }
+      clouds.sort(function (a, b) { return a.layer - b.layer; });
+    }
+
+    var birds = null, nextBirds = 6;
+    function launchBirds() {
+      var n = randInt(3, 6), y = h * rand(0.12, 0.4), dir = Math.random() < 0.5 ? 1 : -1;
+      birds = [];
+      for (var i = 0; i < n; i++) birds.push({ x: (dir > 0 ? -60 : w + 60) - dir * i * rand(18, 30), y: y + (i % 2 ? 1 : -1) * i * rand(6, 10), ph: rand(0, TAU), dir: dir });
+    }
+
+    runFrames(function (t, dt, col) {
+      if (cloudKey !== col.join()) { cloudKey = col.join(); buildClouds(col); }
+      ctx.clearRect(0, 0, w, h);
+      var sx = w * 0.72, sy = h * 0.78, breathe = 0.9 + 0.1 * Math.sin(t * 0.3);
+      var g = ctx.createRadialGradient(sx, sy, 0, sx, sy, Math.max(w, h) * 0.7);
+      g.addColorStop(0, 'rgba(255, 244, 214, 0.95)');
+      g.addColorStop(0.08, col[1]);
+      g.addColorStop(0.4, col[0]);
+      g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.globalAlpha = 0.35 * breathe;
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+
+      clouds.forEach(function (cl) {
+        cl.x += cl.sp * dt;
+        if (cl.x > w + 20) cl.x = -cl.img.width - rand(0, 200);
+        ctx.globalAlpha = cl.a;
+        ctx.drawImage(cl.img, cl.x, cl.y);
+      });
+
+      nextBirds -= dt;
+      if (nextBirds <= 0 && !birds) { launchBirds(); nextBirds = rand(14, 26); }
+      if (birds) {
+        ctx.strokeStyle = 'rgba(70, 40, 45, 0.55)';
+        ctx.lineWidth = 1.4;
+        ctx.lineCap = 'round';
+        ctx.globalAlpha = 1;
+        var gone = true;
+        birds.forEach(function (b) {
+          b.x += b.dir * 46 * dt;
+          b.y += Math.sin(t * 0.7 + b.ph) * 4 * dt;
+          if (b.dir > 0 ? b.x < w + 40 : b.x > -40) gone = false;
+          var flap = Math.sin(t * 9 + b.ph) * 5, span = 8;
+          ctx.beginPath();
+          ctx.moveTo(b.x - span, b.y - flap);
+          ctx.quadraticCurveTo(b.x - span / 2, b.y - 2, b.x, b.y);
+          ctx.quadraticCurveTo(b.x + span / 2, b.y - 2, b.x + span, b.y - flap);
+          ctx.stroke();
+        });
+        if (gone) birds = null;
+      }
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // Bloom: cherry-blossom petals that tumble in three dimensions as they
+  // fall, over soft drifting light.
+  function buildPetals(cfg) {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, TAU = Math.PI * 2;
+    seedNoise();
+    function spawn(p, anywhere) {
+      p.z = Math.random() < 0.12 ? rand(2.2, 3) : rand(0.6, 1.4);
+      p.x = rand(-0.1, 1.1) * w;
+      p.y = anywhere ? rand(-0.1, 1) * h : -30;
+      p.spin = rand(0, TAU);
+      p.vs = rand(-1.2, 1.2);
+      p.flip = rand(0, TAU);
+      p.vf = rand(1.2, 3);
+      p.tone = Math.random();
+      return p;
+    }
+    var petals = [];
+    for (var i = 0; i < cfg.petals; i++) petals.push(spawn({}, true));
+    var lights = [];
+    for (i = 0; i < 10; i++) lights.push({ x: rand(0, w), y: rand(0, h), r: rand(40, 110), ph: rand(0, TAU), c: i % 2 });
+
+    function petalPath(s) {
+      // Rounded petal with the little notch at its tip.
+      ctx.beginPath();
+      ctx.moveTo(0, s);
+      ctx.bezierCurveTo(-s * 0.95, s * 0.35, -s * 0.7, -s * 0.85, -s * 0.12, -s * 0.9);
+      ctx.lineTo(0, -s * 0.7);
+      ctx.lineTo(s * 0.12, -s * 0.9);
+      ctx.bezierCurveTo(s * 0.7, -s * 0.85, s * 0.95, s * 0.35, 0, s);
+      ctx.closePath();
+    }
+
+    runFrames(function (t, dt, col) {
+      ctx.clearRect(0, 0, w, h);
+      lights.forEach(function (l) {
+        l.x += Math.sin(t * 0.1 + l.ph) * 6 * dt;
+        l.y += Math.cos(t * 0.08 + l.ph) * 5 * dt;
+        ctx.globalAlpha = 0.14 + 0.06 * Math.sin(t * 0.5 + l.ph);
+        stamp(ctx, glowSprite(l.c ? col[1] : '#ffffff'), l.x, l.y, l.r);
+      });
+      var wind = noise2(t * 0.07, 1.7) * 50 + 18;
+      petals.sort(function (a, b) { return a.z - b.z; });
+      petals.forEach(function (p) {
+        p.y += (22 + p.z * 18) * dt;
+        p.x += (wind * p.z * 0.5 + Math.sin(t * 0.9 + p.flip) * 14) * dt;
+        p.spin += p.vs * dt;
+        p.flip += p.vf * dt;
+        if (p.y > h + 40 || p.x > w + 60) spawn(p, false);
+        var s = 10 * p.z;
+        var fx = Math.cos(p.flip);
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.spin);
+        ctx.scale(Math.max(0.12, Math.abs(fx)), 1);
+        petalPath(s);
+        var g = ctx.createLinearGradient(0, s, 0, -s);
+        g.addColorStop(0, col[0]);
+        g.addColorStop(0.45, col[1]);
+        g.addColorStop(1, '#ffe8f1');
+        ctx.fillStyle = g;
+        // The underside, turned away, reads a shade darker.
+        ctx.globalAlpha = (p.z > 2 ? 0.45 : 0.85) * (fx < 0 ? 0.75 : 1);
+        ctx.fill();
+        ctx.restore();
+      });
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // Matrix: the digital rain, drawn as glyph streams at two depths. Each
+  // stream's head is bright and its trail fades as the canvas decays.
+  function buildRain2(cfg) {
+    var c = makeCanvas('warp-canvas');
+    if (!c) return;
+    var ctx = c.ctx, w = c.w, h = c.h, frames = 0;
+    var layers = [{ fs: 13, a: 0.45, sp: [7, 13] }, { fs: 19, a: 1, sp: [10, 19] }];
+    var drops = [];
+    layers.forEach(function (L, li) {
+      var cols = Math.ceil(w / L.fs);
+      for (var i = 0; i < cols; i++) {
+        if (li === 1 && Math.random() < 0.55) continue;
+        drops.push({ L: L, x: i * L.fs + L.fs / 2, y: rand(-h, h), sp: rand(L.sp[0], L.sp[1]), acc: 0, last: '' });
+      }
+    });
+
+    runFrames(function (t, dt, col) {
+      if (++frames % 2 === 0) {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+        ctx.fillRect(0, 0, w, h);
+        if (frames % 40 === 0) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.globalAlpha = 0.04;
+          ctx.fillRect(0, 0, w, h);
+          ctx.globalAlpha = 1;
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      drops.forEach(function (d) {
+        d.acc += d.sp * dt;
+        while (d.acc >= 1) {
+          d.acc -= 1;
+          var fs = d.L.fs;
+          // Re-draw the previous head in the trail colour, then the new head.
+          if (d.last) {
+            ctx.fillStyle = col[0];
+            ctx.globalAlpha = d.L.a * 0.85;
+            ctx.font = fs + 'px monospace';
+            ctx.clearRect(d.x - fs / 2, d.y - fs / 2, fs, fs);
+            ctx.fillText(d.last, d.x, d.y);
+          }
+          d.y += fs;
+          if (d.y > h + fs * 2) {
+            if (Math.random() < 0.6) { d.y = -rand(0, h * 0.5); d.sp = rand(d.L.sp[0], d.L.sp[1]); }
+          }
+          d.last = randGlyph();
+          ctx.font = fs + 'px monospace';
+          ctx.fillStyle = '#f2fff4';
+          ctx.globalAlpha = d.L.a;
+          ctx.shadowColor = col[1];
+          ctx.shadowBlur = d.L.fs > 15 ? 12 : 6;
+          ctx.fillText(d.last, d.x, d.y);
+          ctx.shadowBlur = 0;
+        }
+      });
+      ctx.globalAlpha = 1;
+    });
+  }
+
   function renderParticles(theme) {
     clearParticles();
     var cfg = THEME_ANIM[theme];
@@ -5557,6 +5866,10 @@
     else if (cfg.type === 'aurora2') buildAurora2(cfg);
     else if (cfg.type === 'forest') buildForest(cfg);
     else if (cfg.type === 'sunrise') buildSunrise(cfg);
+    else if (cfg.type === 'snow') buildSnow(cfg);
+    else if (cfg.type === 'sky') buildSky(cfg);
+    else if (cfg.type === 'petals') buildPetals(cfg);
+    else if (cfg.type === 'rain2') buildRain2(cfg);
     else if (cfg.type === 'crt') buildCrt();
     else if (cfg.type === 'fireworks') buildFireworks(cfg);
     else if (cfg.type === 'ripple') buildRipple(cfg);
