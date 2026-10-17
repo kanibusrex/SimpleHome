@@ -2148,7 +2148,19 @@
   }
   .group-tabs.hidden { display: none; }
 
+  /* The active tab's fill is one pill behind the tabs that glides from tab
+     to tab, rather than each tab painting its own. */
+  .group-tabs { position: relative; }
+  .group-pill {
+    position: absolute;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 6px 18px -8px var(--accent);
+    pointer-events: none;
+  }
   .group-tab {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     gap: 7px;
@@ -2165,9 +2177,11 @@
   .group-tab:hover { color: var(--text); border-color: var(--accent); }
   .group-tab.active {
     color: var(--bg);
-    background: var(--accent);
-    border-color: var(--accent);
+    background: transparent;
+    border-color: transparent;
+    animation: group-tab-on 0.35s ease;
   }
+  @keyframes group-tab-on { from { color: var(--text-dim); } }
   .group-tab-remove {
     display: none;
     align-items: center;
@@ -2307,10 +2321,32 @@
   .tile { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   .tile.pressing { transform: scale(0.94); }
 
-  .shortcuts-grid.slide-left { animation: grid-in-left 0.22s ease; }
-  .shortcuts-grid.slide-right { animation: grid-in-right 0.22s ease; }
-  @keyframes grid-in-left { from { opacity: 0; transform: translateX(24px); } }
-  @keyframes grid-in-right { from { opacity: 0; transform: translateX(-24px); } }
+  /* ---- Icon loading: a shimmer holds the slot, then the icon resolves in ---- */
+  .tile-icon { position: relative; }
+  .tile-icon.loading {
+    background: color-mix(in srgb, var(--text) 6%, var(--bg));
+  }
+  .tile-icon.loading::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 25%, color-mix(in srgb, var(--text) 14%, transparent) 50%, transparent 75%);
+    transform: translateX(-100%);
+    animation: icon-shimmer 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  @keyframes icon-shimmer { to { transform: translateX(100%); } }
+
+  .tile-icon img {
+    opacity: 0;
+    transform: scale(0.8);
+    filter: blur(5px);
+    transition: opacity 0.4s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), filter 0.45s ease;
+  }
+  .tile-icon img.loaded { opacity: 1; transform: none; filter: none; }
+  .tile-icon.letter-in { animation: icon-letter-in 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+  @keyframes icon-letter-in {
+    from { color: transparent; transform: scale(0.8); filter: blur(4px); }
+  }
 
   body.editing .tile-remove { display: flex; }
   body.editing .tile { cursor: grab; }

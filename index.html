@@ -2147,7 +2147,19 @@
   }
   .group-tabs.hidden { display: none; }
 
+  /* The active tab's fill is one pill behind the tabs that glides from tab
+     to tab, rather than each tab painting its own. */
+  .group-tabs { position: relative; }
+  .group-pill {
+    position: absolute;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 6px 18px -8px var(--accent);
+    pointer-events: none;
+  }
   .group-tab {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     gap: 7px;
@@ -2164,9 +2176,11 @@
   .group-tab:hover { color: var(--text); border-color: var(--accent); }
   .group-tab.active {
     color: var(--bg);
-    background: var(--accent);
-    border-color: var(--accent);
+    background: transparent;
+    border-color: transparent;
+    animation: group-tab-on 0.35s ease;
   }
+  @keyframes group-tab-on { from { color: var(--text-dim); } }
   .group-tab-remove {
     display: none;
     align-items: center;
@@ -2306,10 +2320,32 @@
   .tile { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   .tile.pressing { transform: scale(0.94); }
 
-  .shortcuts-grid.slide-left { animation: grid-in-left 0.22s ease; }
-  .shortcuts-grid.slide-right { animation: grid-in-right 0.22s ease; }
-  @keyframes grid-in-left { from { opacity: 0; transform: translateX(24px); } }
-  @keyframes grid-in-right { from { opacity: 0; transform: translateX(-24px); } }
+  /* ---- Icon loading: a shimmer holds the slot, then the icon resolves in ---- */
+  .tile-icon { position: relative; }
+  .tile-icon.loading {
+    background: color-mix(in srgb, var(--text) 6%, var(--bg));
+  }
+  .tile-icon.loading::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 25%, color-mix(in srgb, var(--text) 14%, transparent) 50%, transparent 75%);
+    transform: translateX(-100%);
+    animation: icon-shimmer 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  @keyframes icon-shimmer { to { transform: translateX(100%); } }
+
+  .tile-icon img {
+    opacity: 0;
+    transform: scale(0.8);
+    filter: blur(5px);
+    transition: opacity 0.4s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), filter 0.45s ease;
+  }
+  .tile-icon img.loaded { opacity: 1; transform: none; filter: none; }
+  .tile-icon.letter-in { animation: icon-letter-in 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+  @keyframes icon-letter-in {
+    from { color: transparent; transform: scale(0.8); filter: blur(4px); }
+  }
 
   body.editing .tile-remove { display: flex; }
   body.editing .tile { cursor: grab; }
@@ -2922,6 +2958,8 @@
   }
 
   function renderGroupTabs() {
+    var oldPill = groupTabsEl.querySelector('.group-pill');
+    var from = oldPill && oldPill.offsetWidth ? [oldPill.offsetLeft, oldPill.offsetTop, oldPill.offsetWidth, oldPill.offsetHeight] : null;
     groupTabsEl.innerHTML = '';
     groupTabsEl.classList.toggle('hidden', groups.length === 0 && !editing);
 
@@ -2949,7 +2987,7 @@
         btn.appendChild(rm);
       }
 
-      btn.addEventListener('click', function () { setActiveGroup(id); });
+      btn.addEventListener('click', function () { switchGroup(id); });
       return btn;
     }
 
@@ -2970,6 +3008,60 @@
       setActiveGroup(name);
     });
     groupTabsEl.appendChild(addTab);
+
+    // Place the pill on the active tab, gliding there from where it was.
+    var on = groupTabsEl.querySelector('.group-tab.active');
+    if (!on || groupTabsEl.classList.contains('hidden')) return;
+    var pill = document.createElement('div');
+    pill.className = 'group-pill';
+    var to = [on.offsetLeft, on.offsetTop, on.offsetWidth, on.offsetHeight];
+    pill.style.left = to[0] + 'px';
+    pill.style.top = to[1] + 'px';
+    pill.style.width = to[2] + 'px';
+    pill.style.height = to[3] + 'px';
+    groupTabsEl.insertBefore(pill, groupTabsEl.firstChild);
+    if (from && from.join() !== to.join() && pill.animate && !reducedMotion()) {
+      pill.animate([
+        { left: from[0] + 'px', top: from[1] + 'px', width: from[2] + 'px', height: from[3] + 'px' },
+        { left: to[0] + 'px', top: to[1] + 'px', width: to[2] + 'px', height: to[3] + 'px' }
+      ], { duration: 420, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' });
+    }
+  }
+
+  function reducedMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+
+  // Changing category: the current tiles leave quickly toward where they're
+  // going, then the new set cascades in from the side being moved toward.
+  var switchTimer = null;
+  function switchGroup(id, dir) {
+    if (id === activeGroup && !switchTimer) return;
+    var order = ['all'].concat(groups);
+    if (!dir) dir = order.indexOf(id) >= order.indexOf(activeGroup) ? 1 : -1;
+    var leaving = Array.prototype.slice.call(grid.children);
+    clearTimeout(switchTimer);
+    if (reducedMotion() || !leaving.length || !grid.animate) {
+      switchTimer = null;
+      setActiveGroup(id);
+      return;
+    }
+    leaving.forEach(function (t, i) {
+      t.animate([
+        { opacity: 1, transform: 'none', filter: 'blur(0)' },
+        { opacity: 0, transform: 'translateX(' + (-dir * 18) + 'px) scale(0.96)', filter: 'blur(4px)' }
+      ], { duration: 150, delay: Math.min(i, 10) * 10, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
+    });
+    switchTimer = setTimeout(function () {
+      switchTimer = null;
+      setActiveGroup(id);
+      Array.prototype.forEach.call(grid.children, function (t, i) {
+        t.animate([
+          { opacity: 0, transform: 'translateX(' + (dir * 26) + 'px) translateY(6px) scale(0.95)', filter: 'blur(6px)' },
+          { opacity: 1, transform: 'none', filter: 'blur(0)' }
+        ], { duration: 560, delay: Math.min(i, 16) * 30, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'backwards' });
+      });
+    }, 150 + Math.min(leaving.length - 1, 10) * 10);
   }
 
   function renderShortcuts() {
@@ -2994,15 +3086,23 @@
       var host = hostnameFor(s.url);
       if (host) {
         var img = document.createElement('img');
-        img.src = 'https://www.google.com/s2/favicons?sz=64&domain=' + host;
         img.alt = '';
+        icon.classList.add('loading');
+        img.onload = function () {
+          icon.classList.remove('loading');
+          img.classList.add('loaded');
+        };
         img.onerror = function () {
+          icon.classList.remove('loading');
           icon.innerHTML = '';
           icon.textContent = initialFor(s.name);
+          icon.classList.add('letter-in');
         };
+        img.src = 'https://www.google.com/s2/favicons?sz=64&domain=' + host;
         icon.appendChild(img);
       } else {
         icon.textContent = initialFor(s.name);
+        icon.classList.add('letter-in');
       }
 
       var label = document.createElement('div');
@@ -5975,10 +6075,7 @@
     var order = ['all'].concat(groups);
     var next = order.indexOf(activeGroup) + delta;
     if (!groups.length || zenActive || next < 0 || next >= order.length) return false;
-    setActiveGroup(order[next]);
-    grid.classList.remove('slide-left', 'slide-right');
-    void grid.offsetWidth; // restart the animation on a quick second swipe
-    grid.classList.add(delta > 0 ? 'slide-left' : 'slide-right');
+    switchGroup(order[next], delta > 0 ? 1 : -1);
     return true;
   }
 

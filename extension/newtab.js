@@ -137,6 +137,8 @@
   }
 
   function renderGroupTabs() {
+    var oldPill = groupTabsEl.querySelector('.group-pill');
+    var from = oldPill && oldPill.offsetWidth ? [oldPill.offsetLeft, oldPill.offsetTop, oldPill.offsetWidth, oldPill.offsetHeight] : null;
     groupTabsEl.innerHTML = '';
     groupTabsEl.classList.toggle('hidden', groups.length === 0 && !editing);
 
@@ -164,7 +166,7 @@
         btn.appendChild(rm);
       }
 
-      btn.addEventListener('click', function () { setActiveGroup(id); });
+      btn.addEventListener('click', function () { switchGroup(id); });
       return btn;
     }
 
@@ -185,6 +187,60 @@
       setActiveGroup(name);
     });
     groupTabsEl.appendChild(addTab);
+
+    // Place the pill on the active tab, gliding there from where it was.
+    var on = groupTabsEl.querySelector('.group-tab.active');
+    if (!on || groupTabsEl.classList.contains('hidden')) return;
+    var pill = document.createElement('div');
+    pill.className = 'group-pill';
+    var to = [on.offsetLeft, on.offsetTop, on.offsetWidth, on.offsetHeight];
+    pill.style.left = to[0] + 'px';
+    pill.style.top = to[1] + 'px';
+    pill.style.width = to[2] + 'px';
+    pill.style.height = to[3] + 'px';
+    groupTabsEl.insertBefore(pill, groupTabsEl.firstChild);
+    if (from && from.join() !== to.join() && pill.animate && !reducedMotion()) {
+      pill.animate([
+        { left: from[0] + 'px', top: from[1] + 'px', width: from[2] + 'px', height: from[3] + 'px' },
+        { left: to[0] + 'px', top: to[1] + 'px', width: to[2] + 'px', height: to[3] + 'px' }
+      ], { duration: 420, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' });
+    }
+  }
+
+  function reducedMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+
+  // Changing category: the current tiles leave quickly toward where they're
+  // going, then the new set cascades in from the side being moved toward.
+  var switchTimer = null;
+  function switchGroup(id, dir) {
+    if (id === activeGroup && !switchTimer) return;
+    var order = ['all'].concat(groups);
+    if (!dir) dir = order.indexOf(id) >= order.indexOf(activeGroup) ? 1 : -1;
+    var leaving = Array.prototype.slice.call(grid.children);
+    clearTimeout(switchTimer);
+    if (reducedMotion() || !leaving.length || !grid.animate) {
+      switchTimer = null;
+      setActiveGroup(id);
+      return;
+    }
+    leaving.forEach(function (t, i) {
+      t.animate([
+        { opacity: 1, transform: 'none', filter: 'blur(0)' },
+        { opacity: 0, transform: 'translateX(' + (-dir * 18) + 'px) scale(0.96)', filter: 'blur(4px)' }
+      ], { duration: 150, delay: Math.min(i, 10) * 10, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
+    });
+    switchTimer = setTimeout(function () {
+      switchTimer = null;
+      setActiveGroup(id);
+      Array.prototype.forEach.call(grid.children, function (t, i) {
+        t.animate([
+          { opacity: 0, transform: 'translateX(' + (dir * 26) + 'px) translateY(6px) scale(0.95)', filter: 'blur(6px)' },
+          { opacity: 1, transform: 'none', filter: 'blur(0)' }
+        ], { duration: 560, delay: Math.min(i, 16) * 30, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'backwards' });
+      });
+    }, 150 + Math.min(leaving.length - 1, 10) * 10);
   }
 
   function renderShortcuts() {
@@ -209,15 +265,23 @@
       var host = hostnameFor(s.url);
       if (host) {
         var img = document.createElement('img');
-        img.src = 'https://www.google.com/s2/favicons?sz=64&domain=' + host;
         img.alt = '';
+        icon.classList.add('loading');
+        img.onload = function () {
+          icon.classList.remove('loading');
+          img.classList.add('loaded');
+        };
         img.onerror = function () {
+          icon.classList.remove('loading');
           icon.innerHTML = '';
           icon.textContent = initialFor(s.name);
+          icon.classList.add('letter-in');
         };
+        img.src = 'https://www.google.com/s2/favicons?sz=64&domain=' + host;
         icon.appendChild(img);
       } else {
         icon.textContent = initialFor(s.name);
+        icon.classList.add('letter-in');
       }
 
       var label = document.createElement('div');
@@ -3190,10 +3254,7 @@
     var order = ['all'].concat(groups);
     var next = order.indexOf(activeGroup) + delta;
     if (!groups.length || zenActive || next < 0 || next >= order.length) return false;
-    setActiveGroup(order[next]);
-    grid.classList.remove('slide-left', 'slide-right');
-    void grid.offsetWidth; // restart the animation on a quick second swipe
-    grid.classList.add(delta > 0 ? 'slide-left' : 'slide-right');
+    switchGroup(order[next], delta > 0 ? 1 : -1);
     return true;
   }
 
