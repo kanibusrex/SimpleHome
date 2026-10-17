@@ -2818,6 +2818,159 @@
       background: color-mix(in srgb, var(--bg) 92%, transparent);
     }
   }
+
+  /* ---- Settings, refined ----
+     Sections are grouped cards with an icon in the heading; theme swatches
+     are taller previews with a check on the active one. */
+  .panel .panel-section {
+    margin-bottom: 14px;
+    padding: 16px;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--text) 3.5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
+  }
+  .panel .panel-section h3 {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0 0 14px;
+    font-family: 'Sora', sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: none;
+    color: var(--text);
+  }
+  .panel .panel-section h3 svg {
+    width: 26px;
+    height: 26px;
+    padding: 5px;
+    border-radius: 8px;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+    flex-shrink: 0;
+  }
+  .panel .hint { margin: 10px 0 0; }
+  .panel .hint:first-of-type { margin-top: 0; }
+  .panel-head h2 { font-size: 20px; letter-spacing: -0.2px; }
+
+  .panel .theme-grid { gap: 10px; }
+  .panel .swatch {
+    position: relative;
+    padding: 6px 6px 9px;
+    border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+    border-radius: 13px;
+    font-size: 11px;
+    letter-spacing: 0.2px;
+    box-shadow: 0 6px 16px -10px rgba(0, 0, 0, 0.6);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease;
+  }
+  .panel .swatch:hover { transform: translateY(-2px); box-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.7); }
+  .panel .swatch .swatch-preview {
+    height: 46px;
+    border-radius: 9px;
+    margin-bottom: 8px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+  .panel .swatch:not(.active) { padding-left: 6px; }
+  .panel .swatch.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent), 0 10px 24px -12px var(--accent);
+  }
+  .panel .swatch.active::after {
+    content: '';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+  .swatch { padding-left: 10px; }
+  .panel .swatch { padding-left: 6px; }
+  .panel .swatch > :not(.swatch-preview) { margin-left: 4px; }
+
+  .panel .color-custom { margin-top: 16px; padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent); }
+  .panel .color-field input[type="color"] {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px color-mix(in srgb, var(--text) 20%, transparent);
+  }
+  .panel .color-field input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  .panel .color-field input[type="color"]::-webkit-color-swatch { border-radius: 50%; }
+  .panel .color-field input[type="color"]::-moz-color-swatch { border-radius: 50%; }
+
+  .panel .stack { margin-bottom: 0; }
+  .panel .stack-row { flex-direction: row; }
+  .panel .panel-btn {
+    padding: 11px 10px;
+    border-radius: 11px;
+    border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--text) 6%, transparent), color-mix(in srgb, var(--text) 2%, transparent));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent), 0 4px 10px -6px rgba(0, 0, 0, 0.5);
+    font-weight: 500;
+    transition: border-color 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease;
+  }
+  .panel .panel-btn:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .panel .panel-btn:active { transform: scale(0.98); }
+
+  .panel kbd.k {
+    min-width: 20px;
+    text-align: center;
+    padding: 2px 6px;
+    margin: 2px 1px;
+    border-radius: 6px;
+    border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+    border-bottom-width: 2px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--text) 9%, transparent), color-mix(in srgb, var(--text) 3%, transparent));
+    font-size: 10.5px;
+  }
+
+  /* ---- Dark app-icon wells for the shortcut tiles ----
+     Graphite squares with a lit top edge. Logos get a faint light outline so
+     dark ones (GitHub, X, Notion) stay visible; letter icons take the accent. */
+  .tile-icon {
+    background: linear-gradient(180deg, #2a2b31, #141519);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 6px 14px -6px rgba(0, 0, 0, 0.6);
+  }
+  .tile-icon img.loaded {
+    filter: drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.85)) drop-shadow(0 0 5px rgba(255, 255, 255, 0.12));
+  }
+  .tile-icon img.loaded.dark-logo { filter: invert(1) hue-rotate(180deg) brightness(1.05); }
+  .tile-icon.letter {
+    background: linear-gradient(180deg, #2a2b31, #141519);
+    color: var(--accent);
+    text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 6px 14px -6px rgba(0, 0, 0, 0.6);
+  }
+  .tile-icon.loading { background: linear-gradient(180deg, #24252a, #16171b); }
+
+  .key-list {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 8px 14px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .key-list > span:nth-child(odd) { white-space: nowrap; }
+  .cmd-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 10px;
+    margin-top: 12px;
+    font-size: 11.5px;
+    color: var(--text-dim);
+  }
+  .cmd-list span { display: flex; align-items: center; gap: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cmd-list kbd.k { min-width: 30px; }
+  .tile.add-tile .tile-icon { background: transparent; }
 </style>
 </head>
 <body>
@@ -2884,7 +3037,7 @@
     <button class="icon-btn panel-close" id="panelClose" aria-label="Close settings">&times;</button>
   </div>
   <div class="panel-section">
-    <h3>Theme</h3>
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.9 1.2-1.8-.5-1.1.2-2.2 1.4-2.2H17a4 4 0 0 0 4-4c0-5-4-10-9-10z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/></svg>Theme</h3>
     <div class="theme-grid" id="themeGrid">
       <button class="swatch" data-swatch="ember"><div class="swatch-preview"></div>Ember</button>
       <button class="swatch" data-swatch="noir"><div class="swatch-preview"></div>Noir</button>
@@ -2937,16 +3090,16 @@
     <p class="hint">Recolors the current theme's accents, glow, and clock. Saved per theme.</p>
   </div>
   <div class="panel-section">
-    <h3>Backup</h3>
-    <div class="stack">
-      <button class="panel-btn" id="exportBtn">Export settings</button>
-      <button class="panel-btn" id="importBtn">Import settings</button>
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Backup</h3>
+    <div class="stack stack-row">
+      <button class="panel-btn" id="exportBtn">Export</button>
+      <button class="panel-btn" id="importBtn">Import</button>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
     </div>
     <p class="hint" id="backupStatus">Saves your shortcuts, theme, search engine, notes, and history to a JSON file you can move between browsers.</p>
   </div>
   <div class="panel-section">
-    <h3>History</h3>
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>History</h3>
     <p class="hint" id="historyStatus">Nothing remembered yet.</p>
     <div class="stack">
       <button class="panel-btn" id="clearHistoryBtn">Clear history</button>
@@ -2954,23 +3107,23 @@
     <p class="hint">Sites you open from this page, kept so the search bar can complete them as you type. Stored in this browser only — nothing is sent anywhere, and the page can't see the rest of your browsing.</p>
   </div>
   <div class="panel-section">
-    <h3>Keyboard</h3>
-    <p class="hint">
-      <kbd class="k">/</kbd> jump to search &nbsp;·&nbsp;
-      <kbd class="k">&#8593;</kbd><kbd class="k">&#8595;</kbd> pick a result &nbsp;·&nbsp;
-      <kbd class="k">Alt</kbd>+<kbd class="k">1</kbd>–<kbd class="k">9</kbd> open a tile &nbsp;·&nbsp;
-      <kbd class="k">Shift</kbd>+<kbd class="k">S</kbd> scratchpad &nbsp;·&nbsp;
-      <kbd class="k">Z</kbd> zen mode &nbsp;·&nbsp;
-      <kbd class="k">Esc</kbd> close
-    </p>
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg>Keyboard</h3>
+    <div class="key-list">
+      <span><kbd class="k">/</kbd></span><span>Jump to search</span>
+      <span><kbd class="k">&#8593;</kbd><kbd class="k">&#8595;</kbd></span><span>Pick a result</span>
+      <span><kbd class="k">Alt</kbd><kbd class="k">1–9</kbd></span><span>Open a tile</span>
+      <span><kbd class="k">Shift</kbd><kbd class="k">S</kbd></span><span>Scratchpad</span>
+      <span><kbd class="k">Z</kbd></span><span>Zen mode</span>
+      <span><kbd class="k">Esc</kbd></span><span>Close</span>
+    </div>
   </div>
   <div class="panel-section">
-    <h3>Search commands</h3>
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>Search commands</h3>
     <p class="hint">Start a search with a prefix to send it somewhere specific — <kbd class="k">gh react</kbd> searches GitHub.</p>
-    <p class="hint" id="commandList"></p>
+    <div class="cmd-list" id="commandList"></div>
   </div>
   <div class="panel-section">
-    <h3>Shortcuts</h3>
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>Shortcuts</h3>
     <p class="hint">Click the pencil icon to enter edit mode. In edit mode you can drag tiles to reorder, click a tile to rename or change its URL, and tap the × to remove it. Use the + tile to add a new one.</p>
   </div>
 </div>
@@ -3258,6 +3411,38 @@
     }, 150 + Math.min(leaving.length - 1, 10) * 10);
   }
 
+  // Dark logos (GitHub, X, Notion...) vanish on the dark icon well, so they
+  // are drawn inverted. Reading pixels needs the favicon service to allow
+  // cross-origin use; a separate copy is loaded for that, and if it isn't
+  // allowed the logo just keeps its outline.
+  var darkLogoCache = {};
+  function markDarkLogo(img, src) {
+    function apply(dark) { if (dark) img.classList.add('dark-logo'); }
+    if (src in darkLogoCache) { apply(darkLogoCache[src]); return; }
+    var probe = new Image();
+    probe.crossOrigin = 'anonymous';
+    probe.onload = function () {
+      try {
+        var cv = document.createElement('canvas');
+        cv.width = cv.height = 24;
+        var g = cv.getContext('2d');
+        g.drawImage(probe, 0, 0, 24, 24);
+        var d = g.getImageData(0, 0, 24, 24).data, sum = 0, n = 0, chroma = 0;
+        for (var i = 0; i < d.length; i += 4) {
+          if (d[i + 3] < 128) continue;
+          sum += (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+          chroma += (Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2])) / 255;
+          n++;
+        }
+        // Mostly dark and close to grey: a black or charcoal mark.
+        var dark = n > 20 && sum / n < 0.3 && chroma / n < 0.2;
+        darkLogoCache[src] = dark;
+        apply(dark);
+      } catch (e) { darkLogoCache[src] = false; }
+    };
+    probe.src = src;
+  }
+
   function renderShortcuts() {
     renderGroupTabs();
     grid.innerHTML = '';
@@ -3285,6 +3470,7 @@
         img.onload = function () {
           icon.classList.remove('loading');
           img.classList.add('loaded');
+          markDarkLogo(img, img.src);
         };
         img.onerror = function () {
           icon.classList.remove('loading');
@@ -7683,8 +7869,8 @@
   var commandListEl = document.getElementById('commandList');
   if (commandListEl) {
     commandListEl.innerHTML = COMMANDS.map(function (c) {
-      return '<kbd class="k">' + c.prefix + '</kbd> ' + c.label;
-    }).join(' &nbsp;·&nbsp; ');
+      return '<span><kbd class="k">' + c.prefix + '</kbd>' + c.label + '</span>';
+    }).join('');
   }
 
   var savedTheme = localStorage.getItem(STORAGE_THEME) || 'ember';

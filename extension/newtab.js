@@ -243,6 +243,38 @@
     }, 150 + Math.min(leaving.length - 1, 10) * 10);
   }
 
+  // Dark logos (GitHub, X, Notion...) vanish on the dark icon well, so they
+  // are drawn inverted. Reading pixels needs the favicon service to allow
+  // cross-origin use; a separate copy is loaded for that, and if it isn't
+  // allowed the logo just keeps its outline.
+  var darkLogoCache = {};
+  function markDarkLogo(img, src) {
+    function apply(dark) { if (dark) img.classList.add('dark-logo'); }
+    if (src in darkLogoCache) { apply(darkLogoCache[src]); return; }
+    var probe = new Image();
+    probe.crossOrigin = 'anonymous';
+    probe.onload = function () {
+      try {
+        var cv = document.createElement('canvas');
+        cv.width = cv.height = 24;
+        var g = cv.getContext('2d');
+        g.drawImage(probe, 0, 0, 24, 24);
+        var d = g.getImageData(0, 0, 24, 24).data, sum = 0, n = 0, chroma = 0;
+        for (var i = 0; i < d.length; i += 4) {
+          if (d[i + 3] < 128) continue;
+          sum += (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+          chroma += (Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2])) / 255;
+          n++;
+        }
+        // Mostly dark and close to grey: a black or charcoal mark.
+        var dark = n > 20 && sum / n < 0.3 && chroma / n < 0.2;
+        darkLogoCache[src] = dark;
+        apply(dark);
+      } catch (e) { darkLogoCache[src] = false; }
+    };
+    probe.src = src;
+  }
+
   function renderShortcuts() {
     renderGroupTabs();
     grid.innerHTML = '';
@@ -270,6 +302,7 @@
         img.onload = function () {
           icon.classList.remove('loading');
           img.classList.add('loaded');
+          markDarkLogo(img, img.src);
         };
         img.onerror = function () {
           icon.classList.remove('loading');
@@ -4668,8 +4701,8 @@
   var commandListEl = document.getElementById('commandList');
   if (commandListEl) {
     commandListEl.innerHTML = COMMANDS.map(function (c) {
-      return '<kbd class="k">' + c.prefix + '</kbd> ' + c.label;
-    }).join(' &nbsp;·&nbsp; ');
+      return '<span><kbd class="k">' + c.prefix + '</kbd>' + c.label + '</span>';
+    }).join('');
   }
 
   var savedTheme = localStorage.getItem(STORAGE_THEME) || 'ember';
