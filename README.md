@@ -37,7 +37,7 @@ Settings → History shows how many sites are remembered and clears them, with a
 
 **Zen mode.** `Z` (or the ◎ button) strips everything down to just the clock and search bar, dead-centered, with the theme's background animation still running as ambience. `Esc` or `Z` again brings everything back. The state is remembered across reloads.
 
-**Scratchpad.** A persistent notes panel that saves as you type. `Shift+S` from anywhere. Lines starting with `- [ ]` are checklist items — click the brackets to check them off (toggles to `- [x]`); clicking anywhere else on the line just places the cursor like normal text.
+**Scratchpad.** A persistent notes panel that saves as you type, on a ruled page whose lines scroll with the text, with a live saved indicator, a word count, and buttons to start a checklist item or copy the whole note. `Shift+S` from anywhere. Lines starting with `- [ ]` are checklist items — click the brackets to check them off (toggles to `- [x]`); clicking anywhere else on the line just places the cursor like normal text.
 
 **Custom accent colors.** Settings → Theme has two color pickers — Accent and Accent 2 — that recolor the active theme's glow, particles, and clock digits live. Each theme remembers its own override independently, so switching themes never clobbers another theme's custom colors, and "Reset colors" drops back to that theme's defaults. Overrides travel with the export/import backup.
 
@@ -89,6 +89,8 @@ Shortcut tiles, the search bar, and the scratchpad share a hover/focus treatment
 The hour and minute roll into place when they change, a band of light sweeps across the digits every few seconds, and the minute bar is a hairline with a lit bead riding its leading edge.
 
 **Search bar.** Frosted glass with a lit top edge, a search icon, the engine shown as a small chip sized to its name, a "Search or type a URL" hint beside the glowing cursor, and a filled accent button. Focusing it lifts it slightly with a soft accent ring.
+
+The greeting, clock and date sit on a frosted-glass card so they read cleanly over any background; it fades away as the header docks (Eclipse goes without it, since its moon frames the clock).
 
 **Time-of-day greeting** above the clock, switching between morning, afternoon, evening, and night.
 

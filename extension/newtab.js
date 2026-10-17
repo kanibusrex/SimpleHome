@@ -4230,19 +4230,45 @@
 
   scratchText.value = localStorage.getItem(STORAGE_SCRATCH) || '';
 
+  var scratchCount = document.getElementById('scratchCount');
+  function updateScratchCount() {
+    var t = scratchText.value.trim();
+    var words = t ? t.split(/\s+/).length : 0;
+    scratchCount.textContent = words + (words === 1 ? ' word' : ' words');
+  }
+  updateScratchCount();
+
   function saveScratch() {
     localStorage.setItem(STORAGE_SCRATCH, scratchText.value);
     scratchStatus.textContent = 'Saved';
-    clearTimeout(scratchTimer);
-    scratchTimer = setTimeout(function () {
-      scratchStatus.textContent = 'Saved automatically';
-    }, 1500);
+    scratchStatus.classList.remove('saving');
   }
 
   scratchText.addEventListener('input', function () {
     scratchStatus.textContent = 'Saving…';
+    scratchStatus.classList.add('saving');
+    updateScratchCount();
     clearTimeout(scratchTimer);
     scratchTimer = setTimeout(saveScratch, 400);
+  });
+
+  // Starts a checklist item on a fresh line at the cursor.
+  document.getElementById('scratchCheck').addEventListener('click', function () {
+    var v = scratchText.value, pos = scratchText.selectionStart != null ? scratchText.selectionStart : v.length;
+    var lineStart = v.lastIndexOf('\n', pos - 1) + 1;
+    var prefix = pos > lineStart && v.slice(lineStart, pos).trim() ? '\n' : '';
+    var ins = prefix + '- [ ] ';
+    scratchText.setRangeText(ins, pos, pos, 'end');
+    scratchText.focus();
+    scratchText.dispatchEvent(new Event('input'));
+  });
+
+  var scratchCopyBtn = document.getElementById('scratchCopy');
+  scratchCopyBtn.addEventListener('click', function () {
+    copyText(scratchText.value);
+    var label = scratchCopyBtn.querySelector('span');
+    label.textContent = 'Copied';
+    setTimeout(function () { label.textContent = 'Copy'; }, 1400);
   });
 
   // Checklist syntax: a line starting with "- [ ]" or "- [x]" toggles when
@@ -4268,6 +4294,7 @@
       scratchText.value = '';
       localStorage.setItem(STORAGE_SCRATCH, '');
       scratchStatus.textContent = 'Cleared';
+      updateScratchCount();
       scratchText.focus();
     }
   });
@@ -4532,6 +4559,12 @@
     return v;
   }
 
+  function offsetWithin(el, ancestor) {
+    var y = 0;
+    while (el && el !== ancestor) { y += el.offsetTop; el = el.offsetParent; }
+    return y;
+  }
+
   function measureDock() {
     var dock = document.getElementById('dock');
     if (!dock) return;
@@ -4546,14 +4579,15 @@
     var size = parseFloat(getComputedStyle(clockEl).fontSize) || 100;
     var scale = Math.max(0.32, Math.min(0.85, 40 / size)); // 40px digits once collapsed
     var pad = 10 + safeTop();
-    var d = Math.max(0, Math.round(search.offsetTop - clockEl.offsetHeight * scale - 8 - pad));
+    var clockTop = offsetWithin(clockEl, dock), searchTop = offsetWithin(search, dock);
+    var d = Math.max(0, Math.round(searchTop - clockEl.offsetHeight * scale - 8 - pad));
     // The collapse plays over the scroll that takes the dock from where it
     // sits (below the page's top padding) to pinned, d above the viewport.
     var range = d + app.offsetTop + (parseFloat(getComputedStyle(app).paddingTop) || 0);
     dock.style.setProperty('--dock-d', d + 'px');
     dock.style.setProperty('--dock-range', range + 'px');
     dock.style.setProperty('--clock-s', scale.toFixed(3));
-    dock.style.setProperty('--clock-dy', (d + pad - clockEl.offsetTop) + 'px');
+    dock.style.setProperty('--clock-dy', (d + pad - clockTop) + 'px');
 
     // A page that overflows by only a little couldn't scroll far enough to
     // finish collapsing, so give it just enough extra room. One that doesn't

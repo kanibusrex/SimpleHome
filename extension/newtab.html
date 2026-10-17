@@ -2972,6 +2972,134 @@
   .cmd-list span { display: flex; align-items: center; gap: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cmd-list kbd.k { min-width: 30px; }
   .tile.add-tile .tile-icon { background: transparent; }
+
+  /* ---- Frosted backing behind the clock ----
+     A glass card the width of the readout, so the clock and date read
+     cleanly over any background. It fades out as the header docks, where the
+     docked strip takes over. Eclipse frames the clock with its own moon. */
+  .hero {
+    position: relative;
+    isolation: isolate;
+    width: auto;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 22px clamp(18px, 4vw, 44px) 20px;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: 28px;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--text) 6%, transparent), transparent 55%),
+      color-mix(in srgb, var(--bg) 42%, transparent);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+    border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent), 0 24px 60px -30px rgba(0, 0, 0, 0.55);
+  }
+  html[data-theme="eclipse"] .hero::before { display: none; }
+  .dock.collapsible .hero::before {
+    animation: 1s linear both paused dock-card;
+    animation-delay: calc(var(--c, 0) * -1s);
+  }
+  @supports (animation-timeline: scroll()) {
+    .dock.collapsible .hero::before {
+      animation-play-state: running;
+      animation-delay: 0s;
+      animation-timeline: scroll(root);
+      animation-range: 0px var(--dock-range, 1px);
+    }
+  }
+  @keyframes dock-card { 45%, 100% { opacity: 0; } }
+  body.zen .hero { margin-bottom: 28px; }
+  @media (prefers-reduced-motion: reduce) {
+    .dock.collapsible .hero::before { animation-duration: 1s !important; }
+  }
+
+  /* ---- Scratchpad, refined ---- */
+  .scratch-tools {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .chip-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--text) 7%, transparent), color-mix(in srgb, var(--text) 2%, transparent));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .chip-btn svg { width: 14px; height: 14px; color: var(--accent); }
+  .chip-btn:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .chip-btn:active { transform: scale(0.97); }
+
+  /* A ruled page: the lines sit on the text's baseline grid and scroll with it. */
+  .scratch-panel textarea {
+    height: calc(100vh - 290px);
+    padding: 16px 18px;
+    border-radius: 16px;
+    border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+    background:
+      repeating-linear-gradient(180deg, transparent 0, transparent calc(1.7em - 1px), color-mix(in srgb, var(--text) 7%, transparent) calc(1.7em - 1px), color-mix(in srgb, var(--text) 7%, transparent) 1.7em) 0 16px / 100% 1.7em local,
+      linear-gradient(180deg, color-mix(in srgb, var(--bg) 70%, transparent), color-mix(in srgb, var(--bg) 88%, transparent));
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.25), inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
+    caret-color: var(--accent);
+  }
+  .scratch-panel textarea::placeholder { color: var(--text-dim); opacity: 0.7; }
+  .scratch-field { position: relative; }
+  .scratch-field::after { border-radius: 17px; }
+
+  .scratch-meta { margin-top: 12px; }
+  .scratch-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 10px 4px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text) 5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  }
+  .scratch-status::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 8px #34d399;
+  }
+  .scratch-status.saving::before { background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); animation: status-pulse 0.8s ease-in-out infinite alternate; }
+  @keyframes status-pulse { from { opacity: 0.35; } }
+  .scratch-count { color: var(--text-dim); font-size: 11px; margin-left: auto; margin-right: 14px; }
+  .scratch-meta .link-btn {
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    color: var(--text-dim);
+    transition: color 0.2s ease, border-color 0.2s ease;
+  }
+  .scratch-meta .link-btn:hover { color: #f87171; border-color: color-mix(in srgb, #f87171 40%, transparent); }
+  .scratch-hint {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin-top: 14px !important;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--text) 3.5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  }
+  .scratch-hint svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; color: var(--accent); }
 </style>
 </head>
 <body>
@@ -3134,14 +3262,19 @@
     <h2>Scratchpad</h2>
     <button class="icon-btn panel-close" id="scratchClose" aria-label="Close scratchpad">&times;</button>
   </div>
+  <div class="scratch-tools">
+    <button class="chip-btn" id="scratchCheck" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 12.5l3 3 5-6"/></svg>Checklist item</button>
+    <button class="chip-btn" id="scratchCopy" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/></svg><span>Copy</span></button>
+  </div>
   <div class="scratch-field">
     <textarea id="scratchText" placeholder="Anything you need to hang onto…"></textarea>
   </div>
   <div class="scratch-meta">
-    <span id="scratchStatus">Saved automatically</span>
+    <span class="scratch-status" id="scratchStatus">Saved</span>
+    <span class="scratch-count" id="scratchCount"></span>
     <button class="link-btn" id="scratchClear">Clear</button>
   </div>
-  <p class="hint scratch-hint">Lines starting with <kbd class="k">- [ ]</kbd> are checklist items — click the brackets to check them off.</p>
+  <p class="hint scratch-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.2 1.2L7 5M3.5 12l1.2 1.2L7 11"/></svg><span>Lines starting with <kbd class="k">- [ ]</kbd> are checklist items — click the brackets to check them off.</span></p>
 </div>
 
 <div class="toast" id="toast">
