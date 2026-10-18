@@ -1,0 +1,21 @@
+{
+  "name": "simplehome",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A custom browser home page in one self-contained HTML file. This manifest only drives the test harness; the page itself has no build step and no runtime dependencies.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --test --test-reporter=spec tests/unit/*.test.mjs && node extension/test-parser.mjs",
+    "test:e2e": "node --test --test-reporter=spec tests/e2e/*.test.mjs",
+    "build:newtab": "cd extension && python3 build-newtab.py",
+    "check:newtab": "node scripts/check-newtab.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}
