@@ -9080,6 +9080,220 @@ function serverSound(k) {
   };
 }
 
+function fireSound(k) {
+  const { c, E } = k;
+  const roar = k.gain(0.7);
+  k.loop(E.brown, 0.4).connect(k.filt("lowpass", 420)).connect(roar).connect(k.bus.fire);
+  const hiss = k.gain(0.12);
+  k.loop(E.pink, 1.9).connect(k.filt("bandpass", 2400, 0.8)).connect(hiss).connect(k.bus.fire);
+  const howlF = k.filt("bandpass", 300, 4), howlG = k.gain(0.5);
+  k.loop(E.pink, 2.7).connect(howlF).connect(howlG).connect(k.bus.wind);
+
+  // sap popping: a few very short, bright clicks close together
+  function pop(at, size) {
+    const pan = rand(-0.5, 0.5), n = 1 + Math.floor(Math.random() * 4);
+    let t = at;
+    for (let i = 0; i < n; i++) {
+      k.burst(t, { f: rand(900, 4500), q: rand(0.8, 3), peak: size * rand(0.4, 1), decay: rand(0.004, 0.02), pan, to: k.bus.crackle });
+      t += rand(0.005, 0.04);
+    }
+    k.emit(at, "pop", pan + 0.5, size);
+  }
+  // a log shifting: a dull thump, then a little crunch of charcoal
+  function settle(at) {
+    const o = c.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(90, at);
+    o.frequency.exponentialRampToValueAtTime(45, at + 0.25);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.6, at + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0005, at + 0.35);
+    o.connect(g).connect(k.bus.logs);
+    o.start(at); o.stop(at + 0.4);
+    let t = at + 0.05;
+    for (let i = 0; i < 8; i++) { k.burst(t, { f: rand(600, 2000), peak: rand(0.1, 0.3), decay: 0.03, pan: rand(-0.3, 0.3), to: k.bus.logs }); t += rand(0.02, 0.06); }
+    k.emit(at, "settle");
+  }
+
+  let nextPop = c.currentTime + 0.2, nextFlicker = 0, nextSettle = c.currentTime + rand(20, 40), nextHowl = 0;
+  k.tick = t => {
+    if (nextPop < t) nextPop = t + 0.05;
+    while (nextPop < t + 0.2) {
+      pop(nextPop, Math.random() < 0.15 ? rand(0.7, 1) : rand(0.15, 0.5));
+      nextPop += -Math.log(1 - Math.random()) / (1.5 + 6 * level("fire", "crackle"));
+    }
+    if (t > nextFlicker) {
+      nextFlicker = t + rand(0.08, 0.3);
+      roar.gain.setTargetAtTime(rand(0.5, 0.95), t, 0.08);
+      hiss.gain.setTargetAtTime(rand(0.06, 0.18), t, 0.1);
+    }
+    if (nextSettle < t + 0.2) { settle(Math.max(nextSettle, t + 0.05)); nextSettle += rand(25, 70); }
+    if (t > nextHowl) {
+      nextHowl = t + rand(3, 7);
+      howlF.frequency.setTargetAtTime(rand(180, 520), t, 1.5);
+      howlG.gain.setTargetAtTime(rand(0.15, 0.8), t, 2);
+    }
+  };
+}
+
+function forestSound(k) {
+  const { c, E } = k;
+  // the stream: bands of noise that each wobble quickly, like water over stones
+  const bands = [];
+  [[500, 1.2], [900, 2], [1500, 2.5], [2600, 3], [4200, 2]].forEach(([f, q], i) => {
+    const g = k.gain(0.3);
+    k.loop(E.white, i * 0.7).connect(k.filt("bandpass", f, q)).connect(g).connect(k.pan((i - 2) * 0.25)).connect(k.bus.stream);
+    bands.push(g);
+  });
+  k.loop(E.brown, 1.2).connect(k.filt("lowpass", 300)).connect(k.gain(0.5)).connect(k.bus.stream);
+
+  const leaves = k.gain(0.3);
+  k.loop(E.pink, 2.4).connect(k.filt("highpass", 1400)).connect(k.filt("lowpass", 7000)).connect(leaves).connect(k.bus.leaves);
+
+  // crickets, each with its own pitch, rhythm and place in the dark
+  const crickets = Array.from({ length: 4 }, () => ({
+    f: rand(4200, 5200), pan: rand(-0.8, 0.8), period: rand(0.45, 0.9),
+    next: c.currentTime + rand(0, 1), pulses: 2 + ((Math.random() * 3) | 0), amp: rand(0.4, 1),
+  }));
+  function chirp(cr, at) {
+    for (let i = 0; i < cr.pulses; i++) {
+      k.strike(at + i * 0.032, { f: cr.f, partials: [[1, 1]], decay: 0.02, peak: 0.12 * cr.amp, pan: cr.pan, to: k.bus.crickets });
+    }
+  }
+
+  // the owl sits off to the left, with a short echo off the trees
+  const owlIn = k.pan(-0.5);
+  owlIn.connect(k.bus.owl);
+  const echo = c.createDelay(1);
+  echo.delayTime.value = 0.23;
+  const fb = k.gain(0.3);
+  owlIn.connect(echo);
+  echo.connect(fb).connect(echo);
+  echo.connect(k.gain(0.5)).connect(k.bus.owl);
+  function hoot(at, f, dur, amp) {
+    const o = c.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(f * 0.92, at);
+    o.frequency.linearRampToValueAtTime(f, at + dur * 0.3);
+    o.frequency.linearRampToValueAtTime(f * 0.9, at + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(amp, at + 0.06);
+    g.gain.setValueAtTime(amp, at + dur - 0.12);
+    g.gain.linearRampToValueAtTime(0, at + dur);
+    o.connect(k.filt("lowpass", 900)).connect(g).connect(owlIn);
+    o.start(at); o.stop(at + dur + 0.05);
+  }
+  // a tawny owl: hoo ... hu-hu-huuuu
+  function owl(at) {
+    const f = rand(380, 430);
+    hoot(at, f, 0.45, 0.5);
+    hoot(at + 1.1, f * 1.04, 0.18, 0.35);
+    hoot(at + 1.35, f * 1.02, 0.18, 0.35);
+    hoot(at + 1.6, f * 0.98, 0.7, 0.45);
+    k.emit(at, "owl");
+  }
+
+  let nextBabble = 0, nextGust = 0, nextOwl = c.currentTime + rand(12, 30);
+  k.tick = t => {
+    if (t > nextBabble) {
+      nextBabble = t + 0.04;
+      bands.forEach(g => g.gain.setTargetAtTime(rand(0.05, 0.55), t, 0.02));
+    }
+    for (const cr of crickets) {
+      if (cr.next < t) cr.next = t + rand(0, 0.5);
+      while (cr.next < t + 0.2) {
+        chirp(cr, cr.next);
+        cr.next += cr.period * rand(0.95, 1.05);
+        if (Math.random() < 0.02) cr.next += rand(2, 6); // a pause now and then
+      }
+    }
+    if (t > nextGust) {
+      nextGust = t + rand(4, 10);
+      const g = rand(0.15, 0.9);
+      leaves.gain.setTargetAtTime(g, t, 1.5);
+      k.emit(t, "gust", g);
+    }
+    if (nextOwl < t + 0.2) {
+      if (level("forest", "owl") > 0.02) owl(Math.max(nextOwl, t + 0.05));
+      nextOwl += rand(35, 90);
+    }
+  };
+}
+
+function librarySound(k) {
+  const { c, E } = k;
+  k.loop(E.brown, 0.6).connect(k.filt("lowpass", 250)).connect(k.gain(0.6)).connect(k.bus.room);
+  k.loop(E.pink, 2.6).connect(k.filt("bandpass", 500, 0.7)).connect(k.gain(0.06)).connect(k.bus.room);
+
+  // a long hall: two damped feedback delays give distant sounds their echo
+  const hall = c.createGain();
+  const d1 = c.createDelay(1), d2 = c.createDelay(1);
+  d1.delayTime.value = 0.137; d2.delayTime.value = 0.211;
+  const damp = k.filt("lowpass", 1800);
+  hall.connect(d1); hall.connect(d2);
+  d1.connect(k.gain(0.45)).connect(damp);
+  d2.connect(k.gain(0.4)).connect(damp);
+  damp.connect(d1); damp.connect(d2);
+  damp.connect(k.gain(0.6)).connect(k.bus.hall);
+  hall.connect(k.gain(0.3)).connect(k.bus.hall);
+
+  // the pendulum clock on the left wall: tick, tock
+  function tickClock(at, tock) {
+    k.burst(at, { f: tock ? 1900 : 2400, q: 6, peak: 0.6, decay: 0.03, pan: -0.45, to: k.bus.clock });
+    k.strike(at, { f: tock ? 820 : 1040, partials: [[1, 1], [2.4, 0.4]], decay: 0.06, peak: 0.05, pan: -0.45, to: k.bus.clock });
+    k.emit(at, "tick", tock);
+  }
+  function page(at) {
+    const dur = rand(0.35, 0.6), pan = rand(0.1, 0.5);
+    const s = c.createBufferSource();
+    s.buffer = E.white; s.loop = true;
+    const bp = k.filt("bandpass", 1500, 0.9);
+    bp.frequency.setValueAtTime(900, at);
+    bp.frequency.linearRampToValueAtTime(3500, at + dur * 0.6);
+    bp.frequency.linearRampToValueAtTime(1800, at + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.25, at + dur * 0.25);
+    g.gain.linearRampToValueAtTime(0.4, at + dur * 0.6);
+    g.gain.linearRampToValueAtTime(0, at + dur);
+    s.connect(bp).connect(g).connect(k.pan(pan)).connect(k.bus.pages);
+    s.start(at, Math.random() * 3); s.stop(at + dur + 0.05);
+    k.burst(at + dur * 0.85, { f: 700, peak: 0.25, decay: 0.05, pan, to: k.bus.pages }); // the paper settling
+    k.emit(at, "page");
+  }
+  // someone walking the length of the hall on old floorboards
+  function steps(at) {
+    const n = 4 + ((Math.random() * 5) | 0), from = rand(-0.8, 0.8), to = -from;
+    for (let i = 0; i < n; i++) {
+      const t = at + i * rand(0.52, 0.6), pan = from + (to - from) * (i / n);
+      k.burst(t, { type: "lowpass", f: 420, peak: 0.5, decay: 0.07, pan, to: hall });
+      k.burst(t + 0.01, { f: 2400, q: 2, peak: 0.08, decay: 0.012, pan, to: hall });
+      if (Math.random() < 0.2) {
+        const o = c.createOscillator(); // a board creaks under the weight
+        o.type = "triangle";
+        o.frequency.setValueAtTime(rand(300, 500), t);
+        o.frequency.linearRampToValueAtTime(rand(250, 450), t + 0.25);
+        const g = c.createGain();
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.04, t + 0.08);
+        g.gain.linearRampToValueAtTime(0, t + 0.3);
+        o.connect(g).connect(hall);
+        o.start(t); o.stop(t + 0.32);
+      }
+    }
+  }
+
+  let nextTick = 0, tock = false, nextPage = c.currentTime + rand(4, 10), nextSteps = c.currentTime + rand(15, 30);
+  k.tick = t => {
+    if (nextTick < t) nextTick = t + 0.05;
+    while (nextTick < t + 0.2) { tickClock(nextTick, tock); tock = !tock; nextTick += 1; }
+    if (nextPage < t + 0.2) { page(Math.max(nextPage, t + 0.05)); nextPage += rand(7, 25); }
+    if (nextSteps < t + 0.2) { steps(Math.max(nextSteps, t + 0.05)); nextSteps += rand(30, 80); }
+  };
+}
+
 /* ================= scenes ================= */
 
 const softCache = {};
@@ -9679,6 +9893,338 @@ class ServerScene extends Scene {
   }
 }
 
+class FireScene extends Scene {
+  constructor() { super(); this.flames = []; this.sparks = []; this.boost = 0; this.nextPop = 0; this.nextSettle = 30; }
+  build() {
+    const { w, h, dpr } = this;
+    const fw = this.fw = Math.min(w * 0.72, 580), fh = this.fh = Math.min(h * 0.3, 250);
+    const cx = this.cx = w / 2, yb = this.yb = h * 0.9, top = this.top = yb - fh;
+    this.logY = yb - fh * 0.16;
+
+    const [bg, g] = layer(w, h, dpr);
+    this.bg = bg;
+    const wall = g.createLinearGradient(0, 0, 0, h);
+    wall.addColorStop(0, "#0d0806"); wall.addColorStop(1, "#1a0f09");
+    g.fillStyle = wall; g.fillRect(0, 0, w, h);
+    g.fillStyle = "#050302";
+    rr(g, cx - fw / 2, top, fw, fh + 4, fh * 0.18); g.fill();
+
+    // the stone surround, with the opening cut out so the flames show through
+    const [front, f] = layer(w, h, dpr);
+    this.front = front;
+    const sw = fw + Math.min(140, w * 0.12), sh = fh + Math.min(110, h * 0.12);
+    const sx = cx - sw / 2, sy = yb - sh;
+    const stones = ["#1e1712", "#1a140f", "#231b15", "#16110d", "#201813"];
+    for (let y = sy; y < yb; y += 26) {
+      const off = ((y - sy) / 26) % 2 ? 0 : 22;
+      for (let x = sx - off; x < sx + sw; x += 44) {
+        f.fillStyle = stones[(Math.random() * stones.length) | 0];
+        rr(f, Math.max(sx, x) + 1, y + 1, Math.min(42, sx + sw - Math.max(sx, x)) - 2, 24, 4); f.fill();
+      }
+    }
+    // stones fall into shadow away from the fire
+    const shade = f.createLinearGradient(0, sy, 0, yb);
+    shade.addColorStop(0, "rgba(0,0,0,0.55)"); shade.addColorStop(1, "rgba(0,0,0,0.05)");
+    f.fillStyle = shade; f.fillRect(sx, sy, sw, yb - sy);
+    // mantel
+    f.fillStyle = "#1b120c"; f.fillRect(sx - 30, sy - 22, sw + 60, 24);
+    f.fillStyle = "rgba(255,170,100,0.08)"; f.fillRect(sx - 30, sy - 22, sw + 60, 1);
+    // hearth slab
+    f.fillStyle = "#211a15"; f.fillRect(sx - 24, yb, sw + 48, h - yb);
+    f.globalCompositeOperation = "destination-out";
+    rr(f, cx - fw / 2, top, fw, fh + 4, fh * 0.18); f.fill();
+    f.globalCompositeOperation = "source-over";
+    vignette(g, w, h, 0.2, 0.5);
+  }
+  on(name, x, size) {
+    if (name === "pop") {
+      const n = Math.round(1 + size * 6);
+      for (let i = 0; i < n; i++) this.spark(this.cx + (x - 0.5) * this.fw * 0.6);
+    } else if (name === "settle") {
+      this.boost = 1;
+      for (let i = 0; i < 26; i++) this.spark(this.cx + rand(-0.3, 0.3) * this.fw);
+    }
+  }
+  spark(x) {
+    if (reduceMotion) return;
+    this.sparks.push({ x, y: this.logY - rand(5, 25), vx: rand(-30, 30), vy: rand(-160, -60), life: 0, max: rand(0.8, 2) });
+  }
+  ambient(dt) {
+    if (Math.random() < dt * 2.5) this.on("pop", Math.random(), rand(0.1, 0.6));
+    this.nextSettle -= dt;
+    if (this.nextSettle <= 0) { this.nextSettle = rand(30, 70); this.on("settle"); }
+  }
+  draw(g, dt, t) {
+    const { w, h, cx, fw, fh, logY } = this;
+    g.drawImage(this.bg, 0, 0, w, h);
+    this.boost *= Math.exp(-dt * 1.5);
+    const flick = reduceMotion ? 0.85 :
+      0.78 + 0.1 * Math.sin(t * 7.3) + 0.07 * Math.sin(t * 13.1 + 1) + 0.05 * Math.sin(t * 2.3 + 2) + 0.2 * this.boost;
+
+    g.globalCompositeOperation = "lighter";
+    blob(g, "255,120,40", cx, logY, Math.max(w, h) * 1.3, 0.13 * flick);
+    blob(g, "255,150,60", cx, logY, fw * 1.1, 0.35 * flick);
+    blob(g, "255,200,110", cx, logY - 10, fw * 0.5, 0.45 * flick);
+    // flames: soft blobs rising off the logs, cooling from yellow to red as they climb
+    if (!reduceMotion) {
+      const rate = 95 * (0.8 + 0.4 * flick);
+      for (let i = 0; i < rate * dt; i++) {
+        const spread = rand(-0.3, 0.3) * (0.5 + 0.5 * Math.random());
+        this.flames.push({ x: cx + spread * fw, y: logY, vx: rand(-12, 12), vy: -rand(90, 180) * (0.7 + 0.5 * flick) * (1 - Math.abs(spread)), s: rand(40, 72), life: 0, max: rand(0.5, 1.2), seed: rand(0, TAU) });
+      }
+    } else if (!this.flames.length) {
+      for (let i = 0; i < 40; i++) this.flames.push({ x: cx + rand(-0.25, 0.25) * fw, y: logY - rand(0, fh * 0.5), vx: 0, vy: 0, s: rand(26, 46), life: 0.4, max: 1e9, seed: 0 });
+    }
+    for (let i = this.flames.length - 1; i >= 0; i--) {
+      const p = this.flames[i];
+      p.life += dt;
+      if (p.life > p.max) { this.flames.splice(i, 1); continue; }
+      const k = Math.min(1, p.life / p.max);
+      p.x += (p.vx + Math.sin(t * 6 + p.seed) * 18 * k) * dt;
+      p.y += p.vy * dt;
+      const tint = k < 0.3 ? "255,214,130" : k < 0.65 ? "255,140,50" : "200,60,25";
+      blob(g, tint, p.x, p.y, p.s * (1 - k * 0.7), 0.75 * (1 - k));
+    }
+    // the logs and the embers under them
+    g.globalCompositeOperation = "source-over";
+    g.fillStyle = "#120a06";
+    g.save(); g.translate(cx, logY + 8);
+    g.rotate(-0.08); rr(g, -fw * 0.3, -9, fw * 0.6, 18, 9); g.fill();
+    g.rotate(0.18); rr(g, -fw * 0.26, -4, fw * 0.5, 16, 8); g.fill();
+    g.restore();
+    g.globalCompositeOperation = "lighter";
+    for (let i = 0; i < 9; i++) {
+      const x = cx + (i / 8 - 0.5) * fw * 0.55;
+      blob(g, "255,90,30", x, logY + 16, 34, 0.25 + 0.2 * Math.sin(t * 2 + i * 1.7) * (reduceMotion ? 0 : 1));
+    }
+    g.globalCompositeOperation = "source-over";
+    g.drawImage(this.front, 0, 0, w, h);
+    // firelight on the stones
+    g.globalCompositeOperation = "lighter";
+    blob(g, "255,140,60", cx, logY - fh * 0.2, fw * 1.6, 0.1 * flick);
+    for (let i = this.sparks.length - 1; i >= 0; i--) {
+      const s = this.sparks[i];
+      s.life += dt;
+      if (s.life > s.max) { this.sparks.splice(i, 1); continue; }
+      s.x += (s.vx + Math.sin(t * 3 + i) * 12) * dt; s.y += s.vy * dt; s.vy *= 1 - dt * 0.3;
+      const a = 1 - s.life / s.max;
+      g.fillStyle = `rgba(255,${180 + 60 * a | 0},110,${a})`;
+      g.fillRect(s.x, s.y, 1.6, 1.6);
+      blob(g, "255,150,60", s.x, s.y, 10, 0.4 * a);
+    }
+    g.globalCompositeOperation = "source-over";
+  }
+}
+
+class ForestScene extends Scene {
+  constructor() { super(); this.gust = 0.4; this.sway = 0.4; this.owlT = -99; this.nextGust = 0; this.nextOwl = 20; }
+  build() {
+    const { w, h, dpr } = this;
+    const yH = this.yH = h * 0.66;
+    const [bg, g] = layer(w, h, dpr);
+    this.bg = bg;
+    const sky = g.createLinearGradient(0, 0, 0, yH);
+    sky.addColorStop(0, "#050b12"); sky.addColorStop(1, "#11262a");
+    g.fillStyle = sky; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 160; i++) {
+      g.fillStyle = `rgba(225,235,255,${rand(0.1, 0.55)})`;
+      g.fillRect(Math.random() * w, Math.random() * yH * 0.8, 1, 1);
+    }
+    const mx = w * 0.32, my = h * 0.2, mr = Math.min(w, h) * 0.035;
+    blob(g, "190,215,220", mx, my, mr * 16, 0.22);
+    g.fillStyle = "#e6eef0"; g.beginPath(); g.arc(mx, my, mr, 0, TAU); g.fill();
+    // two ridges of pines, the farther one lighter in the haze
+    const ridge = (base, tall, color, step) => {
+      g.fillStyle = color;
+      g.beginPath(); g.moveTo(0, h);
+      for (let x = -step; x < w + step; x += step * rand(0.6, 1.2)) {
+        const th = tall * rand(0.55, 1);
+        g.lineTo(x, base); g.lineTo(x + step * 0.5, base - th); g.lineTo(x + step, base);
+      }
+      g.lineTo(w, h); g.fill();
+    };
+    ridge(yH, h * 0.14, "#0b1a1b", 26);
+    ridge(yH + h * 0.04, h * 0.2, "#071111", 34);
+    g.fillStyle = "#040908"; g.fillRect(0, yH + h * 0.04, w, h);
+    // the stream along the bottom
+    this.sy = h * 0.86;
+    const water = g.createLinearGradient(0, this.sy - 10, 0, this.sy + 30);
+    water.addColorStop(0, "#0b1a22"); water.addColorStop(1, "#060e13");
+    g.fillStyle = water;
+    g.beginPath(); g.moveTo(0, this.sy - 6); g.quadraticCurveTo(w * 0.5, this.sy - 18, w, this.sy - 4); g.lineTo(w, this.sy + 34); g.quadraticCurveTo(w * 0.5, this.sy + 22, 0, this.sy + 34); g.fill();
+    vignette(g, w, h, 0.25, 0.55);
+
+    this.trees = [
+      { x: w * 0.06, base: h * 1.02, hgt: h * 0.95, wid: Math.min(260, w * 0.3), ph: 0 },
+      { x: w * 0.2, base: h * 1.02, hgt: h * 0.7, wid: Math.min(180, w * 0.22), ph: 1.3 },
+      { x: w * 0.88, base: h * 1.02, hgt: h * 0.9, wid: Math.min(240, w * 0.28), ph: 2.1 },
+    ];
+    this.owl = { x: this.trees[0].x + this.trees[0].wid * 0.18, y: h * 0.42 };
+    this.ripples = Array.from({ length: 40 }, () => ({ x: Math.random() * w, d: Math.random(), ph: rand(0, TAU), v: rand(25, 50) }));
+    this.flies = Array.from({ length: 22 }, () => ({ x: Math.random() * w, y: rand(0.5, 0.85) * h, ph: rand(0, TAU), sp: rand(0.2, 0.5), blink: rand(0, 6) }));
+  }
+  on(name, a) {
+    if (name === "gust") this.gust = a;
+    else if (name === "owl") this.owlT = this.t;
+  }
+  ambient(dt) {
+    this.nextGust -= dt; this.nextOwl -= dt;
+    if (this.nextGust <= 0) { this.nextGust = rand(4, 10); this.on("gust", rand(0.15, 0.9)); }
+    if (this.nextOwl <= 0) { this.nextOwl = rand(40, 90); this.on("owl"); }
+  }
+  pine(g, tr, sway) {
+    // a pine drawn upward from its base, the top leaning further than the bottom
+    g.save();
+    g.translate(tr.x, tr.base);
+    g.transform(1, 0, -sway, 1, 0, 0);
+    g.fillStyle = "#020504";
+    g.fillRect(-tr.wid * 0.035, -tr.hgt, tr.wid * 0.07, tr.hgt);
+    const tiers = 9;
+    for (let i = 0; i < tiers; i++) {
+      const y0 = -tr.hgt * (0.12 + 0.88 * i / tiers), half = tr.wid * 0.5 * (1 - i / tiers) + 6;
+      g.beginPath(); g.moveTo(-half, y0); g.lineTo(0, y0 - tr.hgt * 0.16); g.lineTo(half, y0); g.closePath(); g.fill();
+    }
+    g.restore();
+  }
+  draw(g, dt, t) {
+    const { w, h, sy } = this;
+    g.drawImage(this.bg, 0, 0, w, h);
+    this.sway += (this.gust - this.sway) * Math.min(1, dt * 0.8);
+    for (const tr of this.trees) {
+      const s = reduceMotion ? 0 : (0.01 + 0.035 * this.sway) * Math.sin(t * (0.9 + this.sway) + tr.ph);
+      this.pine(g, tr, s);
+    }
+    // the owl's eyes, there for a few seconds after each call
+    const since = t - this.owlT;
+    if (since >= 0 && since < 5) {
+      const a = Math.min(1, since / 0.4) * Math.min(1, (5 - since) / 0.8) * (since > 2.6 && since < 2.75 ? 0 : 1);
+      const { x, y } = this.owl;
+      g.globalCompositeOperation = "lighter";
+      for (const dx of [-5, 5]) { blob(g, "255,190,80", x + dx, y, 16, 0.6 * a); g.fillStyle = `rgba(255,214,120,${a})`; g.fillRect(x + dx - 1.2, y - 1.2, 2.4, 2.4); }
+      g.globalCompositeOperation = "source-over";
+    }
+    // moonlight on the moving water
+    for (const r of this.ripples) {
+      if (!reduceMotion) r.x += r.v * dt;
+      if (r.x > w + 20) r.x = -20;
+      const y = sy - 4 + r.d * 30, a = 0.15 + 0.35 * Math.max(0, Math.sin(t * 3 + r.ph));
+      g.fillStyle = `rgba(200,220,235,${a * 0.6})`;
+      g.fillRect(r.x, y, 4 + r.d * 10, 1);
+    }
+    // fireflies
+    g.globalCompositeOperation = "lighter";
+    for (const f of this.flies) {
+      if (!reduceMotion) {
+        f.x += Math.sin(t * f.sp + f.ph) * 14 * dt;
+        f.y += Math.cos(t * f.sp * 1.3 + f.ph) * 9 * dt;
+      }
+      const glow = Math.max(0, Math.sin(t * 0.9 + f.blink)) ** 6;
+      if (glow < 0.02) continue;
+      blob(g, "200,255,120", f.x, f.y, 22, 0.55 * glow);
+      g.fillStyle = `rgba(230,255,170,${glow})`; g.fillRect(f.x - 1, f.y - 1, 2, 2);
+    }
+    g.globalCompositeOperation = "source-over";
+  }
+}
+
+class LibraryScene extends Scene {
+  constructor() { super(); this.lastTick = 0; this.side = 1; this.self = 0; this.nextPage = 12; }
+  build() {
+    const { w, h, dpr } = this;
+    const [bg, g] = layer(w, h, dpr);
+    this.bg = bg;
+    g.fillStyle = "#0f0b08"; g.fillRect(0, 0, w, h);
+    // shelves full of books
+    const colors = ["#3a1f1a", "#2b2f22", "#1f2a33", "#3b2d17", "#2a1c27", "#4a3a22", "#22302a", "#332018"];
+    const rowH = Math.max(64, Math.min(86, h / 9));
+    this.deskY = h * 0.86;
+    for (let y = h * 0.04; y + rowH < this.deskY; y += rowH) {
+      let x = 0;
+      while (x < w) {
+        const bw = rand(6, 16), bh = rowH * rand(0.68, 0.92);
+        if (Math.random() < 0.04) { x += rand(10, 30); continue; }
+        g.fillStyle = colors[(Math.random() * colors.length) | 0];
+        g.fillRect(x, y + rowH - 6 - bh, bw - 1, bh);
+        if (Math.random() < 0.5) { g.fillStyle = "rgba(220,180,110,0.22)"; g.fillRect(x, y + rowH - 6 - bh * 0.8, bw - 1, 1.5); g.fillRect(x, y + rowH - 6 - bh * 0.25, bw - 1, 1.5); }
+        x += bw;
+      }
+      g.fillStyle = "#1d140d"; g.fillRect(0, y + rowH - 6, w, 6);
+      g.fillStyle = "rgba(255,200,140,0.06)"; g.fillRect(0, y + rowH - 6, w, 1);
+    }
+    g.fillStyle = "rgba(10,7,5,0.55)"; g.fillRect(0, 0, w, h);
+    // the desk and a green banker's lamp
+    const lx = this.lx = w * (w < 640 ? 0.76 : 0.8), ly = this.ly = this.deskY - Math.min(90, h * 0.11);
+    g.globalCompositeOperation = "lighter";
+    blob(g, "255,200,120", lx, ly + 20, Math.max(w, h) * 0.9, 0.14);
+    g.globalCompositeOperation = "source-over";
+    const desk = g.createLinearGradient(0, this.deskY, 0, h);
+    desk.addColorStop(0, "#22160e"); desk.addColorStop(1, "#0c0806");
+    g.fillStyle = desk; g.fillRect(0, this.deskY, w, h - this.deskY);
+    g.fillStyle = "rgba(255,200,140,0.1)"; g.fillRect(0, this.deskY, w, 1);
+    g.globalCompositeOperation = "lighter";
+    blob(g, "255,214,150", lx, this.deskY + 6, 260, 0.35);
+    g.globalCompositeOperation = "source-over";
+    g.fillStyle = "#2a2116"; g.fillRect(lx - 3, ly, 6, this.deskY - ly); g.fillRect(lx - 26, this.deskY - 6, 52, 6);
+    g.fillStyle = "#16402c"; g.beginPath(); g.ellipse(lx, ly, 46, 16, 0, Math.PI, TAU); g.fill();
+    g.fillStyle = "rgba(255,226,170,0.9)"; g.beginPath(); g.ellipse(lx, ly, 42, 4, 0, 0, Math.PI); g.fill();
+    vignette(g, w, h, 0.3, 0.55);
+
+    // the pendulum clock on the left wall
+    const cw = this.cw = Math.max(54, Math.min(96, w * 0.12));
+    this.clk = { x: Math.max(cw * 0.6 + 8, w * 0.09), top: h * 0.18, bottom: this.deskY - 4 };
+    this.motes = Array.from({ length: 60 }, () => ({ x: lx + rand(-140, 140), y: ly + rand(10, this.deskY - ly + 40), vx: 0, vy: 0, ph: rand(0, TAU) }));
+  }
+  on(name, tock) {
+    if (name === "tick") { this.lastTick = this.t; this.side = tock ? 1 : -1; }
+    else if (name === "page") for (const m of this.motes) { m.vx += rand(-20, 20); m.vy += rand(-25, 5); }
+  }
+  ambient(dt) {
+    this.self -= dt;
+    if (this.self <= 0) { this.self += 1; this.on("tick", this.side < 0); }
+    this.nextPage -= dt;
+    if (this.nextPage <= 0) { this.nextPage = rand(8, 25); this.on("page"); }
+  }
+  draw(g, dt, t) {
+    const { w, h, cw, clk, lx, ly } = this;
+    g.drawImage(this.bg, 0, 0, w, h);
+    // clock case, face and swinging pendulum
+    const x = clk.x, top = clk.top, bot = clk.bottom, fr = cw * 0.38;
+    g.fillStyle = "#1c120b"; rr(g, x - cw / 2, top, cw, bot - top, 8); g.fill();
+    g.strokeStyle = "rgba(255,200,140,0.12)"; g.lineWidth = 1; g.stroke();
+    const fy = top + fr + 10;
+    g.fillStyle = "#cdbf9f"; g.beginPath(); g.arc(x, fy, fr, 0, TAU); g.fill();
+    g.globalAlpha = 0.6; g.fillStyle = "#0f0b08"; g.beginPath(); g.arc(x, fy, fr, 0, TAU); g.fill(); g.globalAlpha = 1;
+    const now = new Date(), mins = now.getMinutes() + now.getSeconds() / 60, hrs = (now.getHours() % 12) + mins / 60;
+    g.strokeStyle = "#1a120c"; g.lineCap = "round";
+    for (const [ang, len, lw] of [[hrs / 12 * TAU, fr * 0.5, 2.5], [mins / 60 * TAU, fr * 0.78, 1.6]]) {
+      g.lineWidth = lw; g.beginPath(); g.moveTo(x, fy); g.lineTo(x + Math.sin(ang) * len, fy - Math.cos(ang) * len); g.stroke();
+    }
+    const wy = fy + fr + 14, wh = bot - wy - 14;
+    g.fillStyle = "#0a0705"; rr(g, x - cw * 0.34, wy, cw * 0.68, wh, 6); g.fill();
+    const since = Math.min(1, t - this.lastTick);
+    const ang = reduceMotion ? 0 : this.side * 0.16 * Math.cos(Math.PI * since);
+    const plen = wh * 0.82, bx = x + Math.sin(ang) * plen, by = wy + 6 + Math.cos(ang) * plen;
+    g.strokeStyle = "#8a6a38"; g.lineWidth = 2; g.beginPath(); g.moveTo(x, wy + 6); g.lineTo(bx, by); g.stroke();
+    const bob = g.createRadialGradient(bx - 4, by - 4, 1, bx, by, cw * 0.17);
+    bob.addColorStop(0, "#f0d08a"); bob.addColorStop(1, "#7a5a28");
+    g.fillStyle = bob; g.beginPath(); g.arc(bx, by, cw * 0.15, 0, TAU); g.fill();
+    // dust drifting through the lamplight
+    g.globalCompositeOperation = "lighter";
+    for (const m of this.motes) {
+      if (!reduceMotion) {
+        m.vx *= 1 - dt * 0.6; m.vy *= 1 - dt * 0.6;
+        m.x += (m.vx + Math.sin(t * 0.3 + m.ph) * 4) * dt;
+        m.y += (m.vy + Math.cos(t * 0.23 + m.ph) * 3 + 1.5) * dt;
+        if (m.y > this.deskY + 40) { m.y = ly + 10; m.x = lx + rand(-140, 140); }
+      }
+      const d = Math.hypot(m.x - lx, (m.y - ly) * 0.7), a = Math.max(0, 1 - d / 180);
+      if (a < 0.03) continue;
+      g.fillStyle = `rgba(255,230,180,${0.7 * a})`; g.fillRect(m.x, m.y, 1.4, 1.4);
+    }
+    g.globalCompositeOperation = "source-over";
+  }
+}
+
 /* ================= the places ================= */
 
 const PLACES = [
@@ -9716,6 +10262,27 @@ const PLACES = [
       { id: "hum", name: "Hum", hint: "Mains hum from the power supplies", scale: 0.5, def: 0.3 },
       { id: "disks", name: "Disks", hint: "Drive heads seeking", scale: 0.5, def: 0.4 },
       { id: "air", name: "Air handling", hint: "Cold air rising from the floor vents", scale: 0.6, def: 0.35 },
+    ] },
+  { id: "fire", name: "Fireside", trim: 1.3, phrase: "by the fire", sound: fireSound, scene: new FireScene(),
+    layers: [
+      { id: "fire", name: "Flames", hint: "The roar and hiss of the fire", scale: 1, def: 0.6 },
+      { id: "crackle", name: "Crackles", hint: "Sap popping in the logs", scale: 0.8, def: 0.5 },
+      { id: "logs", name: "Logs settling", hint: "A log shifting now and then", scale: 0.8, def: 0.4 },
+      { id: "wind", name: "Chimney wind", hint: "Wind moaning down the flue", scale: 0.5, def: 0.25 },
+    ] },
+  { id: "forest", name: "Night Forest", trim: 2.8, phrase: "in the night forest", sound: forestSound, scene: new ForestScene(),
+    layers: [
+      { id: "crickets", name: "Crickets", hint: "Crickets calling across the clearing", scale: 0.6, def: 0.45 },
+      { id: "stream", name: "Stream", hint: "Water running over stones", scale: 0.8, def: 0.5 },
+      { id: "leaves", name: "Leaves", hint: "Wind moving through the pines", scale: 0.8, def: 0.35 },
+      { id: "owl", name: "Owl", hint: "A tawny owl, now and then", scale: 0.8, def: 0.3 },
+    ] },
+  { id: "library", name: "Reading Room", trim: 4, phrase: "in the reading room", sound: librarySound, scene: new LibraryScene(),
+    layers: [
+      { id: "clock", name: "Clock", hint: "A pendulum clock ticking on the wall", scale: 0.5, def: 0.4 },
+      { id: "pages", name: "Pages", hint: "Someone turning pages nearby", scale: 0.8, def: 0.45 },
+      { id: "hall", name: "Hall", hint: "Footsteps echoing down the hall", scale: 0.8, def: 0.35 },
+      { id: "room", name: "Room", hint: "The quiet air of a large room", scale: 1.2, def: 0.3 },
     ] },
 ];
 const placeById = id => PLACES.find(p => p.id === id) || PLACES[0];
