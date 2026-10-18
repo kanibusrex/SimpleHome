@@ -101,12 +101,6 @@ test('/ jumps to search from anywhere on the page', async (t) => {
 
 test(
   'the favicon service is the only third-party request, as the README promises',
-  {
-    todo:
-      'index.html also loads Google Fonts (fonts.googleapis.com, then fonts.gstatic.com), so every page ' +
-      'load sends the visitor\'s IP to Google even with the favicon line removed - contradicting "no tracking" ' +
-      'and the README\'s "makes no third-party request at all"',
-  },
   async (t) => {
     const app = await browser.open(t, { goto: false });
     const requested = [];
