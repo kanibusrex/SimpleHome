@@ -7479,8 +7479,10 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
   function computeMatches(q) {
     q = q.trim().toLowerCase();
     if (!q) return [];
-    return shortcuts
-      .map(function (s, i) { return { s: s, i: i, score: scoreMatch(s, q) }; })
+    // Only the group that is showing, like the grid and the Alt+1–9 hotkeys;
+    // the All tab still searches everything.
+    return visibleShortcuts()
+      .map(function (e) { return { s: e.s, i: e.i, score: scoreMatch(e.s, q) }; })
       .filter(function (m) { return m.score > -1; })
       .sort(function (a, b) { return a.score - b.score; })
       .slice(0, 6)
@@ -7600,8 +7602,8 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
     }
     visits.forEach(function (v) { consider(bareHost(v.host), frecency(v)); });
     // A shortcut you have never opened still deserves to complete, just below
-    // anything you actually visit.
-    shortcuts.forEach(function (sc) { consider(bareHost(hostnameFor(sc.url)), 0.5); });
+    // anything you actually visit — if its group is the one showing.
+    visibleShortcuts().forEach(function (e) { consider(bareHost(hostnameFor(e.s.url)), 0.5); });
 
     return best ? best.host : null;
   }

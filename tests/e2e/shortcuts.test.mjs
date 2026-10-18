@@ -219,11 +219,6 @@ test('groups: create one, file shortcuts in it, switch tabs, and deleting it ung
 
 test(
   'search only offers shortcuts from the group that is showing, as the README promises',
-  {
-    todo:
-      'computeMatches() ranks every shortcut regardless of the active group, so with "Work" showing, ' +
-      'typing still offers shortcuts from other groups - the README says search respects the current group',
-  },
   async (t) => {
     const app = await browser.open(t, {
       storage: {
