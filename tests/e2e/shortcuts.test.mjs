@@ -236,3 +236,44 @@ test(
     assert.deepEqual(shortcuts, []);
   },
 );
+
+test('in zen mode, where the group tabs are hidden, search covers every group', async (t) => {
+  const app = await browser.open(t, {
+    storage: {
+      'homepage.groups': ['Work'],
+      'homepage.activeGroup': 'Work',
+      'homepage.zen': '1',
+      'homepage.shortcuts': [
+        { name: 'GitHub', url: 'https://github.com', group: 'Work' },
+        { name: 'YouTube', url: 'https://youtube.com', group: '' },
+      ],
+    },
+  });
+  await app.search('tube');
+  const shortcuts = (await app.results()).filter((r) => r.kind === 'Shortcut').map((r) => r.text);
+  assert.deepEqual(shortcuts, ['YouTube']);
+});
+
+test('switching group from the keyboard keeps focus on the group tabs', async (t) => {
+  const app = await browser.open(t, {
+    storage: {
+      'homepage.groups': ['Work', 'Fun'],
+      'homepage.activeGroup': 'all',
+      'homepage.shortcuts': [
+        { name: 'GitHub', url: 'https://github.com', group: 'Work' },
+        { name: 'YouTube', url: 'https://youtube.com', group: 'Fun' },
+      ],
+    },
+  });
+  const { page } = app;
+  await page.locator('.group-tab-name', { hasText: 'Fun' }).focus();
+  await page.keyboard.press('Enter');
+  await eventually(async () => {
+    assert.deepEqual(await app.tileLabels(), ['YouTube']);
+    const focused = await page.evaluate(() => {
+      const el = document.activeElement;
+      return el.classList.contains('group-tab-name') && el.closest('.group-tab').classList.contains('active') ? el.textContent : el.tagName;
+    });
+    assert.equal(focused, 'Fun');
+  });
+});

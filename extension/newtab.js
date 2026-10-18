@@ -142,6 +142,9 @@
     var oldPill = groupTabsEl.querySelector('.group-pill');
     var from = oldPill && oldPill.offsetWidth ? [oldPill.offsetLeft, oldPill.offsetTop, oldPill.offsetWidth, oldPill.offsetHeight] : null;
     var keepScroll = groupTabsEl.scrollLeft;
+    // Rebuilding drops focus to <body>; a keyboard user who just switched,
+    // added or deleted a group lands back on the tab that is now active.
+    var hadFocus = groupTabsEl.contains(document.activeElement);
     groupTabsEl.innerHTML = '';
     groupTabsEl.classList.toggle('hidden', groups.length === 0 && !editing);
 
@@ -201,6 +204,7 @@
       setActiveGroup(name);
     });
     groupTabsEl.appendChild(addTab);
+    if (hadFocus) (groupTabsEl.querySelector('.group-tab.active .group-tab-name') || addTab).focus({ preventScroll: true });
 
     // Place the pill on the active tab, gliding there from where it was.
     var on = groupTabsEl.querySelector('.group-tab.active');
@@ -3661,12 +3665,17 @@
     return -1;
   }
 
+  // The shortcuts the launcher offers: only the group that is showing, like
+  // the grid and the Alt+1–9 hotkeys. Zen hides the group tabs and leaves
+  // the launcher as the only way in, so there it searches every group.
+  function launcherShortcuts() {
+    return zenActive ? shortcuts.map(function (s, i) { return { s: s, i: i }; }) : visibleShortcuts();
+  }
+
   function computeMatches(q) {
     q = q.trim().toLowerCase();
     if (!q) return [];
-    // Only the group that is showing, like the grid and the Alt+1–9 hotkeys;
-    // the All tab still searches everything.
-    return visibleShortcuts()
+    return launcherShortcuts()
       .map(function (e) { return { s: e.s, i: e.i, score: scoreMatch(e.s, q) }; })
       .filter(function (m) { return m.score > -1; })
       .sort(function (a, b) { return a.score - b.score; })
@@ -3788,7 +3797,7 @@
     visits.forEach(function (v) { consider(bareHost(v.host), frecency(v)); });
     // A shortcut you have never opened still deserves to complete, just below
     // anything you actually visit — if its group is the one showing.
-    visibleShortcuts().forEach(function (e) { consider(bareHost(hostnameFor(e.s.url)), 0.5); });
+    launcherShortcuts().forEach(function (e) { consider(bareHost(hostnameFor(e.s.url)), 0.5); });
 
     return best ? best.host : null;
   }
