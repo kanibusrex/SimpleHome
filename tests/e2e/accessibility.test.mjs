@@ -46,11 +46,6 @@ test('the page has a language and a title, and the main controls are named', asy
 
 test(
   'no control on the home screen is left without a name',
-  {
-    todo:
-      'WCAG 4.1.2 Name, Role, Value: the search engine picker (<select id="engineSelect">) has no <label>, ' +
-      'aria-label or title, so screen readers announce an unnamed combo box',
-  },
   async (t) => {
     const app = await browser.open(t);
     assert.deepEqual(unnamedControls(await app.page.locator('body').ariaSnapshot()), []);
@@ -70,11 +65,6 @@ test('every control in Settings and the scratchpad has a name', async (t) => {
 
 test(
   'the undo toast is announced to screen readers',
-  {
-    todo:
-      'WCAG 4.1.3 Status Messages: #toast ("Removed Gmail - Undo", "Copied 14", "History cleared") has no ' +
-      'role="status" or aria-live, so screen reader users are never told a shortcut was removed or that Undo exists',
-  },
   async (t) => {
     const app = await browser.open(t);
     const { page } = app;
@@ -87,12 +77,6 @@ test(
 
 test(
   'shortcuts can be added and edited from the keyboard',
-  {
-    todo:
-      'WCAG 2.1.1 Keyboard: in edit mode the tiles and the + tile are plain <div>s with click handlers and no ' +
-      'tabindex, and a group\'s delete "×" is a <span>, so Tab never reaches them - a keyboard user cannot ' +
-      'add or edit a shortcut, or delete a group (only the per-tile × remove button is reachable)',
-  },
   async (t) => {
     const app = await browser.open(t);
     const { page } = app;
@@ -110,11 +94,6 @@ test(
 
 test(
   'the add/edit shortcut dialog is exposed as a labelled modal dialog',
-  {
-    todo:
-      'WCAG 4.1.2 Name, Role, Value: #modalOverlay .modal has no role="dialog", aria-modal or aria-labelledby, ' +
-      'so assistive technology is not told a dialog opened or what it is for, and the page behind stays reachable',
-  },
   async (t) => {
     const app = await browser.open(t);
     const { page } = app;
@@ -129,12 +108,6 @@ test(
 
 test(
   'launcher results are exposed as a list of options tied to the search box',
-  {
-    todo:
-      'WCAG 4.1.2 Name, Role, Value: the search box has no combobox role, aria-expanded, aria-controls or ' +
-      'aria-activedescendant, and the result rows are plain <div>s, so a screen reader hears nothing as you ' +
-      'type or move through results with the arrow keys',
-  },
   async (t) => {
     const app = await browser.open(t);
     const { page } = app;

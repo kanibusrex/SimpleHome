@@ -2318,19 +2318,47 @@
     animation: group-tab-on 0.35s ease;
   }
   @keyframes group-tab-on { from { color: var(--text-dim); } }
+  .group-tab-name {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    cursor: inherit;
+  }
+  .group-tab-name::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 999px;
+  }
   .group-tab-remove {
+    position: relative;
+    z-index: 1;
     display: none;
     align-items: center;
     justify-content: center;
     width: 14px;
     height: 14px;
+    padding: 0;
+    border: 0;
     border-radius: 50%;
+    background: none;
+    color: inherit;
+    font-family: inherit;
     font-size: 12px;
     line-height: 1;
+    cursor: pointer;
   }
   body.editing .group-tab-remove { display: flex; }
   .group-tab-remove:hover { background: rgba(0, 0, 0, 0.2); }
   .group-tab-add { border-style: dashed; }
+  /* The track clips anything drawn outside a tab, so focus rings sit inside. */
+  .group-tab-name:focus-visible, .group-tab-remove:focus-visible, .group-tab-add:focus-visible { outline: none; }
+  .group-tab-name:focus-visible::after, .group-tab-add:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+  .group-tab.active .group-tab-name:focus-visible::after { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85); }
+  .group-tab-remove:focus-visible { box-shadow: 0 0 0 1.5px currentColor; }
 
   .shortcuts-grid {
     display: flex;
@@ -2482,6 +2510,16 @@
     align-items: center;
     justify-content: center;
   }
+  .tile-edit {
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+  }
+  .tile:focus-visible, .tile-edit:focus-visible, .tile-remove:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .tile-remove:focus-visible { outline-offset: 2px; }
   /* Long-press edits a tile, so the phone's own long-press menu (link
      preview, copy link) is switched off on tiles. */
   .tile { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
@@ -2797,6 +2835,7 @@
     width: 320px;
     max-width: 90vw;
   }
+  .modal:focus { outline: none; }
   .modal h3 {
     font-family: 'Sora', sans-serif;
     margin: 0 0 18px;
@@ -3402,13 +3441,13 @@
   <div class="search-wrap">
     <form class="search" id="searchForm">
       <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
-      <select id="engineSelect">
+      <select id="engineSelect" aria-label="Search engine">
         <option value="https://www.google.com/search?q=">Google</option>
         <option value="https://duckduckgo.com/?q=">DuckDuckGo</option>
         <option value="https://www.bing.com/search?q=">Bing</option>
       </select>
-      <span class="search-input-wrap">
-        <input type="text" id="searchInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Search or jump to a site">
+      <span class="search-input-wrap" id="searchCombo" role="combobox" aria-label="Search or jump to a site" aria-expanded="false" aria-owns="results">
+        <input type="text" id="searchInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Search or jump to a site" aria-autocomplete="both" aria-controls="results">
         <span class="search-cursor" aria-hidden="true"></span>
         <span class="search-hint" aria-hidden="true">Search or type a URL</span>
       </span>
@@ -3416,7 +3455,7 @@
       <kbd class="key-hint" id="keyHint">/</kbd>
       <button type="submit" aria-label="Search">&#8594;</button>
     </form>
-    <div class="results hidden" id="results"></div>
+    <div class="results hidden" id="results" role="listbox" aria-label="Suggestions"></div>
   </div>
   </div>
 
@@ -3545,13 +3584,13 @@
   <p class="hint scratch-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.2 1.2L7 5M3.5 12l1.2 1.2L7 11"/></svg><span>Lines starting with <kbd class="k">- [ ]</kbd> are checklist items — click the brackets to check them off.</span></p>
 </div>
 
-<div class="toast" id="toast">
+<div class="toast" id="toast" role="status">
   <span id="toastMsg"></span>
   <button id="toastAction">Undo</button>
 </div>
 
 <div class="modal-overlay hidden" id="modalOverlay">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
     <h3 id="modalTitle">Add shortcut</h3>
     <label for="tileName">Name</label>
     <input id="tileName" placeholder="e.g. GitHub">
@@ -3984,6 +4023,7 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
 
   var editing = false;
   var editingIndex = null;
+  var modalReturn = null;
   var dragIndex = null;
 
   var grid = document.getElementById('shortcutsGrid');
@@ -4003,6 +4043,7 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
   var modalDelete = document.getElementById('modalDelete');
   var searchForm = document.getElementById('searchForm');
   var searchInput = document.getElementById('searchInput');
+  var searchCombo = document.getElementById('searchCombo');
   var searchClear = document.getElementById('searchClear');
   var engineSelect = document.getElementById('engineSelect');
 
@@ -4109,25 +4150,31 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
     groupTabsEl.innerHTML = '';
     groupTabsEl.classList.toggle('hidden', groups.length === 0 && !editing);
 
+    // A tab holds two buttons side by side, since a button can't hold the
+    // group's delete button: its name, whose hit area spans the whole tab,
+    // and the delete button on top of that.
     function makeTab(id, label, removable) {
+      var tab = document.createElement('div');
+      tab.className = 'group-tab' + (activeGroup === id ? ' active' : '');
       var btn = document.createElement('button');
-      btn.className = 'group-tab' + (activeGroup === id ? ' active' : '');
-      var text = document.createElement('span');
-      text.textContent = label;
-      btn.appendChild(text);
+      btn.type = 'button';
+      btn.className = 'group-tab-name';
+      btn.textContent = label;
+      btn.addEventListener('click', function () { switchGroup(id); });
+      tab.appendChild(btn);
       var n = id === 'all' ? shortcuts.length : shortcuts.filter(function (s) { return (s.group || '') === id; }).length;
       var count = document.createElement('span');
       count.className = 'group-count';
       count.textContent = n;
-      btn.appendChild(count);
+      tab.appendChild(count);
 
       if (removable) {
-        var rm = document.createElement('span');
+        var rm = document.createElement('button');
+        rm.type = 'button';
         rm.className = 'group-tab-remove';
         rm.textContent = '×';
         rm.setAttribute('aria-label', 'Delete group ' + label);
-        rm.addEventListener('click', function (e) {
-          e.stopPropagation();
+        rm.addEventListener('click', function () {
           if (!confirm('Delete group "' + label + '"? Its shortcuts will become ungrouped.')) return;
           groups = groups.filter(function (g) { return g !== id; });
           shortcuts.forEach(function (s) { if (s.group === id) s.group = ''; });
@@ -4135,11 +4182,10 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
           saveGroups(groups);
           setActiveGroup(activeGroup === id ? 'all' : activeGroup);
         });
-        btn.appendChild(rm);
+        tab.appendChild(rm);
       }
 
-      btn.addEventListener('click', function () { switchGroup(id); });
-      return btn;
+      return tab;
     }
 
     groupTabsEl.appendChild(makeTab('all', 'All', false));
@@ -4252,7 +4298,38 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
     probe.src = src;
   }
 
+  // The parts of the grid that act as buttons aren't <button>s: a tile in edit
+  // mode is dragged and holds its own remove button, so its edit target is a
+  // span stretched over it, and the + tile shares the tiles' markup. This
+  // gives them a button's role, tab stop and keys.
+  function makePressable(el, label) {
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', label);
+    el.tabIndex = 0;
+    el.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      el.click();
+    });
+  }
+
+  // Rebuilding the grid takes keyboard focus with it. Returns a function that
+  // puts focus back on the same control of the tile now in the same place:
+  // the next one along when a tile was removed, the + tile after the last.
+  function gridFocusKeeper() {
+    var el = document.activeElement;
+    var tile = el && el !== grid && grid.contains(el) ? el.closest('.tile') : null;
+    if (!tile) return null;
+    var pos = tile.classList.contains('add-tile') ? -1 : Array.prototype.indexOf.call(grid.children, tile);
+    var part = el === tile ? '' : '.' + el.classList[0];
+    return function () {
+      var to = pos < 0 ? grid.lastChild : grid.children[Math.min(pos, grid.children.length - 1)];
+      ((part && to.querySelector(part)) || to).focus();
+    };
+  }
+
   function renderShortcuts() {
+    var refocus = gridFocusKeeper();
     renderGroupTabs();
     grid.innerHTML = '';
     visibleShortcuts().forEach(function (entry, viewIdx) {
@@ -4309,9 +4386,15 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
       }
 
       if (editing) {
+        var edit = document.createElement('span');
+        edit.className = 'tile-edit';
+        makePressable(edit, 'Edit ' + s.name);
+        tile.appendChild(edit);
+
         var removeBtn = document.createElement('button');
         removeBtn.className = 'tile-remove';
         removeBtn.textContent = '\u00d7';
+        removeBtn.setAttribute('aria-label', 'Remove ' + s.name);
         removeBtn.addEventListener('click', function (e) {
           e.stopPropagation();
           removeShortcut(i);
@@ -4349,6 +4432,7 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
 
     var addTile = document.createElement('div');
     addTile.className = 'tile add-tile';
+    makePressable(addTile, 'Add shortcut');
     var addIcon = document.createElement('div');
     addIcon.className = 'tile-icon';
     addIcon.textContent = '+';
@@ -4360,6 +4444,7 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
     addTile.addEventListener('click', function () { openModal(null); });
     addTile.style.setProperty('--i', grid.children.length);
     grid.appendChild(addTile);
+    if (refocus) refocus();
     measureDock();
   }
 
@@ -4389,14 +4474,35 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
       populateGroupSelect(shortcuts[index].group || '');
       modalDelete.classList.remove('hidden');
     }
+    modalReturn = document.activeElement;
     modalOverlay.classList.remove('hidden');
     tileNameInput.focus();
   }
 
+  // Focus goes back to what opened the dialog. When saving rebuilds the grid
+  // straight after, renderShortcuts carries it over to the rebuilt tile.
   function closeModal() {
     modalOverlay.classList.add('hidden');
     editingIndex = null;
+    if (modalReturn && modalReturn.isConnected) modalReturn.focus();
+    modalReturn = null;
   }
+
+  // The dialog is modal: Tab and Shift+Tab cycle through its own controls.
+  modalOverlay.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab') return;
+    var items = Array.prototype.filter.call(modalOverlay.querySelectorAll('input, select, button'), function (el) {
+      return el.offsetWidth > 0;
+    });
+    var at = items.indexOf(document.activeElement);
+    if (e.shiftKey && at <= 0) {
+      e.preventDefault();
+      items[items.length - 1].focus();
+    } else if (!e.shiftKey && at === items.length - 1) {
+      e.preventDefault();
+      items[0].focus();
+    }
+  });
 
   modalCancel.addEventListener('click', closeModal);
   modalOverlay.addEventListener('click', function (e) {
@@ -7926,13 +8032,33 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
     }
   }
 
+  // The input sits in a combobox that owns the results, the ARIA 1.1 way, so
+  // it keeps its own textbox role; the combobox says whether they're showing.
+  function setResultsOpen(open) {
+    resultsEl.classList.toggle('hidden', !open);
+    searchCombo.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (!open) searchInput.removeAttribute('aria-activedescendant');
+  }
+
+  // Focus never leaves the input; the highlighted row is its active
+  // descendant, which is what a screen reader follows through the results.
+  function markSelection() {
+    Array.prototype.forEach.call(resultsEl.children, function (c, ci) {
+      c.classList.toggle('selected', ci === selectedIdx);
+      c.setAttribute('aria-selected', ci === selectedIdx ? 'true' : 'false');
+    });
+    var sel = resultsEl.children[selectedIdx];
+    if (sel) searchInput.setAttribute('aria-activedescendant', sel.id);
+    else searchInput.removeAttribute('aria-activedescendant');
+  }
+
   function renderResults() {
     var q = searchInput.value;
     resultsEl.innerHTML = '';
     searchForm.classList.toggle('has-value', !!q);
 
     if (!q.trim()) {
-      resultsEl.classList.add('hidden');
+      setResultsOpen(false);
       matches = [];
       return;
     }
@@ -7992,7 +8118,9 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
 
     rows.forEach(function (row, i) {
       var el = document.createElement('div');
-      el.className = 'result' + (i === selectedIdx ? ' selected' : '');
+      el.className = 'result';
+      el.id = 'result-' + i;
+      el.setAttribute('role', 'option');
 
       if (row.kind === 'shortcut' || row.kind === 'visit') {
         var host = hostnameFor(row.url);
@@ -8002,6 +8130,7 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
         img.onerror = function () {
           var fb = document.createElement('div');
           fb.className = 'result-fallback';
+          fb.setAttribute('aria-hidden', 'true');
           fb.textContent = initialFor(row.label);
           img.replaceWith(fb);
         };
@@ -8009,6 +8138,7 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
       } else {
         var glyph = document.createElement('div');
         glyph.className = 'result-fallback';
+        glyph.setAttribute('aria-hidden', 'true');
         glyph.textContent = row.kind === 'open' ? '\u2197' : row.kind === 'calc' ? '=' : '\u2315';
         el.appendChild(glyph);
       }
@@ -8044,9 +8174,7 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
 
       el.addEventListener('mouseenter', function () {
         selectedIdx = i;
-        Array.prototype.forEach.call(resultsEl.children, function (c, ci) {
-          c.classList.toggle('selected', ci === i);
-        });
+        markSelection();
       });
 
       el.addEventListener('click', function () {
@@ -8067,7 +8195,8 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
       resultsEl.appendChild(el);
     });
 
-    resultsEl.classList.remove('hidden');
+    setResultsOpen(true);
+    markSelection();
   }
 
   function go(url) {
@@ -8088,9 +8217,7 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
     var count = resultsEl.children.length;
     if (!count) return;
     selectedIdx = (selectedIdx + delta + count) % count;
-    Array.prototype.forEach.call(resultsEl.children, function (c, ci) {
-      c.classList.toggle('selected', ci === selectedIdx);
-    });
+    markSelection();
     var sel = resultsEl.children[selectedIdx];
     if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
   }
@@ -8119,7 +8246,7 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
   searchInput.addEventListener('focus', renderResults);
 
   searchInput.addEventListener('blur', function () {
-    setTimeout(function () { resultsEl.classList.add('hidden'); }, 150);
+    setTimeout(function () { setResultsOpen(false); }, 150);
   });
 
   engineSelect.addEventListener('change', renderResults);
@@ -8562,7 +8689,7 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
         if (searchInput.value) {
           clearSearch();
         } else {
-          resultsEl.classList.add('hidden');
+          setResultsOpen(false);
           searchInput.blur();
         }
       } else if (zenActive) {
