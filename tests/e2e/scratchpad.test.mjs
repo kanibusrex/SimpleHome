@@ -117,12 +117,6 @@ test(
 
 test(
   'an open sheet leaves the toolbar uncovered, so its lit button can close it again',
-  {
-    todo:
-      'the Settings and Scratchpad sheets are drawn over the whole bottom-right toolbar at every viewport ' +
-      '(1280x800 to 1920x1080, and the phone tab bar) - the "open" glow on the button is never visible ' +
-      'and the Notes button cannot toggle the scratchpad shut, although the code wires it as a toggle',
-  },
   async (t) => {
     const app = await browser.open(t);
     const { page } = app;

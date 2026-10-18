@@ -1794,7 +1794,9 @@
     padding: 6px;
     border-radius: 999px;
     border: 1px solid var(--border);
-    z-index: 5;
+    /* Above the sheets and their scrim (which stop short of it), so an open
+       sheet's lit button is still there to close it. */
+    z-index: 21;
     /* A fixed bar will always float over something on a short screen, so it
        carries its own ground: it reads as a bar above the page rather than as
        buttons colliding with it. Solid first for anything without color-mix. */
@@ -2524,12 +2526,14 @@
 
   /* Panels are floating frosted sheets on a wide screen and full-height on a
      phone. They glide in on a long ease-out and leave on a short ease-in,
-     so opening feels deliberate and closing feels instant. */
+     so opening feels deliberate and closing feels instant. Either way they
+     end above the toolbar: 12px clear of the 56px pill, 20px off the bottom. */
   .panel {
+    --sheet-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
     position: fixed;
     top: 12px;
     right: 12px;
-    bottom: 12px;
+    bottom: var(--sheet-bottom);
     width: min(340px, calc(100% - 24px));
     background: var(--surface);
     background: color-mix(in srgb, var(--surface) 86%, transparent);
@@ -2557,11 +2561,14 @@
     .panel {
       top: 0;
       right: 0;
-      bottom: 0;
       width: 100%;
       border-radius: 0;
       border-width: 0 0 0 1px;
     }
+    /* Down to the 63px tab bar. Zen leaves only the pill below, so there the
+       sheet's foot is rounded off like the floating one's. */
+    body:not(.zen) .panel { --sheet-bottom: calc(63px + env(safe-area-inset-bottom, 0px)); }
+    body.zen .panel { border-width: 0 0 1px 1px; border-radius: 0 0 20px 20px; }
   }
 
   /* The title and close button ride along at the top of the sheet, so it can
@@ -3105,9 +3112,13 @@
   .chip-btn:hover { border-color: var(--accent); transform: translateY(-1px); }
   .chip-btn:active { transform: scale(0.97); }
 
-  /* A ruled page: the lines sit on the text's baseline grid and scroll with it. */
+  /* A ruled page: the lines sit on the text's baseline grid and scroll with it.
+     It fills what the sheet leaves after its header, tools, status line and
+     hint (about 320px); on a landscape phone it keeps a few lines and the
+     sheet scrolls instead. */
   .scratch-panel textarea {
-    height: calc(100vh - 290px);
+    height: calc(100vh - 320px - var(--sheet-bottom));
+    min-height: 120px;
     padding: 16px 18px;
     border-radius: 16px;
     border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
@@ -4422,6 +4433,10 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
   });
 
   settingsBtn.addEventListener('click', function () {
+    if (!settingsPanel.classList.contains('hidden')) {
+      settingsPanel.classList.add('hidden');
+      return;
+    }
     scratchPanel.classList.add('hidden');
     scratchBtn.classList.remove('active');
     settingsPanel.classList.remove('hidden');
