@@ -4408,7 +4408,8 @@
       colors: colorOverrides,
       engine: engineSelect.value,
       scratch: scratchText.value,
-      visits: visits
+      visits: visits,
+      focus: window.SimpleHomeFocus ? window.SimpleHomeFocus.exportData() : undefined
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -4490,6 +4491,8 @@
           updateHistoryStatus();
         }
 
+        if (data.focus && window.SimpleHomeFocus) window.SimpleHomeFocus.importData(data.focus);
+
         flashBackupStatus('Settings imported.');
       } catch (err) {
         flashBackupStatus("That file couldn't be read. Pick a homepage settings JSON file.");
@@ -4500,6 +4503,7 @@
   });
 
   document.addEventListener('keydown', function (e) {
+    if (document.body.classList.contains('focus-open')) return; // the focus timer has the keyboard
     var tag = (e.target.tagName || '').toLowerCase();
     var typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
 
@@ -4669,6 +4673,7 @@
 
   function gestureBlocked(target) {
     return editing ||
+      document.body.classList.contains('focus-open') ||
       !modalOverlay.classList.contains('hidden') ||
       !settingsPanel.classList.contains('hidden') ||
       !scratchPanel.classList.contains('hidden') ||
@@ -4754,4 +4759,1857 @@
   var savedTheme = localStorage.getItem(STORAGE_THEME) || 'ember';
   applyTheme(savedTheme);
   renderShortcuts();
+})();
+
+// ---- Focus: Drift, a focus timer with generated soundscapes ----
+// Lives in its own shadow root so its styles and the themes never touch.
+(() => {
+const host = document.getElementById("focusView");
+const tpl = document.getElementById("driftTemplate");
+const tab = document.getElementById("focusBtn");
+if (!host || !tpl || !host.attachShadow) { if (tab) tab.hidden = true; return; }
+const root = host.attachShadow({ mode: "open" });
+root.append(tpl.content.cloneNode(true));
+const $ = s => root.querySelector(s);
+const ui = $("#drift");
+const baseTitle = document.title;
+const TAU = Math.PI * 2;
+const rand = (a, b) => a + Math.random() * (b - a);
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem("homepage.focus." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("homepage.focus." + k, JSON.stringify(v)); } catch {} },
+};
+
+let toastT;
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("on");
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove("on"), 3200);
+}
+
+/* ================= sound building blocks ================= */
+
+function makeNoise(ctx, type) {
+  const len = ctx.sampleRate * 4;
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    let last = 0, b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+    for (let i = 0; i < len; i++) {
+      const w = Math.random() * 2 - 1;
+      if (type === "brown") { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; }
+      else if (type === "pink") {
+        // Paul Kellet's pink filter
+        b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759;
+        b2 = 0.969 * b2 + w * 0.153852; b3 = 0.8665 * b3 + w * 0.3104856;
+        b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898;
+        d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11;
+        b6 = w * 0.115926;
+      }
+      else d[i] = w * 0.5;
+    }
+    if (type !== "white") {
+      // tilt the end back to the start so the loop has no click
+      const drift = d[len - 1] - d[0];
+      for (let i = 0; i < len; i++) d[i] -= drift * (i / len);
+    }
+  }
+  return buf;
+}
+function filt(ctx, type, f, q) {
+  const b = ctx.createBiquadFilter();
+  b.type = type; b.frequency.value = f;
+  if (q) b.Q.value = q;
+  return b;
+}
+function panner(ctx, p) {
+  if (ctx.createStereoPanner) { const n = ctx.createStereoPanner(); n.pan.value = p; return n; }
+  return ctx.createGain();
+}
+
+/* A kit hands a place everything it needs to build its sound inside one gain node,
+   and lets the engine tear the whole place down again when you move on. */
+function kit(E, out, place) {
+  const c = E.ctx;
+  const k = { c, E, out, place: place.id, srcs: [], bus: {} };
+  for (const l of place.layers) {
+    const g = c.createGain();
+    g.gain.value = layerGain(place, l.id);
+    g.connect(out);
+    k.bus[l.id] = g;
+  }
+  k.loop = (buf, off = 0) => {
+    const s = c.createBufferSource();
+    s.buffer = buf; s.loop = true;
+    s.start(0, off % buf.duration);
+    k.srcs.push(s);
+    return s;
+  };
+  k.osc = (type, f) => {
+    const o = c.createOscillator();
+    o.type = type; o.frequency.value = f;
+    o.start();
+    k.srcs.push(o);
+    return o;
+  };
+  k.gain = v => { const g = c.createGain(); g.gain.value = v; return g; };
+  k.filt = (t, f, q) => filt(c, t, f, q);
+  k.pan = p => panner(c, p);
+  // a one-shot burst of noise through a filter, shaped by a fast attack and exponential decay
+  k.burst = (at, { buf = E.white, type = "bandpass", f, q = 1, peak, decay, pan = 0, to }) => {
+    const s = c.createBufferSource();
+    s.buffer = buf;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(peak, at + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0005, at + decay);
+    s.connect(filt(c, type, f, q)).connect(g).connect(panner(c, pan)).connect(to);
+    s.start(at, Math.random() * 3, decay + 0.05);
+  };
+  // a struck tone made of partials: bells, cups, clinks
+  k.strike = (at, { f, partials, decay, peak, pan = 0, to, lowpass }) => {
+    const g = c.createGain();
+    g.gain.value = peak;
+    let tail = g;
+    if (lowpass) { const lp = filt(c, "lowpass", lowpass); g.connect(lp); tail = lp; }
+    tail.connect(panner(c, pan)).connect(to);
+    partials.forEach(([ratio, amp], i) => {
+      const o = c.createOscillator();
+      o.type = "sine"; o.frequency.value = f * ratio;
+      const e = c.createGain();
+      const d = decay / (1 + i * 0.6);
+      e.gain.setValueAtTime(0, at);
+      e.gain.linearRampToValueAtTime(amp, at + 0.003);
+      e.gain.exponentialRampToValueAtTime(0.0004, at + d);
+      o.connect(e).connect(g);
+      o.start(at); o.stop(at + d + 0.05);
+    });
+  };
+  k.emit = (at, name, ...args) => {
+    setTimeout(() => view.event(place.id, name, ...args), Math.max(0, (at - c.currentTime) * 1000));
+  };
+  k.dispose = () => k.srcs.forEach(s => { try { s.stop(); } catch {} });
+  return k;
+}
+
+/* ================= places: sound ================= */
+
+function rainSound(k) {
+  const { c, E } = k;
+  const gust = k.gain(1);
+  gust.connect(k.bus.rain);
+  [-0.6, 0.6].forEach((p, i) => {
+    k.loop(E.white, i * 1.37).connect(k.filt("highpass", 480)).connect(k.filt("lowpass", i ? 6800 : 5400))
+      .connect(k.gain(0.32)).connect(k.pan(p)).connect(gust);
+  });
+  k.loop(E.brown, 0.7).connect(k.filt("lowpass", 900)).connect(k.gain(0.55)).connect(gust);
+  k.loop(E.brown, 2.3).connect(k.filt("lowpass", 210)).connect(k.gain(0.9)).connect(k.bus.room);
+
+  function drop(at) {
+    const size = Math.random(), f = rand(1500, 4100), p = rand(-0.8, 0.8);
+    const pan = k.pan(p);
+    pan.connect(k.bus.drops);
+    // a water drop "plink" is a short upward chirp
+    const o = c.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(f, at);
+    o.frequency.exponentialRampToValueAtTime(f * rand(1.25, 1.75), at + 0.035);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.06 + 0.2 * size, at + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0008, at + 0.05 + 0.08 * size);
+    o.connect(g).connect(pan);
+    o.start(at); o.stop(at + 0.2);
+    k.burst(at, { f: rand(3000, 6000), q: 1.2, peak: 0.05 + 0.25 * size, decay: 0.025, to: pan });
+    k.emit(at, "drop", (p + 0.8) / 1.6, size);
+  }
+  function thunder(at) {
+    const dur = rand(6, 11);
+    const s = c.createBufferSource();
+    s.buffer = E.brown; s.loop = true;
+    const lp = k.filt("lowpass", 260);
+    lp.frequency.setValueAtTime(260, at);
+    lp.frequency.exponentialRampToValueAtTime(70, at + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.9, at + rand(0.6, 1.8));
+    g.gain.setTargetAtTime(0, at + 2, dur / 4);
+    s.connect(lp).connect(g).connect(k.pan(rand(-0.6, 0.6))).connect(k.bus.thunder);
+    s.start(at, Math.random() * 3);
+    s.stop(at + dur + 4);
+    k.emit(at - rand(0.6, 2.4), "flash", level("rain", "thunder"));
+  }
+
+  let nextDrop = 0, nextGust = 0, nextThunder = c.currentTime + rand(15, 40);
+  k.tick = t => {
+    if (nextDrop < t) nextDrop = t + 0.05;
+    while (nextDrop < t + 0.2) {
+      drop(nextDrop);
+      nextDrop += -Math.log(1 - Math.random()) / (0.7 + 8 * Math.pow(level("rain", "drops"), 1.5));
+    }
+    if (t > nextGust) {
+      nextGust = t + rand(3, 9);
+      gust.gain.setTargetAtTime(rand(0.72, 1.22), t, 1.8);
+    }
+    // scheduled a few seconds ahead so the lightning can come first
+    if (nextThunder < t + 3) {
+      if (level("rain", "thunder") > 0.02) thunder(Math.max(nextThunder, t + 0.1));
+      nextThunder += rand(35, 115);
+    }
+  };
+}
+
+function trainSound(k) {
+  const { c, E } = k;
+  const rumble = k.gain(1.1);
+  k.loop(E.brown, 0.3).connect(k.filt("lowpass", 130)).connect(rumble).connect(k.bus.rumble);
+  k.osc("sine", 0.37).connect(k.gain(0.25)).connect(rumble.gain); // slow sway of the bogies
+  k.loop(E.pink, 1.1).connect(k.filt("bandpass", 380, 0.7)).connect(k.gain(0.35)).connect(k.bus.rumble);
+
+  const rattle = k.gain(0.2);
+  k.loop(E.white, 2.2).connect(k.filt("bandpass", 2600, 3)).connect(rattle).connect(k.bus.carriage);
+  k.loop(E.white, 0.4).connect(k.filt("bandpass", 5200, 4)).connect(k.gain(0.08)).connect(k.bus.carriage);
+
+  const windF = k.filt("bandpass", 800, 0.6);
+  k.loop(E.pink, 3.1).connect(windF).connect(k.gain(0.7)).connect(k.bus.wind);
+
+  function clack(at, amp) {
+    const pan = rand(-0.25, 0.25);
+    k.burst(at, { f: rand(1300, 1900), q: 1.6, peak: 0.9 * amp, decay: 0.07, pan, to: k.bus.rails });
+    const o = c.createOscillator();
+    o.type = "sine"; o.frequency.setValueAtTime(78, at);
+    o.frequency.exponentialRampToValueAtTime(52, at + 0.12);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.8 * amp, at + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0005, at + 0.16);
+    o.connect(g).connect(k.bus.rails);
+    o.start(at); o.stop(at + 0.2);
+    k.emit(at, "clack", amp);
+  }
+  function creak(at) {
+    const f = rand(170, 320);
+    const o = c.createOscillator();
+    o.type = "sawtooth";
+    o.frequency.setValueAtTime(f, at);
+    o.frequency.linearRampToValueAtTime(f * 1.15, at + 0.3);
+    o.frequency.linearRampToValueAtTime(f * 0.95, at + 0.65);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.07, at + 0.2);
+    g.gain.linearRampToValueAtTime(0, at + 0.7);
+    o.connect(k.filt("bandpass", f * 3, 6)).connect(g).connect(k.pan(rand(-0.7, 0.7))).connect(k.bus.carriage);
+    o.start(at); o.stop(at + 0.75);
+  }
+
+  let nextJoint = 0, nextRattle = 0, nextWind = 0, nextCreak = c.currentTime + 6;
+  k.tick = t => {
+    if (nextJoint < t) nextJoint = t + 0.1;
+    // di-dum ... di-dum: the two bogies of each coach crossing a rail joint
+    while (nextJoint < t + 0.3) {
+      const j = nextJoint;
+      [0, 0.11, 0.62, 0.73].forEach((o, i) => clack(j + o, i % 2 ? 0.75 : 1));
+      nextJoint += rand(1.48, 1.52);
+    }
+    if (t > nextRattle) { nextRattle = t + rand(0.06, 0.16); rattle.gain.setTargetAtTime(rand(0.08, 0.38), t, 0.03); }
+    if (t > nextWind) { nextWind = t + rand(4, 9); windF.frequency.setTargetAtTime(rand(500, 1400), t, 2); }
+    if (nextCreak < t + 0.2) { creak(nextCreak); nextCreak += rand(6, 18); }
+  };
+}
+
+function cafeSound(k) {
+  const { c, E } = k;
+  // babble: a handful of filtered "voices", each switching between talking and listening
+  const voices = [];
+  for (let i = 0; i < 7; i++) {
+    const g = k.gain(0);
+    k.loop(E.pink, i * 0.53).connect(k.filt("bandpass", rand(350, 1250), 1.8)).connect(k.filt("lowpass", 2400))
+      .connect(g).connect(k.pan(rand(-0.8, 0.8))).connect(k.bus.murmur);
+    voices.push({ g, next: 0, talking: Math.random() < 0.5, until: 0 });
+  }
+  k.loop(E.brown, 1.7).connect(k.filt("lowpass", 380)).connect(k.gain(0.5)).connect(k.bus.murmur);
+
+  const street = k.gain(0.2);
+  k.loop(E.pink, 2.9).connect(k.filt("lowpass", 650)).connect(street).connect(k.bus.street);
+
+  const CUP = [[1, 1], [2.71, 0.5], [5.2, 0.22]];
+  function clink(at, amp) {
+    const pan = rand(-0.7, 0.7);
+    k.strike(at, { f: rand(2000, 3400), partials: CUP, decay: rand(0.2, 0.5), peak: 0.12 * amp, pan, to: k.bus.cups });
+    k.emit(at, "clink", (pan + 0.7) / 1.4);
+  }
+  function steam(at) {
+    const dur = rand(4, 7);
+    const s = c.createBufferSource();
+    s.buffer = E.white; s.loop = true;
+    const bp = k.filt("bandpass", 3000, 0.8);
+    bp.frequency.setValueAtTime(2600, at);
+    bp.frequency.linearRampToValueAtTime(4800, at + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.45, at + 0.6);
+    g.gain.setValueAtTime(0.45, at + dur - 0.8);
+    g.gain.linearRampToValueAtTime(0, at + dur);
+    s.connect(k.filt("highpass", 1800)).connect(bp).connect(g).connect(k.pan(0.6)).connect(k.bus.machine);
+    s.start(at, Math.random() * 3); s.stop(at + dur + 0.1);
+    // milk gurgling under the hiss
+    const m = c.createBufferSource();
+    m.buffer = E.pink; m.loop = true;
+    const mg = c.createGain();
+    mg.gain.setValueAtTime(0, at);
+    mg.gain.linearRampToValueAtTime(0.5, at + 1.5);
+    mg.gain.linearRampToValueAtTime(0, at + dur);
+    m.connect(k.filt("bandpass", 260, 3)).connect(mg).connect(k.pan(0.6)).connect(k.bus.machine);
+    m.start(at, Math.random() * 3); m.stop(at + dur + 0.1);
+    k.emit(at, "steam", dur);
+  }
+  function grind(at) {
+    const dur = rand(2.5, 4);
+    const o = c.createOscillator();
+    o.type = "sawtooth"; o.frequency.value = rand(110, 140);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.05, at + 0.15);
+    g.gain.setValueAtTime(0.05, at + dur - 0.2);
+    g.gain.linearRampToValueAtTime(0, at + dur);
+    o.connect(k.filt("bandpass", 900, 1)).connect(g).connect(k.pan(0.6)).connect(k.bus.machine);
+    o.start(at); o.stop(at + dur + 0.1);
+  }
+
+  let nextClink = c.currentTime + 1, nextMachine = c.currentTime + rand(12, 25), nextCar = 0;
+  k.tick = t => {
+    for (const v of voices) {
+      if (t > v.until) { v.talking = !v.talking; v.until = t + (v.talking ? rand(2, 8) : rand(1, 5)); }
+      if (t > v.next) {
+        v.next = t + rand(0.09, 0.27);
+        v.g.gain.setTargetAtTime(v.talking ? (Math.random() < 0.2 ? 0.03 : rand(0.25, 0.8)) : 0, t, 0.035);
+      }
+    }
+    if (nextClink < t + 0.2) {
+      if (Math.random() < 0.25) for (let i = 0; i < 4; i++) clink(nextClink + i * rand(0.12, 0.18), 0.5); // a spoon stirring
+      else clink(nextClink, rand(0.6, 1));
+      nextClink += -Math.log(1 - Math.random()) / 0.45;
+    }
+    if (nextMachine < t + 0.2) {
+      if (Math.random() < 0.7) steam(nextMachine); else grind(nextMachine);
+      nextMachine += rand(25, 60);
+    }
+    if (t > nextCar) {
+      nextCar = t + rand(8, 22);
+      street.gain.setTargetAtTime(0.65, t, 1.2);
+      street.gain.setTargetAtTime(0.15, t + 2.6, 1.5);
+    }
+  };
+}
+
+function shoreSound(k) {
+  const { c, E } = k;
+  k.loop(E.brown, 0.9).connect(k.filt("lowpass", 320)).connect(k.gain(0.8)).connect(k.bus.waves);
+  const windF = k.filt("bandpass", 600, 0.5), windG = k.gain(0.5);
+  k.loop(E.pink, 2.2).connect(windF).connect(windG).connect(k.bus.wind);
+
+  function wave(at) {
+    const rise = rand(2.2, 3.4), dur = rise + rand(5, 8), size = rand(0.6, 1), pan = rand(-0.5, 0.5);
+    const s = c.createBufferSource();
+    s.buffer = E.pink; s.loop = true;
+    const lp = k.filt("lowpass", 250);
+    lp.frequency.setValueAtTime(250, at);
+    lp.frequency.exponentialRampToValueAtTime(2200 * size, at + rise);
+    lp.frequency.exponentialRampToValueAtTime(450, at + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.25, at + rise * 0.7);
+    g.gain.linearRampToValueAtTime(size, at + rise);
+    g.gain.setTargetAtTime(0, at + rise + 0.2, (dur - rise) / 3.5);
+    s.connect(lp).connect(g).connect(k.pan(pan)).connect(k.bus.waves);
+    s.start(at, Math.random() * 3); s.stop(at + dur + 3);
+    // the fizz of foam running up the sand and draining back
+    const f = c.createBufferSource();
+    f.buffer = E.white; f.loop = true;
+    const fg = c.createGain();
+    fg.gain.setValueAtTime(0, at + rise);
+    fg.gain.linearRampToValueAtTime(0.35 * size, at + rise + 0.4);
+    fg.gain.setTargetAtTime(0, at + rise + 0.6, 1.6);
+    f.connect(k.filt("highpass", 2500)).connect(fg).connect(k.pan(pan * 0.6)).connect(k.bus.foam);
+    f.start(at, Math.random() * 3); f.stop(at + dur + 3);
+    k.emit(at, "wave", rise, size);
+  }
+  const BELL = [[1, 1], [2.1, 0.5], [2.92, 0.32], [4.2, 0.14]];
+  function bell(at) {
+    k.strike(at, { f: 310, partials: BELL, decay: 6, peak: 0.25, pan: 0.4, to: k.bus.buoy, lowpass: 1800 });
+    k.emit(at, "bell");
+  }
+
+  let nextWave = c.currentTime + 0.5, nextBell = c.currentTime + rand(4, 10), nextWind = 0;
+  k.tick = t => {
+    if (nextWave < t + 0.2) { wave(Math.max(nextWave, t + 0.05)); nextWave += rand(8.5, 13); }
+    if (nextBell < t + 0.2) {
+      bell(nextBell);
+      if (Math.random() < 0.4) bell(nextBell + rand(1.2, 2));
+      nextBell += rand(8, 22);
+    }
+    if (t > nextWind) {
+      nextWind = t + rand(4, 8);
+      windF.frequency.setTargetAtTime(rand(400, 1000), t, 2);
+      windG.gain.setTargetAtTime(rand(0.3, 0.75), t, 2);
+    }
+  };
+}
+
+function serverSound(k) {
+  const { c, E } = k;
+  [[60, 0.5], [120, 0.35], [180, 0.12], [240, 0.06]].forEach(([f, a]) => k.osc("sine", f).connect(k.gain(a)).connect(k.bus.hum));
+  k.loop(E.brown, 0.2).connect(k.filt("lowpass", 180)).connect(k.gain(0.6)).connect(k.bus.hum);
+
+  [[230, 6], [410, 5], [720, 7]].forEach(([f, q], i) => {
+    k.loop(E.white, i * 0.9).connect(k.filt("bandpass", f, q)).connect(k.gain(0.9)).connect(k.pan((i - 1) * 0.6)).connect(k.bus.fans);
+  });
+  k.loop(E.pink, 1.4).connect(k.filt("lowpass", 1600)).connect(k.gain(0.35)).connect(k.bus.fans);
+  // two fans a few hertz apart beat against each other
+  [1180, 1183.5].forEach(f => k.osc("sine", f).connect(k.gain(0.012)).connect(k.bus.fans));
+
+  const air = k.gain(0.5);
+  k.loop(E.pink, 3.3).connect(k.filt("lowpass", 3000)).connect(k.filt("highpass", 250)).connect(air).connect(k.bus.air);
+
+  function seek(at) {
+    const n = 3 + Math.floor(Math.random() * 10), rack = Math.random(), pan = rack * 1.6 - 0.8;
+    let t = at;
+    for (let i = 0; i < n; i++) {
+      k.burst(t, { type: "highpass", f: 2500, peak: rand(0.25, 0.5), decay: 0.008, pan, to: k.bus.disks });
+      k.strike(t, { f: rand(850, 950), partials: [[1, 1]], decay: 0.012, peak: 0.05, pan, to: k.bus.disks });
+      t += rand(0.02, 0.07);
+    }
+    k.emit(at, "disk", rack, t - at);
+  }
+
+  let nextSeek = c.currentTime + 0.5, nextAir = 0;
+  k.tick = t => {
+    if (nextSeek < t + 0.2) { seek(nextSeek); nextSeek += rand(0.4, 3.5); }
+    if (t > nextAir) { nextAir = t + rand(5, 9); air.gain.setTargetAtTime(rand(0.35, 0.65), t, 2.5); }
+  };
+}
+
+/* ================= scenes ================= */
+
+const softCache = {};
+function soft(rgb) {
+  if (softCache[rgb]) return softCache[rgb];
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = 64;
+  const g = cv.getContext("2d");
+  const rg = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  rg.addColorStop(0, `rgba(${rgb},1)`);
+  rg.addColorStop(0.4, `rgba(${rgb},0.35)`);
+  rg.addColorStop(1, `rgba(${rgb},0)`);
+  g.fillStyle = rg;
+  g.fillRect(0, 0, 64, 64);
+  return (softCache[rgb] = cv);
+}
+function blob(g, rgb, x, y, size, alpha) {
+  g.globalAlpha = alpha;
+  g.drawImage(soft(rgb), x - size / 2, y - size / 2, size, size);
+  g.globalAlpha = 1;
+}
+function layer(w, h, dpr) {
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const g = cv.getContext("2d");
+  g.scale(dpr, dpr);
+  return [cv, g];
+}
+function rr(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+function bokeh(g, w, h, { tints, n, top = 0.3, rMin = 0.015, rMax = 0.09, aMin = 0.12, aMax = 0.42, x0 = 0, x1 = 1 }) {
+  g.globalCompositeOperation = "lighter";
+  const unit = Math.min(w, h);
+  for (let i = 0; i < n; i++) {
+    const x = w * rand(x0, x1);
+    const y = h * (top + (1 - top) * Math.pow(Math.random(), 0.65));
+    const r = unit * (rMin + Math.pow(Math.random(), 2.2) * (rMax - rMin));
+    const a = rand(aMin, aMax);
+    const tint = tints[(Math.random() * tints.length) | 0];
+    const rg = g.createRadialGradient(x, y, 0, x, y, r);
+    rg.addColorStop(0, `rgba(${tint},${a})`);
+    rg.addColorStop(0.55, `rgba(${tint},${a * 0.75})`);
+    rg.addColorStop(1, `rgba(${tint},0)`);
+    g.fillStyle = rg;
+    g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+  }
+  g.globalCompositeOperation = "source-over";
+}
+function vignette(g, w, h, centre = 0.35, edge = 0.6) {
+  const unit = Math.min(w, h);
+  const v = g.createRadialGradient(w / 2, h / 2, unit * 0.2, w / 2, h / 2, Math.max(w, h) * 0.75);
+  v.addColorStop(0, `rgba(6,10,15,${centre})`);
+  v.addColorStop(0.5, `rgba(6,10,15,${centre * 0.35})`);
+  v.addColorStop(1, `rgba(6,10,15,${edge})`);
+  g.fillStyle = v;
+  g.fillRect(0, 0, w, h);
+}
+
+class Scene {
+  constructor() { this.w = 0; this.t = 0; }
+  fit(w, h, dpr) {
+    if (this.w === w && this.h === h && this.dpr === dpr) return;
+    this.w = w; this.h = h; this.dpr = dpr;
+    [this.cv, this.g] = layer(w, h, dpr);
+    this.build();
+  }
+  render(dt, t) {
+    this.t = t;
+    this.g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.draw(this.g, dt, t);
+  }
+  build() {}
+  on() {}
+  ambient() {}
+}
+
+class RainScene extends Scene {
+  constructor() { super(); this.beads = []; this.runners = []; this.streaks = []; this.flashA = 0; }
+  build() {
+    const { w, h, dpr } = this;
+    [this.glass, this.gg] = layer(w, h, dpr);
+    const bw = this.bw = w * 1.16, bh = this.bh = h * 1.08;
+    const [city, g] = layer(bw, bh, dpr);
+    this.city = city;
+    const sky = g.createLinearGradient(0, 0, 0, bh);
+    sky.addColorStop(0, "#081018"); sky.addColorStop(0.55, "#0d1720"); sky.addColorStop(1, "#161b1f");
+    g.fillStyle = sky; g.fillRect(0, 0, bw, bh);
+    bokeh(g, bw, bh, { tints: ["242,182,109", "242,182,109", "255,212,150", "120,186,206", "228,108,86", "170,196,255"], n: Math.round(46 + bw / 30) });
+    const glow = g.createRadialGradient(bw * 0.5, bh * 1.05, 0, bw * 0.5, bh * 1.05, bh * 0.8);
+    glow.addColorStop(0, "rgba(242,170,90,0.16)"); glow.addColorStop(1, "rgba(242,170,90,0)");
+    g.fillStyle = glow; g.fillRect(0, 0, bw, bh);
+    vignette(g, bw, bh);
+    if (!this.beads.length) {
+      for (let i = 0; i < 240; i++) {
+        const big = Math.random() < 0.12;
+        this.beads.push({ x: Math.random() * w, y: Math.random() * h, r: big ? rand(2.4, 4.4) : rand(0.6, 2.3) });
+      }
+    }
+    this.dirty = true;
+  }
+  on(name, a, b) {
+    if (name === "drop") this.impact(a, b);
+    else if (name === "flash" && !reduceMotion) {
+      const v = Math.min(0.55, 0.15 + a * 0.45);
+      this.flashA = v;
+      setTimeout(() => { this.flashA = Math.max(this.flashA, v * 0.7); }, 140);
+    }
+  }
+  ambient(dt) { if (Math.random() < dt * 1.4) this.impact(Math.random(), Math.random() * 0.8); }
+  impact(nx, size) {
+    const r = 1.2 + size * 3.6;
+    const b = { x: Math.max(0, Math.min(this.w, nx * this.w + (Math.random() - 0.5) * this.w * 0.35)), y: Math.random() * this.h * 0.92, r };
+    if (r > 3.6 && Math.random() < 0.3 && !reduceMotion) this.runners.push({ ...b, pause: 0.3, trail: 0 });
+    else { this.beads.push(b); this.dirty = true; }
+    if (this.beads.length > 460) this.beads.splice(0, this.beads.length - 460);
+  }
+  drawBead(g, x, y, r) {
+    g.beginPath(); g.arc(x, y, r, 0, TAU);
+    g.fillStyle = "rgba(6,12,18,0.42)"; g.fill();
+    g.beginPath(); g.arc(x, y + r * 0.28, r * 0.7, 0, TAU);
+    g.fillStyle = "rgba(244,192,132,0.2)"; g.fill();
+    if (r > 1.1) {
+      g.beginPath(); g.arc(x - r * 0.32, y - r * 0.36, Math.max(0.5, r * 0.22), 0, TAU);
+      g.fillStyle = "rgba(255,255,255,0.55)"; g.fill();
+    }
+  }
+  draw(g, dt, t) {
+    const { w, h } = this;
+    const pan = reduceMotion ? 0.5 : 0.5 + 0.45 * Math.sin(t * 0.012);
+    g.drawImage(this.city, -(this.bw - w) * pan, -(this.bh - h) * 0.5, this.bw, this.bh);
+
+    if (!reduceMotion) {
+      const want = Math.round(170 * level("rain", "rain") * (engine.playing ? 1 : 0.6));
+      while (this.streaks.length < want) this.streaks.push({ x: Math.random() * w, y: Math.random() * h, len: rand(14, 40), v: rand(700, 1200), a: rand(0.05, 0.15) });
+      if (this.streaks.length > want) this.streaks.length = want;
+      g.lineWidth = 1;
+      for (const s of this.streaks) {
+        s.y += s.v * dt; s.x += s.v * dt * 0.06;
+        if (s.y > h) { s.y = -s.len; s.x = Math.random() * w; }
+        g.strokeStyle = `rgba(190,210,228,${s.a})`;
+        g.beginPath(); g.moveTo(s.x, s.y); g.lineTo(s.x - s.len * 0.06, s.y - s.len); g.stroke();
+      }
+    }
+    g.fillStyle = "rgba(10,17,24,0.22)";
+    g.fillRect(0, 0, w, h);
+
+    // now and then a heavy bead lets go and runs
+    if (!reduceMotion && Math.random() < dt * 0.35) {
+      const i = this.beads.findIndex(b => b.r > 2.6 && Math.random() < 0.2);
+      if (i >= 0) { const b = this.beads.splice(i, 1)[0]; this.runners.push({ ...b, pause: 0, trail: 0 }); this.dirty = true; }
+    }
+    for (let k = this.runners.length - 1; k >= 0; k--) {
+      const d = this.runners[k];
+      if (d.pause > 0) { d.pause -= dt; continue; }
+      const step = (40 + d.r * 22) * dt;
+      d.y += step; d.x += (Math.random() - 0.5) * 0.7; d.trail += step;
+      if (Math.random() < dt * 1.6) d.pause = rand(0.05, 0.5);
+      if (d.trail > 9) {
+        d.trail = 0;
+        if (Math.random() < 0.65) { this.beads.push({ x: d.x + (Math.random() - 0.5), y: d.y - d.r * 1.2, r: d.r * rand(0.2, 0.38) }); d.r -= 0.06; this.dirty = true; }
+      }
+      for (let i = this.beads.length - 1; i >= 0; i--) {
+        const b = this.beads[i];
+        if (b.y > d.y - 1 && Math.abs(b.x - d.x) < d.r + b.r && b.y - d.y < d.r + b.r) {
+          d.r = Math.min(7, Math.sqrt(d.r * d.r + b.r * b.r * 0.6));
+          this.beads.splice(i, 1);
+          this.dirty = true;
+        }
+      }
+      if (d.y > h + 10) this.runners.splice(k, 1);
+      else if (d.r < 1.8) { this.beads.push({ x: d.x, y: d.y, r: d.r }); this.runners.splice(k, 1); this.dirty = true; }
+    }
+    if (this.dirty) {
+      this.gg.clearRect(0, 0, w, h);
+      for (const b of this.beads) this.drawBead(this.gg, b.x, b.y, b.r);
+      this.dirty = false;
+    }
+    g.drawImage(this.glass, 0, 0, w, h);
+    for (const d of this.runners) {
+      g.beginPath(); g.ellipse(d.x, d.y - d.r * 0.5, d.r * 0.82, d.r * 1.3, 0, 0, TAU);
+      g.fillStyle = "rgba(6,12,18,0.4)"; g.fill();
+      this.drawBead(g, d.x, d.y, d.r);
+    }
+    if (this.flashA > 0.002) {
+      g.fillStyle = `rgba(214,226,255,${this.flashA * 0.42})`;
+      g.fillRect(0, 0, w, h);
+      this.flashA *= Math.exp(-dt * 5);
+    }
+  }
+}
+
+class TrainScene extends Scene {
+  constructor() { super(); this.jolt = 0; this.joint = 0; }
+  build() {
+    const { w, h, dpr } = this;
+    const portrait = h > w;
+    const ww = this.ww = Math.min(w * 0.88, 1180);
+    const wh = this.wh = portrait ? h * 0.5 : Math.min(h * 0.64, ww * 0.62);
+    const wx = this.wx = (w - ww) / 2;
+    const wy = this.wy = portrait ? h * 0.2 : (h - wh) / 2 - h * 0.02;
+    const r = this.r = Math.min(40, ww * 0.06);
+    this.horizon = wy + wh * 0.62;
+
+    // the carriage wall, with the window cut out of it
+    const [wall, g] = layer(w, h, dpr);
+    this.wall = wall;
+    const grad = g.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, "#1a1410"); grad.addColorStop(1, "#0c0a08");
+    g.fillStyle = grad; g.fillRect(0, 0, w, h);
+    blob(g, "242,170,100", wx + ww * 0.12, wy - 20, Math.max(w, h) * 0.7, 0.22);
+    g.fillStyle = "rgba(0,0,0,0.25)";
+    g.fillRect(0, wy + wh + 26, w, 2);
+    g.globalCompositeOperation = "destination-out";
+    rr(g, wx, wy, ww, wh, r); g.fill();
+    g.globalCompositeOperation = "source-over";
+    rr(g, wx - 5, wy - 5, ww + 10, wh + 10, r + 5);
+    g.lineWidth = 10; g.strokeStyle = "#241b14"; g.stroke();
+    rr(g, wx - 10, wy - 10, ww + 20, wh + 20, r + 10);
+    g.lineWidth = 1; g.strokeStyle = "rgba(255,206,150,0.12)"; g.stroke();
+    // the sill
+    const sill = g.createLinearGradient(0, wy + wh + 10, 0, wy + wh + 26);
+    sill.addColorStop(0, "#2a2018"); sill.addColorStop(1, "#16110d");
+    g.fillStyle = sill; g.fillRect(wx - 24, wy + wh + 10, ww + 48, 16);
+
+    this.stars = Array.from({ length: 70 }, () => ({ x: Math.random() * ww, y: Math.random() * wh * 0.5, a: rand(0.2, 0.8) }));
+    const span = ww * 3;
+    this.lights = Array.from({ length: Math.round(ww / 12) }, () => ({
+      x: Math.random() * span, y: rand(-9, 12), s: rand(0.6, 2.2), ph: rand(0, TAU),
+      c: ["255,196,120", "255,214,160", "255,240,220", "160,200,255"][(Math.random() * 4) | 0],
+    }));
+  }
+  on(name, amp) { if (name === "clack" && !reduceMotion) this.jolt += amp * 1.4; }
+  ambient(dt) {
+    this.joint -= dt;
+    if (this.joint <= 0) {
+      this.joint = 1.5;
+      [0, 0.11, 0.62, 0.73].forEach((o, i) => setTimeout(() => this.on("clack", i % 2 ? 0.75 : 1), o * 1000));
+    }
+  }
+  draw(g, dt, t) {
+    const { w, h, wx, wy, ww, wh, r, horizon } = this;
+    const v = reduceMotion ? 0.15 : 1;
+    this.jolt *= Math.exp(-dt * 9);
+    const oy = reduceMotion ? 0 : Math.sin(t * 2.1) * 1.2 + Math.sin(t * 0.7) * 1.6 + this.jolt;
+    const wrap = (x, span) => ((x % span) + span) % span;
+
+    g.fillStyle = "#0c0a08"; g.fillRect(0, 0, w, h);
+    g.save();
+    rr(g, wx, wy, ww, wh, r); g.clip();
+    const sky = g.createLinearGradient(0, wy, 0, horizon);
+    sky.addColorStop(0, "#0b1428"); sky.addColorStop(1, "#2c3a62");
+    g.fillStyle = sky; g.fillRect(wx, wy, ww, wh);
+    g.translate(0, oy);
+    for (const s of this.stars) { g.fillStyle = `rgba(230,236,255,${s.a})`; g.fillRect(wx + s.x, wy + s.y, 1.2, 1.2); }
+    const mx = wx + ww * 0.78, my = wy + wh * 0.2;
+    blob(g, "200,214,255", mx, my, 160, 0.4);
+    g.fillStyle = "#e9eefc"; g.beginPath(); g.arc(mx, my, 9, 0, TAU); g.fill();
+
+    // far hills
+    const o1 = t * 10 * v;
+    g.beginPath(); g.moveTo(wx - 10, wy + wh + 20);
+    for (let x = -10; x <= ww + 10; x += 8) g.lineTo(wx + x, horizon - 26 - 16 * Math.sin((x + o1) / 210) - 9 * Math.sin((x + o1) / 77 + 1));
+    g.lineTo(wx + ww + 10, wy + wh + 20); g.fillStyle = "#172242"; g.fill();
+
+    // town lights strung along the valley
+    const span = ww * 3;
+    for (const l of this.lights) {
+      const x = wx + wrap(l.x - t * 38 * v, span) - ww;
+      if (x < wx - 10 || x > wx + ww + 10) continue;
+      const y = horizon + l.y;
+      blob(g, l.c, x, y, l.s * 14, 0.65);
+      g.fillStyle = `rgba(${l.c},${0.7 + 0.3 * Math.sin(t * 3 + l.ph)})`;
+      g.fillRect(x - l.s / 2, y - l.s / 2, l.s, l.s);
+    }
+    g.fillStyle = "#0b1020"; g.fillRect(wx, horizon + 14, ww, wh);
+
+    // near treeline
+    const o2 = t * 160 * v;
+    g.beginPath(); g.moveTo(wx - 10, wy + wh + 20);
+    for (let x = -10; x <= ww + 10; x += 5) {
+      const X = x + o2;
+      g.lineTo(wx + x, horizon + 16 - (12 + 12 * Math.abs(Math.sin(X / 37)) + 8 * Math.sin(X / 13) + 5 * Math.sin(X / 5.3)));
+    }
+    g.lineTo(wx + ww + 10, wy + wh + 20); g.fillStyle = "#04060c"; g.fill();
+
+    // telegraph poles and the wires dipping between them
+    const S = Math.max(720, ww * 0.85), top = wy + wh * 0.16;
+    const base = -wrap(t * 560 * v, S);
+    const poles = [];
+    for (let x = base - S; x < ww + S; x += S) poles.push(wx + x);
+    g.strokeStyle = "rgba(2,3,6,0.9)"; g.lineWidth = 1.3;
+    for (let i = 0; i < poles.length - 1; i++) {
+      for (const dy of [0, 14]) {
+        g.beginPath(); g.moveTo(poles[i], top + dy);
+        g.quadraticCurveTo((poles[i] + poles[i + 1]) / 2, top + dy + 52, poles[i + 1], top + dy);
+        g.stroke();
+      }
+    }
+    g.fillStyle = "#020305";
+    for (const x of poles) { g.fillRect(x - 4, top - 30, 8, wh + 60); g.fillRect(x - 24, top - 4, 48, 5); }
+    g.restore();
+
+    // the reading lamp reflected in the glass
+    g.save(); rr(g, wx, wy, ww, wh, r); g.clip();
+    blob(g, "255,190,120", wx + ww * 0.16, wy + wh * 0.3, Math.min(ww, wh) * 0.5, 0.12);
+    g.restore();
+    g.drawImage(this.wall, 0, 0, w, h);
+  }
+}
+
+class CafeScene extends Scene {
+  constructor() { super(); this.parts = []; this.sparks = []; this.steamUntil = 0; this.nextSteam = 30; this.puff = 0; }
+  build() {
+    const { w, h, dpr } = this;
+    const [bg, g] = layer(w, h, dpr);
+    this.bg = bg;
+    const grad = g.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, "#1b120c"); grad.addColorStop(1, "#0d0907");
+    g.fillStyle = grad; g.fillRect(0, 0, w, h);
+    // the front window on the left: cool street lights
+    bokeh(g, w, h, { tints: ["120,150,190", "150,175,210", "230,120,90"], n: 26, top: 0.2, x0: 0, x1: 0.32, aMax: 0.3 });
+    // the room: warm lamps, a green plant catching light
+    bokeh(g, w, h, { tints: ["255,190,120", "255,160,95", "255,226,180", "255,190,120", "150,175,120"], n: Math.round(40 + w / 35), top: 0.25, x0: 0.25 });
+    vignette(g, w, h, 0.3, 0.55);
+    this.tableY = h * 0.86;
+    this.cup = { x: w * (w < 640 ? 0.78 : 0.82), y: this.tableY + 4 };
+    this.bulbs = [0.16, 0.38, 0.62, 0.85].map((fx, i) => ({ fx, len: 0.08 + (i % 3) * 0.04, ph: i * 1.7 }));
+  }
+  on(name, a) {
+    if (name === "clink") this.sparks.push({ x: this.w * Math.max(0.05, Math.min(0.95, a + rand(-0.15, 0.15))), y: this.h * rand(0.3, 0.8), life: 1 });
+    else if (name === "steam") { this.steamUntil = this.t + a; this.puff = 1; }
+  }
+  ambient(dt) {
+    if (Math.random() < dt * 0.3) this.on("clink", Math.random());
+    this.nextSteam -= dt;
+    if (this.nextSteam <= 0) { this.nextSteam = rand(35, 60); this.on("steam", rand(4, 6)); }
+  }
+  draw(g, dt, t) {
+    const { w, h } = this;
+    g.drawImage(this.bg, 0, 0, w, h);
+
+    // hanging bulbs
+    for (const b of this.bulbs) {
+      const ang = reduceMotion ? 0 : Math.sin(t * 0.45 + b.ph) * 0.025;
+      const L = b.len * h + 30, ax = b.fx * w;
+      const bx = ax + Math.sin(ang) * L, by = Math.cos(ang) * L;
+      g.strokeStyle = "rgba(8,6,4,0.9)"; g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(ax, 0); g.lineTo(bx, by); g.stroke();
+      g.globalCompositeOperation = "lighter";
+      blob(g, "255,170,90", bx, by + 10, 220, 0.3);
+      blob(g, "255,210,150", bx, by + 10, 50, 0.6);
+      g.globalCompositeOperation = "source-over";
+      g.fillStyle = "#1c140e"; g.fillRect(bx - 4, by - 2, 8, 6);
+      g.fillStyle = "rgba(255,214,160,0.9)";
+      g.beginPath(); g.ellipse(bx, by + 12, 8, 11, 0, 0, TAU); g.fill();
+      g.fillStyle = "#fff3dc"; g.fillRect(bx - 2, by + 8, 4, 6);
+    }
+
+    // table and cup
+    const ty = this.tableY;
+    const tg = g.createLinearGradient(0, ty, 0, h);
+    tg.addColorStop(0, "#1b120c"); tg.addColorStop(1, "#090605");
+    g.fillStyle = tg; g.fillRect(0, ty, w, h - ty);
+    g.fillStyle = "rgba(255,190,120,0.1)"; g.fillRect(0, ty, w, 1);
+    const { x: cx, y: cy } = this.cup;
+    g.fillStyle = "#1f1712"; g.beginPath(); g.ellipse(cx, cy, 50, 10, 0, 0, TAU); g.fill();
+    g.strokeStyle = "rgba(255,210,170,0.12)"; g.lineWidth = 1; g.stroke();
+    g.fillStyle = "#2a201a";
+    g.beginPath(); g.moveTo(cx - 31, cy - 46);
+    g.bezierCurveTo(cx - 30, cy - 12, cx - 24, cy - 4, cx, cy - 4);
+    g.bezierCurveTo(cx + 24, cy - 4, cx + 30, cy - 12, cx + 31, cy - 46);
+    g.closePath(); g.fill();
+    g.strokeStyle = "#2a201a"; g.lineWidth = 6;
+    g.beginPath(); g.arc(cx + 34, cy - 30, 10, -1.2, 1.2); g.stroke();
+    g.fillStyle = "#0e0806"; g.beginPath(); g.ellipse(cx, cy - 46, 31, 7, 0, 0, TAU); g.fill();
+    g.strokeStyle = "rgba(255,214,170,0.22)"; g.lineWidth = 1.2; g.stroke();
+
+    // steam from the cup, and from the machine behind the counter when it runs
+    if (!reduceMotion) {
+      if (Math.random() < dt * 7) this.parts.push({ x: cx + rand(-10, 10), y: cy - 50, vx: rand(-3, 3), vy: rand(-28, -18), r: 6, gr: 7, life: 0, max: rand(3, 4.5), a: 0.07, seed: rand(0, TAU) });
+      if (t < this.steamUntil) {
+        for (let i = 0; i < 3; i++) this.parts.push({ x: w + 10, y: h * rand(0.4, 0.5), vx: rand(-140, -60), vy: rand(-55, -15), r: 14, gr: 26, life: 0, max: rand(2, 3.4), a: 0.06, seed: rand(0, TAU) });
+      }
+      if (this.parts.length > 420) this.parts.splice(0, this.parts.length - 420);
+      for (let i = this.parts.length - 1; i >= 0; i--) {
+        const p = this.parts[i];
+        p.life += dt;
+        if (p.life > p.max) { this.parts.splice(i, 1); continue; }
+        p.x += (p.vx + Math.sin(t * 1.3 + p.seed) * 8) * dt; p.y += p.vy * dt; p.r += p.gr * dt;
+        const f = p.life / p.max;
+        blob(g, "255,240,225", p.x, p.y, p.r * 2, p.a * Math.sin(Math.PI * f));
+      }
+    }
+    // a glint wherever a cup was set down
+    for (let i = this.sparks.length - 1; i >= 0; i--) {
+      const s = this.sparks[i];
+      s.life -= dt * 1.6;
+      if (s.life <= 0) { this.sparks.splice(i, 1); continue; }
+      const L = 7 * s.life;
+      g.strokeStyle = `rgba(255,236,200,${0.7 * s.life})`; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(s.x - L, s.y); g.lineTo(s.x + L, s.y); g.moveTo(s.x, s.y - L); g.lineTo(s.x, s.y + L); g.stroke();
+      blob(g, "255,220,170", s.x, s.y, 18, 0.5 * s.life);
+    }
+  }
+}
+
+class ShoreScene extends Scene {
+  constructor() { super(); this.waves = []; this.blink = 0; this.nextWave = 0.5; this.nextBell = 6; }
+  build() {
+    const { w, h, dpr } = this;
+    const portrait = h > w;
+    const yH = this.yH = h * (portrait ? 0.46 : 0.5);
+    const yB = this.yB = h * (portrait ? 0.78 : 0.8);
+    this.moon = { x: w * 0.7, y: h * (portrait ? 0.16 : 0.2), r: Math.min(w, h) * 0.04 };
+    const [bg, g] = layer(w, h, dpr);
+    this.bg = bg;
+    const sky = g.createLinearGradient(0, 0, 0, yH);
+    sky.addColorStop(0, "#050a14"); sky.addColorStop(1, "#13203a");
+    g.fillStyle = sky; g.fillRect(0, 0, w, yH);
+    for (let i = 0; i < 220; i++) {
+      g.fillStyle = `rgba(230,236,255,${rand(0.1, 0.6)})`;
+      const s = Math.random() < 0.1 ? 1.6 : 1;
+      g.fillRect(Math.random() * w, Math.pow(Math.random(), 1.3) * yH * 0.95, s, s);
+    }
+    const { x: mx, y: my, r: mr } = this.moon;
+    blob(g, "190,205,240", mx, my, mr * 14, 0.25);
+    blob(g, "220,228,250", mx, my, mr * 4, 0.35);
+    g.fillStyle = "#eef2fc"; g.beginPath(); g.arc(mx, my, mr, 0, TAU); g.fill();
+    g.fillStyle = "rgba(170,180,205,0.35)";
+    g.beginPath(); g.arc(mx - mr * 0.3, my - mr * 0.15, mr * 0.28, 0, TAU); g.arc(mx + mr * 0.35, my + mr * 0.3, mr * 0.18, 0, TAU); g.fill();
+    const sea = g.createLinearGradient(0, yH, 0, yB);
+    sea.addColorStop(0, "#0e1a2e"); sea.addColorStop(1, "#08111d");
+    g.fillStyle = sea; g.fillRect(0, yH, w, yB - yH);
+    const sand = g.createLinearGradient(0, yB, 0, h);
+    sand.addColorStop(0, "#1c1a17"); sand.addColorStop(1, "#0b0a09");
+    g.fillStyle = sand; g.fillRect(0, yB, w, h - yB);
+    g.fillStyle = "rgba(170,190,230,0.25)"; g.fillRect(0, yH, w, 1);
+    vignette(g, w, h, 0.25, 0.5);
+    this.glints = Array.from({ length: 170 }, () => {
+      let o = 0; for (let i = 0; i < 3; i++) o += Math.random() - 0.5;
+      return { d: Math.random(), off: o, ph: rand(0, TAU), sp: rand(1.5, 4) };
+    });
+    this.twinkle = Array.from({ length: 24 }, () => ({ x: Math.random() * w, y: Math.random() * yH * 0.8, ph: rand(0, TAU), sp: rand(0.5, 2) }));
+  }
+  on(name, rise, size) {
+    if (name === "wave") this.waves.push({ born: this.t, rise, size, ph: rand(0, TAU) });
+    else if (name === "bell") this.blink = 1;
+  }
+  ambient(dt) {
+    this.nextWave -= dt; this.nextBell -= dt;
+    if (this.nextWave <= 0) { this.nextWave = rand(9, 13); this.on("wave", rand(2.2, 3.4), rand(0.6, 1)); }
+    if (this.nextBell <= 0) { this.nextBell = rand(10, 22); this.on("bell"); }
+  }
+  edge(g, w, y0, amp, ph, t) {
+    for (let x = 0; x <= w + 12; x += 12) g.lineTo(x, y0 + Math.sin(x / 70 + ph) * amp + Math.sin(x / 23 + t * 0.5) * amp * 0.4);
+  }
+  draw(g, dt, t) {
+    const { w, h, yH, yB } = this;
+    g.drawImage(this.bg, 0, 0, w, h);
+    for (const s of this.twinkle) {
+      g.fillStyle = `rgba(240,244,255,${0.25 + 0.5 * Math.max(0, Math.sin(t * s.sp + s.ph))})`;
+      g.fillRect(s.x, s.y, 1.4, 1.4);
+    }
+    // swells rolling in
+    for (let i = 0; i < 6; i++) {
+      const p = reduceMotion ? i / 6 : (t * 0.045 + i / 6) % 1;
+      const y = yH + (yB - yH) * Math.pow(p, 1.8);
+      g.strokeStyle = `rgba(150,180,220,${0.07 * Math.sin(Math.PI * p)})`;
+      g.lineWidth = 1 + p * 2;
+      g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
+    }
+    // moon path on the water
+    const mx = this.moon.x;
+    for (const gl of this.glints) {
+      const d = Math.pow(gl.d, 1.5);
+      const y = yH + 2 + (yB - yH - 4) * d;
+      const x = mx + gl.off * (6 + d * 110) + Math.sin(t * 0.3 + gl.ph) * 3;
+      const a = reduceMotion ? 0.3 : Math.pow(Math.max(0, Math.sin(t * gl.sp + gl.ph)), 4) * 0.85;
+      if (a < 0.02) continue;
+      const len = 2 + d * 14;
+      g.fillStyle = `rgba(232,238,255,${a})`;
+      g.fillRect(x - len / 2, y, len, 1 + d);
+    }
+    // waves: a crest runs in, breaks, foam slides up the sand and drains away
+    for (let i = this.waves.length - 1; i >= 0; i--) {
+      const wv = this.waves[i], p = t - wv.born;
+      if (p < wv.rise) {
+        const f = p / wv.rise, y = yH + (yB - yH) * (0.25 + 0.75 * f * f);
+        g.strokeStyle = `rgba(205,218,238,${0.05 + 0.25 * f * wv.size})`;
+        g.lineWidth = 1 + 3 * f;
+        g.beginPath(); g.moveTo(0, y);
+        for (let x = 0; x <= w + 12; x += 12) g.lineTo(x, y + Math.sin(x / 90 + wv.ph) * 3 * f);
+        g.stroke();
+      } else {
+        const q = p - wv.rise;
+        if (q > 7) { this.waves.splice(i, 1); continue; }
+        const up = q < 1.6 ? 1 - Math.pow(1 - q / 1.6, 3) : Math.max(0, 1 - (q - 1.6) / 3.6);
+        const reach = yB + (h - yB) * 0.6 * wv.size * up;
+        if (q > 1.6) {
+          g.fillStyle = `rgba(150,170,200,${0.08 * Math.max(0, 1 - (q - 1.6) / 5)})`;
+          g.fillRect(0, yB, w, (h - yB) * 0.6 * wv.size);
+        }
+        g.beginPath(); g.moveTo(0, yB - 2);
+        this.edge(g, w, reach, 5 * up, wv.ph, t);
+        g.lineTo(w, yB - 2); g.closePath();
+        g.fillStyle = `rgba(190,205,225,${0.03 + 0.1 * up})`; g.fill();
+        g.beginPath(); g.moveTo(0, reach);
+        this.edge(g, w, reach, 5 * up, wv.ph, t);
+        g.strokeStyle = `rgba(232,240,250,${0.4 * up})`; g.lineWidth = 1.5; g.stroke();
+      }
+    }
+    // the buoy, its red lamp lit with the bell
+    const bx = w * 0.27, by = yH + 4;
+    g.fillStyle = "#04070c"; g.fillRect(bx - 2, by - 6, 4, 7);
+    this.blink *= Math.exp(-dt * 1.4);
+    blob(g, "255,90,70", bx, by - 7, 26, 0.15 + 0.7 * this.blink);
+    g.fillStyle = `rgba(255,120,100,${0.4 + 0.6 * this.blink})`; g.fillRect(bx - 1, by - 8, 2, 2);
+  }
+}
+
+class ServerScene extends Scene {
+  build() {
+    const { w, h, dpr } = this;
+    const [bg, g] = layer(w, h, dpr);
+    this.bg = bg;
+    g.fillStyle = "#04080b"; g.fillRect(0, 0, w, h);
+    const rw = Math.max(110, Math.min(170, w / 6)), gap = 10;
+    const count = Math.ceil(w / (rw + gap)) + 1;
+    const x0 = (w - (count * (rw + gap) - gap)) / 2;
+    const top = h * 0.05, bottom = h * 0.95, u = 9;
+    this.racks = count;
+    this.leds = [];
+    const COLORS = { green: "90,230,150", amber: "245,180,80", blue: "90,170,255" };
+    for (let r = 0; r < count; r++) {
+      const x = x0 + r * (rw + gap);
+      g.fillStyle = "#0a1015"; g.fillRect(x, top, rw, bottom - top);
+      g.fillStyle = "#111a21"; g.fillRect(x, top, 6, bottom - top); g.fillRect(x + rw - 6, top, 6, bottom - top);
+      let y = top + 8;
+      while (y < bottom - 8 - u) {
+        const units = Math.random() < 0.15 ? 0 : [1, 1, 1, 2, 2, 4][(Math.random() * 6) | 0];
+        if (!units) { y += u; continue; }
+        const dh = units * u - 1;
+        if (y + dh > bottom - 8) break;
+        g.fillStyle = Math.random() < 0.5 ? "#0e161c" : "#121b22"; g.fillRect(x + 8, y, rw - 16, dh);
+        g.fillStyle = "rgba(0,0,0,0.5)";
+        for (let vx = x + 30; vx < x + rw - 30; vx += 4) g.fillRect(vx, y + 2, 2, dh - 4);
+        g.fillStyle = "rgba(160,200,230,0.05)"; g.fillRect(x + 8, y, rw - 16, 1);
+        const n = 1 + ((Math.random() * 4) | 0);
+        for (let i = 0; i < n; i++) {
+          const kind = Math.random() < 0.7 ? "green" : Math.random() < 0.6 ? "blue" : "amber";
+          this.leds.push({
+            x: x + 12 + i * 4, y: y + dh / 2 - 1, rack: r, c: COLORS[kind],
+            mode: kind === "green" ? (Math.random() < 0.5 ? "steady" : "blink") : kind === "blue" ? "steady" : "slow",
+            ph: rand(0, TAU), sp: rand(1, 4), act: 0,
+          });
+        }
+        y += units * u;
+      }
+    }
+    const floor = g.createLinearGradient(0, h * 0.7, 0, h);
+    floor.addColorStop(0, "rgba(80,180,220,0)"); floor.addColorStop(1, "rgba(80,180,220,0.08)");
+    g.fillStyle = floor; g.fillRect(0, h * 0.7, w, h * 0.3);
+    this.shade = layer(w, h, dpr)[0];
+    const sg = this.shade.getContext("2d");
+    sg.scale(dpr, dpr);
+    const v = sg.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
+    v.addColorStop(0, "rgba(3,6,9,0.62)"); v.addColorStop(0.45, "rgba(3,6,9,0.4)"); v.addColorStop(1, "rgba(3,6,9,0.7)");
+    sg.fillStyle = v; sg.fillRect(0, 0, w, h);
+  }
+  on(name, rack, dur) {
+    if (name !== "disk") return;
+    const r = Math.min(this.racks - 1, Math.floor(rack * this.racks));
+    for (const l of this.leds) if (l.rack === r && l.c[0] === "9" && Math.random() < 0.5) l.act = Math.max(l.act, 0.25 + dur);
+  }
+  ambient(dt) { if (Math.random() < dt * 0.8) this.on("disk", Math.random(), 0.3); }
+  draw(g, dt, t) {
+    const { w, h } = this;
+    g.drawImage(this.bg, 0, 0, w, h);
+    for (const l of this.leds) {
+      let b;
+      if (l.act > 0) { l.act -= dt; b = Math.random() < 0.5 ? 1 : 0.15; }
+      else if (l.mode === "steady") b = 0.85;
+      else if (l.mode === "blink") b = Math.sin(t * l.sp + l.ph) > 0.6 ? 1 : 0.2;
+      else b = 0.3 + 0.5 * (0.5 + 0.5 * Math.sin(t * 0.8 + l.ph));
+      if (reduceMotion) b = 0.7;
+      g.fillStyle = `rgba(${l.c},${0.12 * b})`; g.fillRect(l.x - 2, l.y - 2, 6, 6);
+      g.fillStyle = `rgba(${l.c},${b})`; g.fillRect(l.x, l.y, 2, 2);
+    }
+    g.drawImage(this.shade, 0, 0, w, h);
+  }
+}
+
+/* ================= the places ================= */
+
+const PLACES = [
+  { id: "rain", name: "Rain on Glass", phrase: "of rain on glass", sound: rainSound, scene: new RainScene(),
+    layers: [
+      { id: "rain", name: "Rain", hint: "Steady fall on the street outside", scale: 0.9, def: 0.7 },
+      { id: "drops", name: "Drops on glass", hint: "Single drops striking the window", scale: 0.55, def: 0.5 },
+      { id: "thunder", name: "Distant thunder", hint: "A low roll every minute or two", scale: 2.4, def: 0.3 },
+      { id: "room", name: "Room", hint: "The warm low hum of indoors", scale: 1.3, def: 0.25 },
+    ] },
+  { id: "train", name: "Night Train", trim: 0.55, phrase: "on the night train", sound: trainSound, scene: new TrainScene(),
+    layers: [
+      { id: "rumble", name: "Rumble", hint: "The coach rolling over the track bed", scale: 1, def: 0.7 },
+      { id: "rails", name: "Rail joints", hint: "Wheels clacking over each joint", scale: 0.5, def: 0.5 },
+      { id: "carriage", name: "Carriage", hint: "Rattles and creaks of an old coach", scale: 1, def: 0.4 },
+      { id: "wind", name: "Wind", hint: "Air rushing past the window", scale: 0.5, def: 0.35 },
+    ] },
+  { id: "cafe", name: "Corner Café", trim: 1.1, phrase: "in the corner café", sound: cafeSound, scene: new CafeScene(),
+    layers: [
+      { id: "murmur", name: "Murmur", hint: "Conversations you can't quite make out", scale: 1.2, def: 0.6 },
+      { id: "cups", name: "Cups", hint: "Spoons, saucers and cups set down", scale: 1, def: 0.45 },
+      { id: "machine", name: "Espresso machine", hint: "The steam wand and grinder now and then", scale: 0.6, def: 0.35 },
+      { id: "street", name: "Street", hint: "Traffic passing outside", scale: 1, def: 0.3 },
+    ] },
+  { id: "shore", name: "Night Shore", trim: 0.55, phrase: "by the shore", sound: shoreSound, scene: new ShoreScene(),
+    layers: [
+      { id: "waves", name: "Waves", hint: "Swells breaking on the sand", scale: 1.2, def: 0.75 },
+      { id: "foam", name: "Foam", hint: "The hiss of the wash draining back", scale: 0.8, def: 0.45 },
+      { id: "wind", name: "Wind", hint: "Sea air coming off the water", scale: 0.8, def: 0.3 },
+      { id: "buoy", name: "Bell buoy", hint: "A bell rocking somewhere offshore", scale: 0.8, def: 0.25 },
+    ] },
+  { id: "server", name: "Server Room", trim: 2, phrase: "in the server room", sound: serverSound, scene: new ServerScene(),
+    layers: [
+      { id: "fans", name: "Fans", hint: "Hundreds of fans pushing air", scale: 0.7, def: 0.6 },
+      { id: "hum", name: "Hum", hint: "Mains hum from the power supplies", scale: 0.5, def: 0.3 },
+      { id: "disks", name: "Disks", hint: "Drive heads seeking", scale: 0.5, def: 0.4 },
+      { id: "air", name: "Air handling", hint: "Cold air rising from the floor vents", scale: 0.6, def: 0.35 },
+    ] },
+];
+const placeById = id => PLACES.find(p => p.id === id) || PLACES[0];
+
+const levels = LS.get("levels2", null) || {};
+{
+  const old = LS.get("levels", null); // levels saved before there was more than one place
+  if (old && !levels.rain) levels.rain = old;
+  for (const p of PLACES) {
+    levels[p.id] = levels[p.id] || {};
+    for (const l of p.layers) if (typeof levels[p.id][l.id] !== "number") levels[p.id][l.id] = l.def;
+  }
+}
+function level(pid, lid) { return levels[pid][lid]; }
+function layerGain(place, lid) {
+  const v = level(place.id, lid);
+  return v * v * place.layers.find(l => l.id === lid).scale;
+}
+let current = placeById(LS.get("place", "rain"));
+let master = LS.get("master", 0.8);
+let bellOn = LS.get("bell", true);
+
+/* ================= engine ================= */
+
+const engine = {
+  ctx: null, playing: false, inst: null, ducked: false,
+  init() {
+    if (this.ctx) return true;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) { toast("This browser can't play generated sound."); return false; }
+    const ctx = this.ctx = new AC();
+    this.out = ctx.createGain(); this.out.gain.value = 0;
+    this.comp = ctx.createDynamicsCompressor();
+    this.comp.threshold.value = -20; this.comp.ratio.value = 4;
+    // makeup gain: generated noise sits quiet, phone speakers need it louder
+    this.makeup = ctx.createGain(); this.makeup.gain.value = 2.6;
+    this.out.connect(this.comp).connect(this.makeup).connect(ctx.destination);
+    this.white = makeNoise(ctx, "white");
+    this.pink = makeNoise(ctx, "pink");
+    this.brown = makeNoise(ctx, "brown");
+    setInterval(() => { if (this.playing && this.inst) this.inst.tick?.(this.ctx.currentTime); }, 50);
+    return true;
+  },
+  load(place) {
+    const c = this.ctx, old = this.inst;
+    if (old && old.place === place.id) return;
+    if (old) {
+      old.out.gain.setTargetAtTime(0, c.currentTime, 0.6);
+      setTimeout(() => { old.dispose(); old.out.disconnect(); }, 4000);
+    }
+    const out = c.createGain();
+    out.gain.value = 0;
+    out.connect(this.out);
+    const k = kit(this, out, place);
+    place.sound(k);
+    out.gain.setTargetAtTime(place.trim || 1, c.currentTime, old ? 0.8 : 0.01);
+    this.inst = k;
+  },
+  unlock() {
+    // iOS mutes Web Audio under the silent switch unless the page is in "playback" mode.
+    // Newer Safari has an API for it; older ones switch when an <audio> element is playing.
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch {}
+    if (!this.keep) {
+      const n = 4000, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+      const str = (o, s) => [...s].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+      str(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); str(8, "WAVEfmt ");
+      v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+      v.setUint32(24, 8000, true); v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+      str(36, "data"); v.setUint32(40, n * 2, true);
+      this.keep = new Audio(URL.createObjectURL(new Blob([buf], { type: "audio/wav" })));
+      this.keep.loop = true;
+      this.keep.setAttribute("playsinline", "");
+    }
+    this.keep.play().catch(() => {});
+  },
+  start(fade = 3) {
+    if (!this.init()) return;
+    this.unlock();
+    this.load(current);
+    clearTimeout(this.suspendT);
+    this.ctx.resume().then(() => {
+      if (this.ctx.state !== "running") toast("Sound is blocked here. Tap Listen to try again.");
+    }, () => toast("Sound is blocked here. Tap Listen to try again."));
+    this.playing = true;
+    const g = this.out.gain, t = this.ctx.currentTime;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.setTargetAtTime(this.level(), t, fade / 3);
+    syncSoundBtn();
+  },
+  stop(fade = 1) {
+    if (!this.ctx) return;
+    this.playing = false;
+    const g = this.out.gain, t = this.ctx.currentTime;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.setTargetAtTime(0, t, fade / 3);
+    clearTimeout(this.suspendT);
+    this.suspendT = setTimeout(() => { if (!this.playing) { this.ctx.suspend(); this.keep?.pause(); } }, fade * 1000 + 6000);
+    syncSoundBtn();
+  },
+  setLevel(pid, lid, v) {
+    levels[pid][lid] = v;
+    if (this.inst && this.inst.place === pid) this.inst.bus[lid].gain.setTargetAtTime(layerGain(placeById(pid), lid), this.ctx.currentTime, 0.1);
+  },
+  level() { return master * master * (this.ducked ? 0.35 : 1); },
+  setMaster(v) {
+    master = v;
+    if (this.ctx && this.playing) this.out.gain.setTargetAtTime(this.level(), this.ctx.currentTime, 0.1);
+  },
+  // breaks play the same place, quieter
+  duck(on) {
+    this.ducked = on;
+    if (this.ctx && this.playing) this.out.gain.setTargetAtTime(this.level(), this.ctx.currentTime, 1.5);
+  },
+  // "end": one low bell when a focus round ends; "break": a lighter two-note chime when a break ends
+  bell(kind = "end") {
+    if (!this.ctx) return;
+    const c = this.ctx;
+    const g = c.createGain();
+    g.gain.value = (kind === "break" ? 0.12 : 0.18) * master;
+    g.connect(this.comp);
+    const notes = kind === "break" ? [[659.25, 0], [880, 0.32]] : [[392, 0]];
+    for (const [base, delay] of notes) {
+      const t = c.currentTime + 0.05 + delay;
+      [[1, 1], [2.0015, 0.5], [2.758, 0.32], [4, 0.12]].forEach(([r, a]) => {
+        const f = base * r, d = Math.max(0.6, (kind === "break" ? 3 : 5.5) - f / 800);
+        const o = c.createOscillator();
+        o.type = "sine"; o.frequency.value = f;
+        const e = c.createGain();
+        e.gain.setValueAtTime(0, t);
+        e.gain.linearRampToValueAtTime(a, t + 0.01);
+        e.gain.exponentialRampToValueAtTime(0.0005, t + d);
+        o.connect(e).connect(g);
+        o.start(t); o.stop(t + d + 0.1);
+      });
+    }
+  },
+};
+
+/* ================= view: draws the current place, crossfading on a change ================= */
+
+const view = {
+  init() {
+    this.c = $("#scene");
+    this.g = this.c.getContext("2d");
+    this.resize();
+    addEventListener("resize", () => this.resize());
+  },
+  kick() {
+    if (this.running) return;
+    this.running = true;
+    this.resize();
+    this.last = performance.now();
+    requestAnimationFrame(t => this.frame(t));
+  },
+  resize() {
+    this.dpr = Math.min(2, devicePixelRatio || 1);
+    this.w = innerWidth; this.h = innerHeight;
+    this.c.width = Math.round(this.w * this.dpr); this.c.height = Math.round(this.h * this.dpr);
+  },
+  show(place) {
+    const s = place.scene;
+    if (this.cur === s) return;
+    if (open) s.fit(this.w, this.h, this.dpr);
+    this.prev = this.cur;
+    this.cur = s;
+    this.mix = this.prev && open && !reduceMotion ? 0 : 1;
+  },
+  event(pid, name, ...args) {
+    const s = placeById(pid).scene;
+    if (s.w && (s === this.cur || s === this.prev)) s.on(name, ...args);
+  },
+  frame(now) {
+    if (!open) { this.running = false; return; }
+    const dt = Math.min(0.05, (now - this.last) / 1000), t = now / 1000;
+    this.last = now;
+    const cur = this.cur, prev = this.mix < 1 ? this.prev : null;
+    const live = engine.playing && engine.inst?.place === current.id;
+    if (!live) cur.ambient(dt, t);
+    cur.fit(this.w, this.h, this.dpr);
+    cur.render(dt, t);
+    const g = this.g;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    if (prev) {
+      prev.fit(this.w, this.h, this.dpr);
+      prev.render(dt, t);
+      g.drawImage(prev.cv, 0, 0);
+      this.mix = Math.min(1, this.mix + dt / 1.4);
+      g.globalAlpha = this.mix * this.mix * (3 - 2 * this.mix);
+    }
+    g.drawImage(cur.cv, 0, 0);
+    g.globalAlpha = 1;
+    requestAnimationFrame(t2 => this.frame(t2));
+  },
+};
+
+/* ================= sessions store ================= */
+
+const pad = n => String(n).padStart(2, "0");
+const dayKey = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+const monthKey = ms => dayKey(ms).slice(0, 7);
+
+const store = {
+  months: new Map(),
+  init() { for (const s of LS.get("sessions", [])) this.put(s); },
+  put(s) {
+    const k = monthKey(s.start);
+    const arr = (this.months.get(k) || []).slice();
+    const i = arr.findIndex(x => x.id === s.id);
+    if (i < 0) arr.push({ ...s }); else arr[i] = { ...s };
+    this.months.set(k, arr);
+    return k;
+  },
+  all() { return [...this.months.values()].flat().sort((a, b) => a.start - b.start); },
+  save(s) {
+    this.put(s);
+    LS.set("sessions", this.all());
+    renderLog();
+  },
+};
+store.init();
+
+/* ================= timer ================= */
+
+let planned = LS.get("planned", 25);
+const BREAKS = { short: 5, long: 15, rounds: 4 };
+let breaksOn = LS.get("breaks", false);
+const T = {
+  state: "idle", mode: "focus", remaining: planned * 60, endAt: 0, focused: 0, lastTick: 0,
+  session: null, extending: false, round: LS.get("round", 1), breakLen: 0, longBreak: false,
+};
+const RING = 2 * Math.PI * 96;
+const ring = $("#ring");
+ring.style.strokeDasharray = RING;
+
+function fmt(sec) {
+  sec = Math.max(0, Math.ceil(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, s = sec % 60;
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+function setState(s) {
+  T.state = s;
+  ui.dataset.state = s;
+  ui.dataset.mode = T.mode;
+  render();
+}
+
+function render() {
+  const s = T.state, resting = T.mode === "break";
+  const total = resting ? T.breakLen * 60 : T.extending ? 60 : planned * 60;
+  const roundLabel = breaksOn ? `Round ${T.round} of ${BREAKS.rounds} · ` : "";
+  $("#time").textContent = fmt(s === "idle" ? planned * 60 : T.remaining);
+  const frac = s === "idle" ? 1 : Math.max(0, T.remaining) / total;
+  ring.style.strokeDashoffset = String(RING * (1 - frac));
+  ring.style.opacity = s === "idle" ? 0.35 : 1;
+  $("#dial").classList.toggle("breathe", s === "running" && !resting);
+  $("#dial").classList.toggle("resting", resting);
+  $("#sub").textContent =
+    s === "idle" ? (breaksOn ? `Round ${T.round} of ${BREAKS.rounds} · ${planned} min` : `${planned} minute session`) :
+    s === "paused" ? "Paused" :
+    s === "running" && resting ? (T.longBreak ? `Long break · ${BREAKS.rounds} rounds done` : `Short break · round ${T.round} next`) :
+    s === "running" ? (T.extending ? "One more minute" : roundLabel + `${planned} minute session`) : "";
+  $("#setup").hidden = s !== "idle";
+  $("#cycle").hidden = s !== "idle";
+  $("#breakNote").hidden = !resting || s === "idle";
+  $("#breaksBtn").setAttribute("aria-pressed", String(breaksOn));
+  $("#endBtn").textContent = resting ? "Skip break" : "End session";
+  $("#actions").hidden = s === "done";
+  $("#done").hidden = s !== "done";
+  $("#dial").hidden = s === "done";
+  $("#placebar").hidden = s === "done";
+  $("#primary").textContent = s === "idle" ? "Start" : s === "running" ? "Pause" : "Resume";
+  $("#endBtn").hidden = s === "idle";
+  root.querySelectorAll(".chip[data-min]").forEach(c => c.setAttribute("aria-pressed", String(+c.dataset.min === planned)));
+  document.title = s === "running" || s === "paused" ? `${fmt(T.remaining)} · ${baseTitle}` : baseTitle;
+  syncTab();
+}
+
+function setPlanned(m) {
+  planned = Math.max(5, Math.min(180, m));
+  LS.set("planned", planned);
+  T.remaining = planned * 60;
+  render();
+}
+
+let wakeLock = null;
+async function holdScreen(on) {
+  try {
+    if (on && !wakeLock && navigator.wakeLock) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch { wakeLock = null; }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && T.state === "running") holdScreen(true);
+});
+
+function run() {
+  T.endAt = Date.now() + T.remaining * 1000;
+  T.lastTick = Date.now();
+  engine.duck(T.mode === "break");
+  engine.start(T.state === "paused" ? 1.2 : 3);
+  setState("running");
+  holdScreen(T.mode === "focus");
+  wake();
+}
+
+function start() {
+  T.mode = "focus";
+  T.remaining = planned * 60;
+  T.focused = 0;
+  T.extending = false;
+  T.session = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), start: Date.now(), planned, mins: 0, place: current.id, note: "", done: false };
+  run();
+}
+
+function pause() {
+  T.remaining = (T.endAt - Date.now()) / 1000;
+  engine.stop(1.5);
+  holdScreen(false);
+  setState("paused");
+}
+
+function finish(early) {
+  openFocus();
+  if (T.mode === "break") { endBreak(early); return; }
+  const s = T.session;
+  s.mins = Math.round(T.focused / 60);
+  s.place = current.id;
+  if (!early) s.done = true;
+  if (!early && breaksOn && !T.extending) {
+    store.save(s);
+    if (bellOn) engine.bell("end");
+    startBreak();
+    return;
+  }
+  engine.stop(early ? 1.5 : 10);
+  if (!early && bellOn) engine.bell();
+  holdScreen(false);
+  if (early && s.mins < 5 && !T.extending) {
+    T.session = null;
+    T.remaining = planned * 60;
+    setState("idle");
+    toast("Sessions under 5 minutes aren't logged.");
+    return;
+  }
+  store.save(s);
+  $("#doneTitle").textContent = early ? "Session ended early" : "Session complete";
+  $("#doneText").textContent = early
+    ? `${s.mins} of ${s.planned} minutes logged.`
+    : `${s.mins} minutes ${current.phrase}.`;
+  $("#note").value = s.note || "";
+  $("#moreBtn").hidden = early;
+  setState("done");
+  setTimeout(() => $("#note").focus({ preventScroll: true }), 50);
+}
+
+function closeDone() {
+  const s = T.session;
+  const note = $("#note").value.trim();
+  if (s && note !== s.note) { s.note = note; store.save(s); }
+  if (note) toast("Saved to your log.");
+  T.session = null;
+  T.extending = false;
+  T.remaining = planned * 60;
+  setState("idle");
+}
+
+function startBreak() {
+  T.longBreak = T.round >= BREAKS.rounds;
+  T.breakLen = T.longBreak ? BREAKS.long : BREAKS.short;
+  T.round = T.longBreak ? 1 : T.round + 1;
+  LS.set("round", T.round);
+  T.mode = "break";
+  T.remaining = T.breakLen * 60;
+  $("#note2").value = "";
+  $("#saveNote2").textContent = "Save";
+  T.state = "paused"; // so run() fades the quieter mix in gently
+  run();
+}
+
+function saveBreakNote(quiet) {
+  const s = T.session, note = $("#note2").value.trim();
+  if (!s || note === s.note) return;
+  s.note = note;
+  store.save(s);
+  if (!quiet) { toast("Saved to your log."); $("#saveNote2").textContent = "Saved"; }
+}
+
+function endBreak(skipped) {
+  saveBreakNote(true);
+  T.mode = "focus";
+  T.session = null;
+  engine.duck(false);
+  engine.stop(skipped ? 1 : 4);
+  if (!skipped && bellOn) engine.bell("break");
+  T.remaining = planned * 60;
+  setState("idle");
+  toast(`${skipped ? "Break skipped." : "Break's over."} Round ${T.round} starts when you press Start.`);
+}
+
+function setBreaks(on) {
+  breaksOn = on;
+  LS.set("breaks", on);
+  T.round = 1;
+  LS.set("round", 1);
+  render();
+}
+
+function oneMore() {
+  const s = T.session;
+  s.note = $("#note").value.trim();
+  T.extending = true;
+  T.remaining = 60;
+  T.state = "paused"; // so run() fades back in gently
+  run();
+}
+
+setInterval(() => {
+  if (T.state !== "running") return;
+  const now = Date.now();
+  if (T.mode === "focus") T.focused += (now - T.lastTick) / 1000;
+  T.lastTick = now;
+  T.remaining = (T.endAt - now) / 1000;
+  if (T.remaining <= 0) { T.remaining = 0; finish(false); }
+  else render();
+}, 200);
+
+/* focus mode: controls hide while running, return on any movement */
+let wakeT;
+function wake() {
+  ui.classList.add("awake");
+  clearTimeout(wakeT);
+  wakeT = setTimeout(() => ui.classList.remove("awake"), 3000);
+}
+["pointermove", "pointerdown", "keydown"].forEach(e => addEventListener(e, wake, { passive: true }));
+
+/* ================= places ================= */
+
+function buildDots() {
+  const wrap = $("#dots");
+  PLACES.forEach((p, i) => {
+    const b = document.createElement("button");
+    b.dataset.place = p.id;
+    b.setAttribute("aria-label", `${p.name} (${i + 1})`);
+    b.title = p.name;
+    b.addEventListener("click", () => setPlace(p));
+    wrap.append(b);
+  });
+}
+
+let swapT;
+function setPlace(p, first) {
+  if (p === current && !first) return;
+  current = p;
+  LS.set("place", p.id);
+  const name = $("#placeName");
+  if (first) name.textContent = p.name;
+  else {
+    name.classList.add("swap");
+    clearTimeout(swapT);
+    swapT = setTimeout(() => { name.textContent = p.name; name.classList.remove("swap"); }, 200);
+  }
+  root.querySelectorAll("#dots button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.place === p.id)));
+  view.show(p);
+  if (engine.ctx) engine.load(p);
+  buildMixer();
+}
+function stepPlace(d) {
+  const i = PLACES.indexOf(current);
+  setPlace(PLACES[(i + d + PLACES.length) % PLACES.length]);
+}
+
+/* ================= sheets ================= */
+
+function openSheet(id) {
+  closeSheets();
+  $("#" + id).classList.add("open");
+  $("#scrim").classList.add("on");
+  if (id === "log") renderLog();
+  setTimeout(() => $("#" + id + " .close").focus({ preventScroll: true }), 60);
+}
+function closeSheets() {
+  root.querySelectorAll(".sheet.open").forEach(s => s.classList.remove("open"));
+  $("#scrim").classList.remove("on");
+}
+function sheetOpen() { return !!root.querySelector(".sheet.open"); }
+
+/* mixer */
+function fillRange(el) { el.style.setProperty("--fill", el.value + "%"); }
+function buildMixer() {
+  const place = current, wrap = $("#layers");
+  $("#mixPlace").textContent = place.name;
+  wrap.innerHTML = "";
+  for (const l of place.layers) {
+    const row = document.createElement("div");
+    row.className = "layer";
+    row.innerHTML = `<div class="layer-top"><label class="layer-name"></label><span class="layer-val"></span></div>
+      <input type="range" min="0" max="100"><div class="layer-hint"></div>`;
+    const input = row.querySelector("input"), val = row.querySelector(".layer-val");
+    input.id = `lvl-${place.id}-${l.id}`;
+    row.querySelector("label").htmlFor = input.id;
+    row.querySelector("label").textContent = l.name;
+    row.querySelector(".layer-hint").textContent = l.hint;
+    input.value = Math.round(level(place.id, l.id) * 100);
+    val.textContent = input.value;
+    fillRange(input);
+    input.addEventListener("input", () => {
+      val.textContent = input.value;
+      fillRange(input);
+      engine.setLevel(place.id, l.id, input.value / 100);
+      LS.set("levels2", levels);
+    });
+    wrap.append(row);
+  }
+}
+function buildMasterControls() {
+  const m = $("#lvl-master");
+  m.value = Math.round(master * 100);
+  $("#val-master").textContent = m.value;
+  fillRange(m);
+  m.addEventListener("input", () => {
+    $("#val-master").textContent = m.value;
+    fillRange(m);
+    engine.setMaster(m.value / 100);
+    LS.set("master", master);
+  });
+  const b = $("#bell");
+  b.checked = bellOn;
+  b.addEventListener("change", () => { bellOn = b.checked; LS.set("bell", bellOn); });
+}
+
+function syncSoundBtn() {
+  const btn = $("#soundBtn");
+  btn.setAttribute("aria-pressed", String(engine.playing));
+  btn.querySelector(".t-label").textContent = engine.playing ? "Playing" : "Listen";
+}
+
+/* log */
+function startOfDay(ms) { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); }
+function mondayOf(ms) { const d = new Date(startOfDay(ms)); const wd = (d.getDay() + 6) % 7; d.setDate(d.getDate() - wd); return d.getTime(); }
+function addDays(ms, n) { const d = new Date(ms); d.setDate(d.getDate() + n); return d.getTime(); }
+function heatLevel(m) { return m <= 0 ? 0 : m < 25 ? 1 : m < 60 ? 2 : m < 120 ? 3 : 4; }
+function fmtMins(m) { const h = Math.floor(m / 60); return h ? `${h}h ${pad(m % 60)}m` : `${m}m`; }
+
+function renderLog() {
+  const all = store.all();
+  const byDay = new Map();
+  for (const s of all) byDay.set(dayKey(s.start), (byDay.get(dayKey(s.start)) || 0) + s.mins);
+  const now = Date.now(), todayK = dayKey(now);
+
+  const today = byDay.get(todayK) || 0;
+  let week = 0;
+  for (let d = mondayOf(now); d <= now; d = addDays(d, 1)) week += byDay.get(dayKey(d)) || 0;
+  let streak = 0, cur = byDay.get(todayK) ? startOfDay(now) : addDays(startOfDay(now), -1);
+  while (byDay.get(dayKey(cur))) { streak++; cur = addDays(cur, -1); }
+  const total = all.reduce((n, s) => n + s.mins, 0);
+  $("#stats").innerHTML = "";
+  [[fmtMins(today), "Today"], [fmtMins(week), "This week"], [streak + (streak === 1 ? " day" : " days"), "Streak"], [fmtMins(total), "All time"]]
+    .forEach(([v, k]) => {
+      const el = document.createElement("div");
+      el.className = "stat";
+      el.innerHTML = "<b></b><span></span>";
+      el.querySelector("b").textContent = v;
+      el.querySelector("span").textContent = k;
+      $("#stats").append(el);
+    });
+
+  const heat = $("#heat");
+  heat.innerHTML = "";
+  const first = addDays(mondayOf(now), -25 * 7);
+  ["Mon", "", "Wed", "", "Fri", "", ""].forEach((d, i) => {
+    const el = document.createElement("span");
+    el.className = "d"; el.textContent = d; el.style.gridRow = i + 2;
+    heat.append(el);
+  });
+  let lastMonth = -1;
+  for (let w = 0; w < 26; w++) {
+    const wk = addDays(first, w * 7);
+    const mo = new Date(wk).getMonth();
+    if (mo !== lastMonth && w < 24) {
+      const el = document.createElement("span");
+      el.className = "m";
+      el.textContent = new Date(wk).toLocaleDateString(undefined, { month: "short" });
+      el.style.gridColumn = `${w + 2} / span 3`;
+      heat.append(el);
+      lastMonth = mo;
+    }
+    for (let d = 0; d < 7; d++) {
+      const ms = addDays(wk, d), k = dayKey(ms), m = byDay.get(k) || 0;
+      const el = document.createElement("i");
+      el.className = "cell";
+      el.style.gridColumn = w + 2;
+      el.style.gridRow = d + 2;
+      if (ms > now) el.classList.add("future");
+      else {
+        el.dataset.l = heatLevel(m);
+        el.title = `${new Date(ms).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })} · ${m ? fmtMins(m) : "no sessions"}`;
+      }
+      if (k === todayK) el.classList.add("today");
+      heat.append(el);
+    }
+  }
+  requestAnimationFrame(() => { const wrap = heat.parentElement; wrap.scrollLeft = wrap.scrollWidth; });
+
+  const list = $("#sessions");
+  list.innerHTML = "";
+  const recent = all.slice(-15).reverse();
+  if (!recent.length) {
+    const li = document.createElement("li");
+    li.innerHTML = '<p class="empty-state">No sessions yet. Finish one and it lands here, with a note on what you worked on.</p>';
+    list.append(li);
+  }
+  for (const s of recent) {
+    const li = document.createElement("li");
+    li.innerHTML = '<span class="s-when"></span><span class="s-mins"></span><span class="s-note"></span>';
+    const d = new Date(s.start);
+    const when = dayKey(s.start) === todayK ? "Today"
+      : dayKey(s.start) === dayKey(addDays(now, -1)) ? "Yesterday"
+      : d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+    li.querySelector(".s-when").textContent = `${when}, ${d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} · ${placeById(s.place).name}`;
+    if (!s.done) {
+      const tag = document.createElement("span");
+      tag.className = "tag"; tag.textContent = "ended early";
+      li.querySelector(".s-when").append(tag);
+    }
+    li.querySelector(".s-mins").textContent = `${s.mins} min`;
+    const note = li.querySelector(".s-note");
+    note.textContent = s.note || "No note";
+    if (!s.note) note.classList.add("empty");
+    list.append(li);
+  }
+  $("#where").textContent = "Sessions are saved in this browser and travel with Settings → Backup.";
+}
+
+/* ================= the Focus tab ================= */
+
+let open = false;
+function homeLayerOpen() {
+  return ["settingsPanel", "scratchPanel", "modalOverlay"].some(id => {
+    const el = document.getElementById(id);
+    return el && !el.classList.contains("hidden");
+  });
+}
+function openFocus() {
+  if (open) return;
+  open = true;
+  host.classList.add("open");
+  host.setAttribute("aria-hidden", "false");
+  document.body.classList.add("focus-open");
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+  view.kick();
+  syncTab();
+  setTimeout(() => {
+    const target = T.state === "done" ? $("#note") : $("#primary");
+    target.focus({ preventScroll: true });
+  }, 80);
+}
+function closeFocus() {
+  if (!open) return;
+  closeSheets();
+  open = false;
+  host.classList.remove("open");
+  host.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("focus-open");
+  syncTab();
+  if (tab && getComputedStyle(tab).display !== "none") tab.focus({ preventScroll: true });
+}
+// the toolbar tab lights up and counts down while a session runs
+function syncTab() {
+  if (!tab) return;
+  const live = T.state === "running" || T.state === "paused";
+  tab.classList.toggle("active", open || live);
+  const time = fmt(T.remaining);
+  tab.querySelector(".tb-label").textContent = live ? time : "Focus";
+  const tip = live ? `${T.mode === "break" ? "Break" : "Focus"} · ${time} left` : "Focus · F";
+  tab.dataset.tip = tip;
+  tab.setAttribute("aria-label", live ? tip : "Focus timer");
+}
+if (tab) tab.addEventListener("click", () => (open ? closeFocus() : openFocus()));
+$("#backBtn").addEventListener("click", closeFocus);
+
+// Settings → Backup carries sessions and sound settings too
+window.SimpleHomeFocus = {
+  exportData() {
+    return { sessions: store.all(), levels, planned, place: current.id, master, bell: bellOn, breaks: breaksOn };
+  },
+  importData(d) {
+    if (!d || typeof d !== "object") return;
+    if (Array.isArray(d.sessions)) {
+      store.months.clear();
+      d.sessions.filter(s => s && typeof s.id === "string" && typeof s.start === "number" && typeof s.mins === "number")
+        .forEach(s => store.put({ id: s.id, start: s.start, planned: +s.planned || s.mins, mins: s.mins, place: String(s.place || "rain"), note: String(s.note || ""), done: !!s.done }));
+      LS.set("sessions", store.all());
+      renderLog();
+    }
+    if (d.levels && typeof d.levels === "object") {
+      for (const p of PLACES) for (const l of p.layers) {
+        const v = d.levels[p.id] && d.levels[p.id][l.id];
+        if (typeof v === "number") engine.setLevel(p.id, l.id, Math.max(0, Math.min(1, v)));
+      }
+      LS.set("levels2", levels);
+      buildMixer();
+    }
+    if (typeof d.master === "number") {
+      engine.setMaster(Math.max(0, Math.min(1, d.master)));
+      LS.set("master", master);
+      const m = $("#lvl-master");
+      m.value = Math.round(master * 100); $("#val-master").textContent = m.value; fillRange(m);
+    }
+    if (typeof d.bell === "boolean") { bellOn = d.bell; LS.set("bell", bellOn); $("#bell").checked = bellOn; }
+    if (T.state === "idle") {
+      if (typeof d.planned === "number") setPlanned(Math.round(d.planned));
+      if (typeof d.place === "string") setPlace(placeById(d.place));
+      if (typeof d.breaks === "boolean" && d.breaks !== breaksOn) setBreaks(d.breaks);
+    }
+  },
+};
+
+/* ================= wiring ================= */
+
+$("#primary").addEventListener("click", () => {
+  if (T.state === "idle") start();
+  else if (T.state === "running") pause();
+  else if (T.state === "paused") run();
+});
+$("#endBtn").addEventListener("click", () => {
+  if (T.state === "running") T.remaining = (T.endAt - Date.now()) / 1000;
+  finish(true);
+});
+$("#saveNote").addEventListener("click", closeDone);
+$("#saveNote2").addEventListener("click", () => saveBreakNote(false));
+$("#note2").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); saveBreakNote(false); e.target.blur(); } });
+$("#note2").addEventListener("input", () => { $("#saveNote2").textContent = "Save"; });
+$("#breaksBtn").addEventListener("click", () => setBreaks(!breaksOn));
+$("#moreBtn").addEventListener("click", oneMore);
+$("#note").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); closeDone(); } });
+$("#minus").addEventListener("click", () => setPlanned(planned - 5));
+$("#plus").addEventListener("click", () => setPlanned(planned + 5));
+$("#prevPlace").addEventListener("click", () => stepPlace(-1));
+$("#nextPlace").addEventListener("click", () => stepPlace(1));
+root.querySelectorAll(".chip[data-min]").forEach(c => c.addEventListener("click", () => setPlanned(+c.dataset.min)));
+$("#soundBtn").addEventListener("click", () => {
+  if (engine.playing) {
+    if (T.state === "running") pause();
+    else engine.stop(1);
+  } else engine.start(2);
+});
+$("#mixBtn").addEventListener("click", () => openSheet("mixer"));
+$("#logBtn").addEventListener("click", () => openSheet("log"));
+$("#scrim").addEventListener("click", closeSheets);
+root.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", closeSheets));
+
+addEventListener("keydown", e => {
+  const target = e.composedPath()[0] || e.target;
+  const typing = !!(target.closest && target.closest("input, textarea, select, [contenteditable]"));
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!open) {
+    if ((e.key === "f" || e.key === "F") && !e.shiftKey && !typing && !homeLayerOpen()) { e.preventDefault(); openFocus(); }
+    return;
+  }
+  if (e.key === "Escape") { if (sheetOpen()) closeSheets(); else closeFocus(); return; }
+  if (typing) return;
+  if (e.key === " " && !target.closest("button")) { e.preventDefault(); if (T.state !== "done") $("#primary").click(); }
+  else if (e.key === "m" || e.key === "M") sheetOpen() && $("#mixer.open") ? closeSheets() : openSheet("mixer");
+  else if (e.key === "l" || e.key === "L") sheetOpen() && $("#log.open") ? closeSheets() : openSheet("log");
+  else if (T.state === "done") return;
+  else if ((e.key === "b" || e.key === "B") && T.state === "idle") setBreaks(!breaksOn);
+  else if (e.key === "ArrowLeft") stepPlace(-1);
+  else if (e.key === "ArrowRight") stepPlace(1);
+  else if (e.key >= "1" && e.key <= String(PLACES.length)) setPlace(PLACES[+e.key - 1]);
+  else if (T.state === "idle" && e.key === "ArrowUp") { e.preventDefault(); setPlanned(planned + 5); }
+  else if (T.state === "idle" && e.key === "ArrowDown") { e.preventDefault(); setPlanned(planned - 5); }
+});
+
+buildDots();
+buildMasterControls();
+view.init();
+setPlace(current, true);
+setState("idle");
+renderLog();
 })();

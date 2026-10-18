@@ -1,6 +1,6 @@
 # SimpleHome
 
-A custom browser home page. One HTML file, no build step, no dependencies, no tracking — clock, launcher search, editable shortcuts, a scratchpad, and thirty-six themes with animated backgrounds and customizable accent colors.
+A custom browser home page. One HTML file, no build step, no dependencies, no tracking — clock, launcher search, editable shortcuts, a scratchpad, a focus timer with generated soundscapes, and thirty-six themes with animated backgrounds and customizable accent colors.
 
 Optionally, an accompanying Chrome extension puts it on your new tab page and blocks ads using EasyList.
 
@@ -27,7 +27,7 @@ Settings → History shows how many sites are remembered and clears them, with a
 
 **Tile hotkeys.** `Alt+1` through `Alt+9` open the first nine visible tiles in a new tab. Hold `Alt` to see the numbers.
 
-**Toolbar.** Scratchpad, edit, settings and zen sit in a frosted floating bar at the bottom right, drawn as line icons that lift on hover with a label above them; whichever is open glows in the accent. On a phone it becomes a full-width tab bar with labels. It used to be pinned top right, where the clock — which is sized to the viewport — grew into it below 900px wide and genuinely overlapped it on a phone in landscape. The bottom is also the easier end of a phone to reach.
+**Toolbar.** Focus, scratchpad, edit, settings and zen sit in a frosted floating bar at the bottom right, drawn as line icons that lift on hover with a label above them; whichever is open glows in the accent. On a phone it becomes a full-width tab bar with labels. It used to be pinned top right, where the clock — which is sized to the viewport — grew into it below 900px wide and genuinely overlapped it on a phone in landscape. The bottom is also the easier end of a phone to reach.
 
 **Touch gestures.** On a phone, where none of the keyboard shortcuts exist: swipe left or right across the page to move between groups, long-press a tile to edit it without entering edit mode, and pull down from the top of the page to jump into search. The phone's own long-press link menu is switched off on tiles so it doesn't get in the way, as is the browser's pull-to-refresh.
 
@@ -36,6 +36,8 @@ Settings → History shows how many sites are remembered and clears them, with a
 **Finish.** The page settles in on load — clock, search and then each tile rising out of a soft blur in sequence. Tiles are lit glass cards that lift and tilt toward the pointer, with a spotlight following it, and give slightly under a press. Icons sit on dark graphite app-icon wells; logos that are dark themselves (GitHub, X, Notion) are detected and drawn inverted so they stay visible, and sites without a favicon get an accent-coloured letter; the search results open as a frosted-glass panel. While a tile's favicon is loading its slot shimmers, and the icon resolves in from a soft blur when it arrives (letter avatars get the same reveal). Changing category — by tab or by swipe — sends the current tiles out toward where you're going and cascades the new set in from that side, while the highlight glides across to the new tab. Settings is laid out as grouped cards, each with an icon, with taller theme previews (a check marks the active one), round colour pickers and keycap-style shortcut lists. Settings and the scratchpad open as frosted sheets — floating cards on a wide screen, full height on a phone — that glide in with their sections settling one after another and dim the page behind. Their title and close button stay pinned while the sheet scrolls, and tapping the dimmed page closes them too.
 
 **Zen mode.** `Z` (or the ◎ button) strips everything down to just the clock and search bar, dead-centered, with the theme's background animation still running as ambience. `Esc` or `Z` again brings everything back. The state is remembered across reloads.
+
+**Focus.** `F` (or the timer button) opens Drift, a focus timer that fills the screen with a place to work in: Rain on Glass, Night Train, Corner Café, Night Shore or Server Room. Each place is a live canvas scene with a soundscape generated in the browser by the Web Audio API — there are no audio files — and the two are tied together: a drop you hear lands on the glass, the view jolts as the wheels cross a rail joint, foam runs up the sand as a wave breaks, drive lights flicker as the disks seek. A mixer sets the four layers of each place, remembered per place. Pick 15 to 90 minutes (or any length in 5-minute steps) and the controls fade away until you move; the session ends with a slow fade and an optional bell, then asks what you worked on. Pomodoro breaks are a switch away: 5 minutes after each round and 15 after every fourth, played quieter, with the note taken during the break instead. The log shows today, this week, your streak and all-time totals, a 26-week heatmap and recent sessions with their notes. `Esc` or Home goes back to your shortcuts without stopping anything: the toolbar button counts down, as does the tab title, and the timer reopens itself when a session or break ends. The timer has its own styles inside a shadow root, so the themes and it never touch.
 
 **Scratchpad.** A persistent notes panel that saves as you type, on a ruled page whose lines scroll with the text, with a live saved indicator, a word count, and buttons to start a checklist item or copy the whole note. `Shift+S` from anywhere. Lines starting with `- [ ]` are checklist items — click the brackets to check them off (toggles to `- [x]`); clicking anywhere else on the line just places the cursor like normal text.
 
@@ -94,7 +96,7 @@ The greeting, clock and date sit on a frosted-glass card so they read cleanly ov
 
 **Time-of-day greeting** above the clock, switching between morning, afternoon, evening, and night.
 
-**Export / import.** Everything lives in `localStorage`, which is per-browser and one "clear browsing data" away from gone. Settings → Backup writes a JSON file with your shortcuts, groups, theme, custom accent colors, engine, notes, and autocomplete history, and reads it back on another machine.
+**Export / import.** Everything lives in `localStorage`, which is per-browser and one "clear browsing data" away from gone. Settings → Backup writes a JSON file with your shortcuts, groups, theme, custom accent colors, engine, notes, autocomplete history, and focus sessions and sound settings, and reads it back on another machine.
 
 ## Keyboard
 
@@ -107,7 +109,10 @@ The greeting, clock and date sit on a frosted-glass card so they read cleanly ov
 | `Alt+1`–`Alt+9` | Open the first nine visible tiles in a new tab |
 | `Shift+S` | Toggle the scratchpad |
 | `Z` | Toggle zen mode |
-| `Esc` | Clear search / close the open panel or modal / exit zen mode |
+| `F` | Open the focus timer |
+| `Esc` | Clear search / close the open panel or modal / exit zen mode / leave the focus timer |
+
+Inside the focus timer: `Space` starts or pauses, `←` `→` or `1`–`5` change place, `↑` `↓` change the length, `B` toggles Pomodoro breaks, `M` opens the mixer and `L` the log.
 
 ## Setup
 
