@@ -142,12 +142,6 @@ test('a file that is not a backup is refused and changes nothing', async (t) => 
 
 test(
   'declining the "replace your shortcuts?" question leaves everything as it was',
-  {
-    todo:
-      'the import replaces and saves groups (and resets the active group) before asking to replace the ' +
-      'shortcuts, so answering Cancel still leaves the profile half-imported: the old groups are gone and ' +
-      'shortcuts filed in them no longer appear under any group tab',
-  },
   async (t) => {
     const source = await browser.open(t, { storage: PROFILE });
     const { file } = await exportBackup(source);
@@ -169,13 +163,6 @@ test(
 
 test(
   'imported shortcuts are limited to web addresses, as the Add dialog is',
-  {
-    todo:
-      'import only checks that a shortcut url is a string, so a crafted backup plants javascript: and data: ' +
-      'URLs as tile links and launcher/Alt+N targets. Chromium happens not to run them because tiles open ' +
-      'with noopener in a new tab, but nothing in the page prevents it; the Add dialog forces https://, ' +
-      'import should likewise accept only http(s)',
-  },
   async (t) => {
     const app = await browser.open(t);
     const crafted = {

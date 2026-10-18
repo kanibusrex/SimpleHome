@@ -8325,6 +8325,16 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
     flashBackupStatus('Exported homepage-settings.json');
   });
 
+  // A backup is plain JSON anyone can edit, so its links get the Add dialog's rule: a bare
+  // host gains https://, and a link naming another scheme (javascript:, data:, file:...) is
+  // dropped rather than planted as a tile. "localhost:3000" is a host and port, not a scheme.
+  function importedUrl(raw) {
+    var v = raw.trim();
+    if (!/^https?:\/\//i.test(v) && /^[a-z][a-z\d+.-]*:(?!\d+(?:[\/?#]|$))/i.test(v)) return '';
+    v = normalizeUrl(v);
+    return hostnameFor(v) ? v : '';
+  }
+
   importBtn.addEventListener('click', function () { importFile.click(); });
 
   importFile.addEventListener('change', function () {
@@ -8336,28 +8346,33 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
         var data = JSON.parse(reader.result);
         if (!data || typeof data !== 'object') throw new Error('bad file');
 
+        // Ask before anything is written, so Cancel leaves the profile exactly as it was.
+        var clean = null;
+        if (Array.isArray(data.shortcuts)) {
+          clean = data.shortcuts.filter(function (s) {
+            return s && typeof s.name === 'string' && typeof s.url === 'string';
+          }).map(function (s) {
+            return { name: s.name, url: importedUrl(s.url), group: typeof s.group === 'string' ? s.group : '' };
+          }).filter(function (s) { return s.url; });
+          if (!confirm('Replace your ' + shortcuts.length + ' shortcuts with ' + clean.length + ' from this file?')) {
+            importFile.value = '';
+            return;
+          }
+        }
+
         if (Array.isArray(data.groups)) {
           groups = data.groups.filter(function (g) { return typeof g === 'string' && g.trim(); });
           saveGroups(groups);
           activeGroup = 'all';
           localStorage.setItem(STORAGE_ACTIVE_GROUP, activeGroup);
-          renderShortcuts();
         }
 
-        if (Array.isArray(data.shortcuts)) {
-          var clean = data.shortcuts.filter(function (s) {
-            return s && typeof s.name === 'string' && typeof s.url === 'string';
-          }).map(function (s) {
-            return { name: s.name, url: s.url, group: typeof s.group === 'string' ? s.group : '' };
-          });
-          if (!confirm('Replace your ' + shortcuts.length + ' shortcuts with ' + clean.length + ' from this file?')) {
-            importFile.value = '';
-            return;
-          }
+        if (clean) {
           shortcuts = clean;
           saveShortcuts(shortcuts);
-          renderShortcuts();
         }
+
+        if (clean || Array.isArray(data.groups)) renderShortcuts();
 
         if (data.colors && typeof data.colors === 'object' && !Array.isArray(data.colors)) {
           colorOverrides = data.colors;
