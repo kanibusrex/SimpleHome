@@ -1794,8 +1794,8 @@
     padding: 6px;
     border-radius: 999px;
     border: 1px solid var(--border);
-    /* Above the sheets and their scrim (which stop short of it), so an open
-       sheet's lit button is still there to close it. */
+    /* Above the page-wide scrim, so an open sheet's lit button is still there
+       to close it. The sheets stop short of the bar (see --sheet-bottom). */
     z-index: 21;
     /* A fixed bar will always float over something on a short screen, so it
        carries its own ground: it reads as a bar above the page rather than as
@@ -2527,7 +2527,9 @@
   /* Panels are floating frosted sheets on a wide screen and full-height on a
      phone. They glide in on a long ease-out and leave on a short ease-in,
      so opening feels deliberate and closing feels instant. Either way they
-     end above the toolbar: 12px clear of the 56px pill, 20px off the bottom. */
+     end above the toolbar, so --sheet-bottom is worked out from its size:
+     here the 56px pill (42px buttons, 6px padding, 1px border) sits 20px off
+     the bottom, and the sheet stops 12px clear of it. */
   .panel {
     --sheet-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
     position: fixed;
@@ -2565,8 +2567,9 @@
       border-radius: 0;
       border-width: 0 0 0 1px;
     }
-    /* Down to the 63px tab bar. Zen leaves only the pill below, so there the
-       sheet's foot is rounded off like the floating one's. */
+    /* Down to the 63px tab bar (52px tabs, 6px and 4px padding, 1px rule).
+       Zen leaves only the pill below, so there the sheet's foot is rounded
+       off like the floating one's. */
     body:not(.zen) .panel { --sheet-bottom: calc(63px + env(safe-area-inset-bottom, 0px)); }
     body.zen .panel { border-width: 0 0 1px 1px; border-radius: 0 0 20px 20px; }
   }
@@ -3175,7 +3178,9 @@
 
   /* ---- Toolbar, refined ----
      A frosted pill of line icons; each lifts on hover with a label above it,
-     and the active one glows in the accent. On a phone it's a tab bar. */
+     and the active one glows in the accent. On a phone it's a tab bar. The
+     sheets' --sheet-bottom is worked out from these sizes, so resizing the
+     bar means changing that too. */
   .toolbar {
     gap: 4px;
     padding: 6px;
@@ -3243,6 +3248,10 @@
     /* The last button's tip would run off the right edge. */
     .toolbar .icon-btn:last-child::after { left: auto; right: -6px; transform: translate(0, 4px); }
     .toolbar .icon-btn:last-child:hover::after { transform: none; }
+    /* The pointer that opened a sheet is usually still resting on its lit
+       button, and the tip would sit across the sheet's foot. */
+    .toolbar .scratch-btn.active::after,
+    .toolbar .settings-btn.active::after { opacity: 0; transition-delay: 0s; }
   }
 
   @media (max-width: 600px) {
@@ -8364,6 +8373,13 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
 
   zenBtn.addEventListener('click', toggleZen);
   applyZen();
+
+  // The toolbar sits above the scrim, so its other buttons can be pressed
+  // with a sheet open. Like switching tabs, that leaves the sheet rather than
+  // acting behind it, and Focus never opens over one (the F key won't either).
+  [editBtn, zenBtn, document.getElementById('focusBtn')].forEach(function (btn) {
+    btn.addEventListener('click', closePanels);
+  });
 
   // ---- Export / import ----
   var exportBtn = document.getElementById('exportBtn');
