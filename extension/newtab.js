@@ -18,6 +18,7 @@
 
   var editing = false;
   var editingIndex = null;
+  var modalReturn = null;
   var dragIndex = null;
 
   var grid = document.getElementById('shortcutsGrid');
@@ -37,6 +38,7 @@
   var modalDelete = document.getElementById('modalDelete');
   var searchForm = document.getElementById('searchForm');
   var searchInput = document.getElementById('searchInput');
+  var searchCombo = document.getElementById('searchCombo');
   var searchClear = document.getElementById('searchClear');
   var engineSelect = document.getElementById('engineSelect');
 
@@ -143,25 +145,31 @@
     groupTabsEl.innerHTML = '';
     groupTabsEl.classList.toggle('hidden', groups.length === 0 && !editing);
 
+    // A tab holds two buttons side by side, since a button can't hold the
+    // group's delete button: its name, whose hit area spans the whole tab,
+    // and the delete button on top of that.
     function makeTab(id, label, removable) {
+      var tab = document.createElement('div');
+      tab.className = 'group-tab' + (activeGroup === id ? ' active' : '');
       var btn = document.createElement('button');
-      btn.className = 'group-tab' + (activeGroup === id ? ' active' : '');
-      var text = document.createElement('span');
-      text.textContent = label;
-      btn.appendChild(text);
+      btn.type = 'button';
+      btn.className = 'group-tab-name';
+      btn.textContent = label;
+      btn.addEventListener('click', function () { switchGroup(id); });
+      tab.appendChild(btn);
       var n = id === 'all' ? shortcuts.length : shortcuts.filter(function (s) { return (s.group || '') === id; }).length;
       var count = document.createElement('span');
       count.className = 'group-count';
       count.textContent = n;
-      btn.appendChild(count);
+      tab.appendChild(count);
 
       if (removable) {
-        var rm = document.createElement('span');
+        var rm = document.createElement('button');
+        rm.type = 'button';
         rm.className = 'group-tab-remove';
         rm.textContent = '×';
         rm.setAttribute('aria-label', 'Delete group ' + label);
-        rm.addEventListener('click', function (e) {
-          e.stopPropagation();
+        rm.addEventListener('click', function () {
           if (!confirm('Delete group "' + label + '"? Its shortcuts will become ungrouped.')) return;
           groups = groups.filter(function (g) { return g !== id; });
           shortcuts.forEach(function (s) { if (s.group === id) s.group = ''; });
@@ -169,11 +177,10 @@
           saveGroups(groups);
           setActiveGroup(activeGroup === id ? 'all' : activeGroup);
         });
-        btn.appendChild(rm);
+        tab.appendChild(rm);
       }
 
-      btn.addEventListener('click', function () { switchGroup(id); });
-      return btn;
+      return tab;
     }
 
     groupTabsEl.appendChild(makeTab('all', 'All', false));
@@ -286,7 +293,38 @@
     probe.src = src;
   }
 
+  // The parts of the grid that act as buttons aren't <button>s: a tile in edit
+  // mode is dragged and holds its own remove button, so its edit target is a
+  // span stretched over it, and the + tile shares the tiles' markup. This
+  // gives them a button's role, tab stop and keys.
+  function makePressable(el, label) {
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', label);
+    el.tabIndex = 0;
+    el.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      el.click();
+    });
+  }
+
+  // Rebuilding the grid takes keyboard focus with it. Returns a function that
+  // puts focus back on the same control of the tile now in the same place:
+  // the next one along when a tile was removed, the + tile after the last.
+  function gridFocusKeeper() {
+    var el = document.activeElement;
+    var tile = el && el !== grid && grid.contains(el) ? el.closest('.tile') : null;
+    if (!tile) return null;
+    var pos = tile.classList.contains('add-tile') ? -1 : Array.prototype.indexOf.call(grid.children, tile);
+    var part = el === tile ? '' : '.' + el.classList[0];
+    return function () {
+      var to = pos < 0 ? grid.lastChild : grid.children[Math.min(pos, grid.children.length - 1)];
+      ((part && to.querySelector(part)) || to).focus();
+    };
+  }
+
   function renderShortcuts() {
+    var refocus = gridFocusKeeper();
     renderGroupTabs();
     grid.innerHTML = '';
     visibleShortcuts().forEach(function (entry, viewIdx) {
@@ -343,9 +381,15 @@
       }
 
       if (editing) {
+        var edit = document.createElement('span');
+        edit.className = 'tile-edit';
+        makePressable(edit, 'Edit ' + s.name);
+        tile.appendChild(edit);
+
         var removeBtn = document.createElement('button');
         removeBtn.className = 'tile-remove';
         removeBtn.textContent = '\u00d7';
+        removeBtn.setAttribute('aria-label', 'Remove ' + s.name);
         removeBtn.addEventListener('click', function (e) {
           e.stopPropagation();
           removeShortcut(i);
@@ -383,6 +427,7 @@
 
     var addTile = document.createElement('div');
     addTile.className = 'tile add-tile';
+    makePressable(addTile, 'Add shortcut');
     var addIcon = document.createElement('div');
     addIcon.className = 'tile-icon';
     addIcon.textContent = '+';
@@ -394,6 +439,7 @@
     addTile.addEventListener('click', function () { openModal(null); });
     addTile.style.setProperty('--i', grid.children.length);
     grid.appendChild(addTile);
+    if (refocus) refocus();
     measureDock();
   }
 
@@ -423,14 +469,35 @@
       populateGroupSelect(shortcuts[index].group || '');
       modalDelete.classList.remove('hidden');
     }
+    modalReturn = document.activeElement;
     modalOverlay.classList.remove('hidden');
     tileNameInput.focus();
   }
 
+  // Focus goes back to what opened the dialog. When saving rebuilds the grid
+  // straight after, renderShortcuts carries it over to the rebuilt tile.
   function closeModal() {
     modalOverlay.classList.add('hidden');
     editingIndex = null;
+    if (modalReturn && modalReturn.isConnected) modalReturn.focus();
+    modalReturn = null;
   }
+
+  // The dialog is modal: Tab and Shift+Tab cycle through its own controls.
+  modalOverlay.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab') return;
+    var items = Array.prototype.filter.call(modalOverlay.querySelectorAll('input, select, button'), function (el) {
+      return el.offsetWidth > 0;
+    });
+    var at = items.indexOf(document.activeElement);
+    if (e.shiftKey && at <= 0) {
+      e.preventDefault();
+      items[items.length - 1].focus();
+    } else if (!e.shiftKey && at === items.length - 1) {
+      e.preventDefault();
+      items[0].focus();
+    }
+  });
 
   modalCancel.addEventListener('click', closeModal);
   modalOverlay.addEventListener('click', function (e) {
@@ -476,6 +543,10 @@
   });
 
   settingsBtn.addEventListener('click', function () {
+    if (!settingsPanel.classList.contains('hidden')) {
+      settingsPanel.classList.add('hidden');
+      return;
+    }
     scratchPanel.classList.add('hidden');
     scratchBtn.classList.remove('active');
     settingsPanel.classList.remove('hidden');
@@ -3593,8 +3664,10 @@
   function computeMatches(q) {
     q = q.trim().toLowerCase();
     if (!q) return [];
-    return shortcuts
-      .map(function (s, i) { return { s: s, i: i, score: scoreMatch(s, q) }; })
+    // Only the group that is showing, like the grid and the Alt+1–9 hotkeys;
+    // the All tab still searches everything.
+    return visibleShortcuts()
+      .map(function (e) { return { s: e.s, i: e.i, score: scoreMatch(e.s, q) }; })
       .filter(function (m) { return m.score > -1; })
       .sort(function (a, b) { return a.score - b.score; })
       .slice(0, 6)
@@ -3714,8 +3787,8 @@
     }
     visits.forEach(function (v) { consider(bareHost(v.host), frecency(v)); });
     // A shortcut you have never opened still deserves to complete, just below
-    // anything you actually visit.
-    shortcuts.forEach(function (sc) { consider(bareHost(hostnameFor(sc.url)), 0.5); });
+    // anything you actually visit — if its group is the one showing.
+    visibleShortcuts().forEach(function (e) { consider(bareHost(hostnameFor(e.s.url)), 0.5); });
 
     return best ? best.host : null;
   }
@@ -3954,13 +4027,33 @@
     }
   }
 
+  // The input sits in a combobox that owns the results, the ARIA 1.1 way, so
+  // it keeps its own textbox role; the combobox says whether they're showing.
+  function setResultsOpen(open) {
+    resultsEl.classList.toggle('hidden', !open);
+    searchCombo.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (!open) searchInput.removeAttribute('aria-activedescendant');
+  }
+
+  // Focus never leaves the input; the highlighted row is its active
+  // descendant, which is what a screen reader follows through the results.
+  function markSelection() {
+    Array.prototype.forEach.call(resultsEl.children, function (c, ci) {
+      c.classList.toggle('selected', ci === selectedIdx);
+      c.setAttribute('aria-selected', ci === selectedIdx ? 'true' : 'false');
+    });
+    var sel = resultsEl.children[selectedIdx];
+    if (sel) searchInput.setAttribute('aria-activedescendant', sel.id);
+    else searchInput.removeAttribute('aria-activedescendant');
+  }
+
   function renderResults() {
     var q = searchInput.value;
     resultsEl.innerHTML = '';
     searchForm.classList.toggle('has-value', !!q);
 
     if (!q.trim()) {
-      resultsEl.classList.add('hidden');
+      setResultsOpen(false);
       matches = [];
       return;
     }
@@ -4020,7 +4113,9 @@
 
     rows.forEach(function (row, i) {
       var el = document.createElement('div');
-      el.className = 'result' + (i === selectedIdx ? ' selected' : '');
+      el.className = 'result';
+      el.id = 'result-' + i;
+      el.setAttribute('role', 'option');
 
       if (row.kind === 'shortcut' || row.kind === 'visit') {
         var host = hostnameFor(row.url);
@@ -4030,6 +4125,7 @@
         img.onerror = function () {
           var fb = document.createElement('div');
           fb.className = 'result-fallback';
+          fb.setAttribute('aria-hidden', 'true');
           fb.textContent = initialFor(row.label);
           img.replaceWith(fb);
         };
@@ -4037,6 +4133,7 @@
       } else {
         var glyph = document.createElement('div');
         glyph.className = 'result-fallback';
+        glyph.setAttribute('aria-hidden', 'true');
         glyph.textContent = row.kind === 'open' ? '\u2197' : row.kind === 'calc' ? '=' : '\u2315';
         el.appendChild(glyph);
       }
@@ -4072,9 +4169,7 @@
 
       el.addEventListener('mouseenter', function () {
         selectedIdx = i;
-        Array.prototype.forEach.call(resultsEl.children, function (c, ci) {
-          c.classList.toggle('selected', ci === i);
-        });
+        markSelection();
       });
 
       el.addEventListener('click', function () {
@@ -4095,7 +4190,8 @@
       resultsEl.appendChild(el);
     });
 
-    resultsEl.classList.remove('hidden');
+    setResultsOpen(true);
+    markSelection();
   }
 
   function go(url) {
@@ -4116,9 +4212,7 @@
     var count = resultsEl.children.length;
     if (!count) return;
     selectedIdx = (selectedIdx + delta + count) % count;
-    Array.prototype.forEach.call(resultsEl.children, function (c, ci) {
-      c.classList.toggle('selected', ci === selectedIdx);
-    });
+    markSelection();
     var sel = resultsEl.children[selectedIdx];
     if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
   }
@@ -4147,7 +4241,7 @@
   searchInput.addEventListener('focus', renderResults);
 
   searchInput.addEventListener('blur', function () {
-    setTimeout(function () { resultsEl.classList.add('hidden'); }, 150);
+    setTimeout(function () { setResultsOpen(false); }, 150);
   });
 
   engineSelect.addEventListener('change', renderResults);
@@ -4250,6 +4344,7 @@
   updateScratchCount();
 
   function saveScratch() {
+    scratchTimer = null;
     localStorage.setItem(STORAGE_SCRATCH, scratchText.value);
     scratchStatus.textContent = 'Saved';
     scratchStatus.classList.remove('saving');
@@ -4261,6 +4356,21 @@
     updateScratchCount();
     clearTimeout(scratchTimer);
     scratchTimer = setTimeout(saveScratch, 400);
+  });
+
+  // The save waits for a pause in typing, so a tab closed, reloaded or
+  // switched away from mid-sentence would drop the last words; write any
+  // pending save out at once instead. Both events, since neither fires in
+  // every browser and case (a backgrounded mobile tab may be discarded
+  // without a pagehide).
+  function flushScratch() {
+    if (scratchTimer === null) return;
+    clearTimeout(scratchTimer);
+    saveScratch();
+  }
+  window.addEventListener('pagehide', flushScratch);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) flushScratch();
   });
 
   // Starts a checklist item on a fresh line at the cursor.
@@ -4386,6 +4496,13 @@
   zenBtn.addEventListener('click', toggleZen);
   applyZen();
 
+  // The toolbar sits above the scrim, so its other buttons can be pressed
+  // with a sheet open. Like switching tabs, that leaves the sheet rather than
+  // acting behind it, and Focus never opens over one (the F key won't either).
+  [editBtn, zenBtn, document.getElementById('focusBtn')].forEach(function (btn) {
+    btn.addEventListener('click', closePanels);
+  });
+
   // ---- Export / import ----
   var exportBtn = document.getElementById('exportBtn');
   var importBtn = document.getElementById('importBtn');
@@ -4421,6 +4538,16 @@
     flashBackupStatus('Exported homepage-settings.json');
   });
 
+  // A backup is plain JSON anyone can edit. Like the Add dialog, a bare host gains https://;
+  // unlike it, a link naming another scheme (javascript:, data:, file:...) is dropped rather
+  // than planted as a tile. "localhost:3000" is a host and port, not a scheme.
+  function importedUrl(raw) {
+    var v = raw.trim();
+    if (!/^https?:\/\//i.test(v) && /^[a-z][a-z\d+.-]*:(?!\d+(?:[\/?#]|$))/i.test(v)) return '';
+    v = normalizeUrl(v);
+    return hostnameFor(v) ? v : '';
+  }
+
   importBtn.addEventListener('click', function () { importFile.click(); });
 
   importFile.addEventListener('change', function () {
@@ -4432,28 +4559,33 @@
         var data = JSON.parse(reader.result);
         if (!data || typeof data !== 'object') throw new Error('bad file');
 
+        // Ask before anything is written, so Cancel leaves the profile exactly as it was.
+        var clean = null;
+        if (Array.isArray(data.shortcuts)) {
+          clean = data.shortcuts.filter(function (s) {
+            return s && typeof s.name === 'string' && typeof s.url === 'string';
+          }).map(function (s) {
+            return { name: s.name, url: importedUrl(s.url), group: typeof s.group === 'string' ? s.group : '' };
+          }).filter(function (s) { return s.url; });
+          if (!confirm('Replace your ' + shortcuts.length + ' shortcuts with ' + clean.length + ' from this file?')) {
+            importFile.value = '';
+            return;
+          }
+        }
+
         if (Array.isArray(data.groups)) {
           groups = data.groups.filter(function (g) { return typeof g === 'string' && g.trim(); });
           saveGroups(groups);
           activeGroup = 'all';
           localStorage.setItem(STORAGE_ACTIVE_GROUP, activeGroup);
-          renderShortcuts();
         }
 
-        if (Array.isArray(data.shortcuts)) {
-          var clean = data.shortcuts.filter(function (s) {
-            return s && typeof s.name === 'string' && typeof s.url === 'string';
-          }).map(function (s) {
-            return { name: s.name, url: s.url, group: typeof s.group === 'string' ? s.group : '' };
-          });
-          if (!confirm('Replace your ' + shortcuts.length + ' shortcuts with ' + clean.length + ' from this file?')) {
-            importFile.value = '';
-            return;
-          }
+        if (clean) {
           shortcuts = clean;
           saveShortcuts(shortcuts);
-          renderShortcuts();
         }
+
+        if (clean || Array.isArray(data.groups)) renderShortcuts();
 
         if (data.colors && typeof data.colors === 'object' && !Array.isArray(data.colors)) {
           colorOverrides = data.colors;
@@ -4483,9 +4615,11 @@
         }
 
         if (Array.isArray(data.visits)) {
+          // Launcher rows open these too, so they get the rule recordVisit applies.
           visits = data.visits.filter(function (v) {
             return v && typeof v.url === 'string' && typeof v.key === 'string' &&
-              typeof v.count === 'number' && typeof v.last === 'number';
+              typeof v.count === 'number' && typeof v.last === 'number' &&
+              /^https?:/i.test(v.url) && !!hostnameFor(v.url);
           });
           saveVisits();
           updateHistoryStatus();
@@ -4504,6 +4638,8 @@
 
   document.addEventListener('keydown', function (e) {
     if (document.body.classList.contains('focus-open')) return; // the focus timer has the keyboard
+    // The edit dialog is modal: page shortcuts mustn't reach behind it.
+    if (!modalOverlay.classList.contains('hidden') && e.key !== 'Escape') return;
     var tag = (e.target.tagName || '').toLowerCase();
     var typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
 
@@ -4550,7 +4686,7 @@
         if (searchInput.value) {
           clearSearch();
         } else {
-          resultsEl.classList.add('hidden');
+          setResultsOpen(false);
           searchInput.blur();
         }
       } else if (zenActive) {

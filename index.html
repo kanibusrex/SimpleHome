@@ -75,6 +75,13 @@
 <style>
   :root {
     --radius: 14px;
+    /* Keyboard focus rings. The accent is too pale against the light themes'
+       near-white surfaces, so those ring in their text colour instead. */
+    --focus-ring: var(--accent);
+  }
+  html[data-theme="daybreak"], html[data-theme="frost"], html[data-theme="sunset"],
+  html[data-theme="bloom"], html[data-theme="ripple"], html[data-theme="ink"] {
+    --focus-ring: var(--text);
   }
 
   html[data-theme="ember"] {
@@ -2348,6 +2355,7 @@
     color: inherit;
     font-family: inherit;
     font-size: 12px;
+    letter-spacing: inherit;
     line-height: 1;
     cursor: pointer;
   }
@@ -2356,8 +2364,10 @@
   .group-tab-add { border-style: dashed; }
   /* The track clips anything drawn outside a tab, so focus rings sit inside. */
   .group-tab-name:focus-visible, .group-tab-remove:focus-visible, .group-tab-add:focus-visible { outline: none; }
-  .group-tab-name:focus-visible::after, .group-tab-add:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
-  .group-tab.active .group-tab-name:focus-visible::after { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85); }
+  .group-tab-name:focus-visible::after, .group-tab-add:focus-visible { box-shadow: inset 0 0 0 2px var(--focus-ring); }
+  /* The active pill can be any accent on a light or dark track, so its ring
+     is two-tone: one of the bands always stands out. */
+  .group-tab.active .group-tab-name:focus-visible::after { box-shadow: inset 0 0 0 2px #ffffff, inset 0 0 0 3.5px rgba(0, 0, 0, 0.6); }
   .group-tab-remove:focus-visible { box-shadow: 0 0 0 1.5px currentColor; }
 
   .shortcuts-grid {
@@ -2516,7 +2526,7 @@
     border-radius: inherit;
   }
   .tile:focus-visible, .tile-edit:focus-visible, .tile-remove:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--focus-ring);
     outline-offset: 3px;
   }
   .tile-remove:focus-visible { outline-offset: 2px; }
@@ -8643,6 +8653,8 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
 
   document.addEventListener('keydown', function (e) {
     if (document.body.classList.contains('focus-open')) return; // the focus timer has the keyboard
+    // The edit dialog is modal: page shortcuts mustn't reach behind it.
+    if (!modalOverlay.classList.contains('hidden') && e.key !== 'Escape') return;
     var tag = (e.target.tagName || '').toLowerCase();
     var typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
 
