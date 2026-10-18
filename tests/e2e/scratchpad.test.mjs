@@ -104,11 +104,6 @@ test('Clear asks before throwing a note away', async (t) => {
 
 test(
   'the last words typed are kept even if the tab closes straight away',
-  {
-    todo:
-      'the scratchpad only saves 400ms after the last keystroke and nothing flushes the pending save on ' +
-      'pagehide/visibilitychange, so text typed just before closing or reloading the tab is silently lost',
-  },
   async (t) => {
     const app = await browser.open(t);
     const { page } = app;

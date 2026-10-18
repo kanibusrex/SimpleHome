@@ -8138,6 +8138,7 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
   updateScratchCount();
 
   function saveScratch() {
+    scratchTimer = null;
     localStorage.setItem(STORAGE_SCRATCH, scratchText.value);
     scratchStatus.textContent = 'Saved';
     scratchStatus.classList.remove('saving');
@@ -8149,6 +8150,21 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
     updateScratchCount();
     clearTimeout(scratchTimer);
     scratchTimer = setTimeout(saveScratch, 400);
+  });
+
+  // The save waits for a pause in typing, so a tab closed, reloaded or
+  // switched away from mid-sentence would drop the last words; write any
+  // pending save out at once instead. Both events, since neither fires in
+  // every browser and case (a backgrounded mobile tab may be discarded
+  // without a pagehide).
+  function flushScratch() {
+    if (scratchTimer === null) return;
+    clearTimeout(scratchTimer);
+    saveScratch();
+  }
+  window.addEventListener('pagehide', flushScratch);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) flushScratch();
   });
 
   // Starts a checklist item on a fresh line at the cursor.
