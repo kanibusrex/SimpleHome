@@ -3447,6 +3447,46 @@
     .focus-view, .focus-view.open { transition: none; }
   }
 
+  /* ---- Horizon ----
+     The ambient view covers the page the same way Drift does; its styles
+     live in its own shadow root (see horizonTemplate). On the toolbar its
+     button carries a small ember that warms as something starts to need you. */
+  .horizon-view {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.6s ease, visibility 0s linear 0.6s;
+  }
+  .horizon-view.open {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.6s ease;
+  }
+  body.horizon-open { overflow: hidden; }
+  .toolbar .horizon-btn { position: relative; }
+  .toolbar .horizon-btn .hz-ember {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ff6a1a;
+    box-shadow: 0 0 8px 1px #ff6a1a;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    pointer-events: none;
+  }
+  .toolbar .horizon-btn[data-tier="steady"] .hz-ember { opacity: 0.75; }
+  .toolbar .horizon-btn[data-tier="flare"] .hz-ember { opacity: 1; animation: hz-ember 1.6s ease-in-out infinite; }
+  @keyframes hz-ember { 50% { box-shadow: 0 0 14px 4px #ff6a1a; } }
+  @media (prefers-reduced-motion: reduce) {
+    .horizon-view, .horizon-view.open { transition: none; }
+    .toolbar .horizon-btn .hz-ember { animation: none !important; }
+  }
+
   /* ---- Group tabs, refined: a segmented control ----
      One frosted track; the accent pill glides between tabs behind them. On a
      narrow screen the row scrolls sideways instead of wrapping. */
@@ -3526,6 +3566,7 @@
 
 <div class="toolbar">
   <button class="icon-btn focus-btn" id="focusBtn" aria-label="Focus timer" data-tip="Focus · F"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.8M10 2.5h4"/></svg><span class="tb-label">Focus</span></button>
+  <button class="icon-btn horizon-btn" id="horizonBtn" aria-label="Horizon" data-tip="Horizon · H" data-tier="quiet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 15.5h19"/><path d="M7.5 15.5a4.5 4.5 0 0 1 9 0"/><path d="M5.5 19.5h13"/><path d="M12 5.5v2.5M5.3 8.8l1.6 1.6M18.7 8.8l-1.6 1.6"/></svg><span class="hz-ember" aria-hidden="true"></span><span class="tb-label">Horizon</span></button>
   <button class="icon-btn scratch-btn" id="scratchBtn" aria-label="Scratchpad" data-tip="Scratchpad · Shift S"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 3.5H7a2.5 2.5 0 0 0-2.5 2.5v12A2.5 2.5 0 0 0 7 20.5h10a2.5 2.5 0 0 0 2.5-2.5V8.5z"/><path d="M14.5 3.5v5h5M8.5 13h7M8.5 16.5h4.5"/></svg><span class="tb-label">Notes</span></button>
   <button class="icon-btn edit-btn" id="editBtn" aria-label="Edit shortcuts" data-tip="Edit shortcuts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 4.5l4 4L9 19H5v-4z"/><path d="M13 7l4 4"/></svg><span class="tb-label">Edit</span></button>
   <button class="icon-btn settings-btn" id="settingsBtn" aria-label="Settings" data-tip="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg><span class="tb-label">Settings</span></button>
@@ -3662,6 +3703,7 @@
       <span><kbd class="k">Alt</kbd><kbd class="k">1–9</kbd></span><span>Open a tile</span>
       <span><kbd class="k">Shift</kbd><kbd class="k">S</kbd></span><span>Scratchpad</span>
       <span><kbd class="k">Z</kbd></span><span>Zen mode</span>
+      <span><kbd class="k">H</kbd></span><span>Horizon</span>
       <span><kbd class="k">Esc</kbd></span><span>Close</span>
     </div>
   </div>
@@ -3721,6 +3763,7 @@
 </div>
 
 <div class="focus-view" id="focusView" role="dialog" aria-label="Drift focus timer" aria-hidden="true"></div>
+<div class="horizon-view" id="horizonView" role="dialog" aria-label="Horizon" aria-hidden="true"></div>
 
 <template id="driftTemplate">
 <style>
@@ -4115,8 +4158,294 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
 <div class="toast" id="toast" role="status"></div>
 </div>
 </template>
+<template id="horizonTemplate">
+<style>
+/* Horizon: a dark sky, slate ground, and one lit line between them. The line
+   warms as something starts to need you; the sentence above it is the one
+   thing that matters now. Everything else waits above (ahead) or below (settled). */
+:host {
+  color-scheme: dark;
+  --sky: #040404;
+  --ground-top: #23272b;
+  --ground-bottom: #04060a;
+  --ember: #ff6a1a;
+  --ember-hot: #ffb27a;
+  --ink: #ece6e1;
+  --mist: #9c958f;
+  --faint: #5d5853;
+  --edge: rgba(236, 230, 225, 0.12);
+  --line-y: 57%;
+  --heat: 0.15;
+  --display: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+  --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+[hidden] { display: none !important; }
+.hz {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--sky);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: normal;
+  text-align: left;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; }
+
+/* ---- the scene ---- */
+.ground {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  top: var(--line-y);
+  background: linear-gradient(to bottom, var(--ground-top), #12161b 30%, var(--ground-bottom));
+}
+/* Warm haze in the sky just above the line; it rises and spreads with heat. */
+.haze {
+  position: absolute;
+  left: -10%; right: -10%;
+  bottom: calc(100% - var(--line-y));
+  height: calc(10% + 26% * var(--heat));
+  background: radial-gradient(ellipse 60% 100% at 50% 100%, rgba(255, 106, 26, 0.55), rgba(140, 45, 10, 0.25) 45%, transparent 75%);
+  opacity: calc(0.25 + 0.75 * var(--heat));
+  transition: height 2.4s ease, opacity 2.4s ease;
+  pointer-events: none;
+}
+/* The ground catches a little of the light, fading fast. */
+.reflect {
+  position: absolute;
+  left: 15%; right: 15%;
+  top: var(--line-y);
+  height: 14%;
+  background: radial-gradient(ellipse 50% 100% at 50% 0%, rgba(255, 120, 50, 0.22), transparent 70%);
+  opacity: calc(0.2 + 0.8 * var(--heat));
+  transition: opacity 2.4s ease;
+  pointer-events: none;
+}
+.line {
+  position: absolute;
+  left: 0; right: 0;
+  top: var(--line-y);
+  height: 1px;
+  transform: translateY(-0.5px);
+  background: linear-gradient(to right, transparent, rgba(255, 106, 26, 0.45) 8%, rgba(255, 106, 26, 0.6) 50%, rgba(255, 106, 26, 0.45) 92%, transparent);
+  pointer-events: none;
+}
+/* The bright core at the centre of the line. */
+.line::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(16% + 48% * var(--heat));
+  height: calc(3px + 3px * var(--heat));
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, #fff3e8 0%, var(--ember-hot) 12%, var(--ember) 35%, transparent 70%);
+  opacity: calc(0.35 + 0.65 * var(--heat));
+  filter: blur(0.5px);
+  transition: width 2.4s ease, height 2.4s ease, opacity 2.4s ease;
+}
+.hz[data-tier="flare"] .line::after { animation: flare 2.2s ease-in-out infinite; }
+.hz[data-tier="flare"] .haze { animation: flare-haze 2.2s ease-in-out infinite; }
+@keyframes flare { 50% { opacity: 0.7; } }
+@keyframes flare-haze { 50% { opacity: 0.75; } }
+.hz:not([data-tier="flare"]) .line::after { animation: breathe 9s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: calc(0.25 + 0.6 * var(--heat)); } }
+
+/* ---- the bar ---- */
+.bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: max(16px, env(safe-area-inset-top, 0px)) 20px 0;
+  z-index: 2;
+  transition: opacity 0.6s ease;
+}
+.lead, .tools { display: flex; align-items: center; gap: 6px; }
+.brand { font-family: var(--display); font-size: 21px; letter-spacing: 0.04em; color: var(--mist); margin-left: 6px; }
+.phase { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); margin-left: 10px; }
+.tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mist);
+  cursor: pointer;
+  font-size: 13px;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+.tool:hover { color: var(--ink); background: rgba(236, 230, 225, 0.06); }
+.tool:focus-visible, .chip:focus-visible, .item button:focus-visible, .link:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.tool[aria-pressed="true"] { color: var(--ember-hot); border-color: rgba(255, 106, 26, 0.35); }
+.tool svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hz.still .bar, .hz.still .hints, .hz.still .actions { opacity: 0; }
+.hz.still { cursor: none; }
+
+/* ---- the sentence ---- */
+.say {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - var(--line-y) + 28px);
+  width: min(760px, calc(100% - 40px));
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 1;
+}
+.msg {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(26px, 4.4vw, 44px);
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  text-wrap: balance;
+  transition: opacity 0.5s ease, transform 0.5s ease, color 1.2s ease;
+}
+.hz[data-tier="quiet"] .msg { color: var(--mist); }
+.hz[data-tier="flare"] .msg { color: #fff1e6; text-shadow: 0 0 28px rgba(255, 106, 26, 0.35); }
+.msg.swap { opacity: 0; transform: translateY(6px); }
+.why {
+  margin: 10px 0 0;
+  min-height: 1.2em;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+}
+
+/* ---- actions under the line ---- */
+.actions {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--line-y) + 22px);
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 1;
+  transition: opacity 0.6s ease;
+}
+.chip {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: rgba(10, 12, 15, 0.5);
+  color: var(--mist);
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.chip:hover { color: var(--ink); border-color: rgba(236, 230, 225, 0.28); }
+.chip[aria-expanded="true"] { color: var(--ember-hot); border-color: rgba(255, 106, 26, 0.4); }
+
+/* ---- ahead (in the sky) and settled (in the ground) ---- */
+.list {
+  position: absolute;
+  left: 50%;
+  width: min(520px, calc(100% - 40px));
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  z-index: 1;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.45s ease, visibility 0s linear 0.45s;
+}
+.list.open { opacity: 1; visibility: visible; transition: opacity 0.45s ease; }
+.ahead { top: 84px; max-height: calc(var(--line-y) - 84px - 200px); overflow: auto; }
+.settled { top: calc(var(--line-y) + 72px); max-height: calc(100% - var(--line-y) - 140px); overflow: auto; }
+.list-head { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); padding: 0 0 8px; }
+.item {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--edge);
+}
+.item .when { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+.item .what { color: var(--ink); overflow-wrap: anywhere; }
+.item[data-tier="steady"] .when, .item[data-tier="flare"] .when { color: var(--ember); }
+.item.done .what { color: var(--mist); }
+.empty { color: var(--faint); font-size: 13px; padding: 9px 0; border-top: 1px solid var(--edge); }
+.link { background: none; border: 0; padding: 0; color: var(--mist); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: 12.5px; }
+.learned { color: var(--faint); font-size: 12.5px; padding: 12px 0 0; line-height: 1.5; }
+/* Wide enough for the sentence and a list side by side: lists slide over. */
+.hz[data-view="ahead"] .say, .hz[data-view="settled"] .say { opacity: 0.35; }
+.hz[data-view="settled"] .actions { opacity: 1; }
+
+.hints {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: max(18px, env(safe-area-inset-bottom, 0px));
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  transition: opacity 0.6s ease;
+}
+.hints kbd { font: inherit; color: var(--mist); }
+@media (max-width: 640px) {
+  .hints, .phase { display: none; }
+  .t-label { display: none; }
+  .item { grid-template-columns: 52px 1fr auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+<div class="hz" id="hz" data-tier="quiet" data-view="line">
+  <div class="ground"></div>
+  <div class="haze"></div>
+  <div class="reflect"></div>
+  <div class="line"></div>
+  <header class="bar">
+    <div class="lead">
+      <button class="tool" id="hzBack" title="Back to your shortcuts (Esc)" aria-label="Back to your shortcuts">
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+        <span class="t-label">Home</span>
+      </button>
+      <div class="brand">Horizon</div>
+      <div class="phase" id="hzPhase"></div>
+    </div>
+    <div class="tools">
+      <button class="tool" id="hzSound" aria-pressed="false" title="A soft tone when something needs you now">
+        <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>
+        <span class="t-label">Tone</span>
+      </button>
+    </div>
+  </header>
+  <section class="list ahead" id="hzAhead" aria-label="Ahead"></section>
+  <div class="say" role="status" aria-live="polite">
+    <p class="msg" id="hzMsg"></p>
+    <p class="why" id="hzWhy"></p>
+  </div>
+  <div class="actions">
+    <button class="chip" id="hzAheadBtn" aria-expanded="false" aria-controls="hzAhead">Ahead ↑</button>
+    <button class="chip" id="hzDismiss" hidden>Not now</button>
+    <button class="chip" id="hzSettledBtn" aria-expanded="false" aria-controls="hzSettled">Settled ↓</button>
+  </div>
+  <section class="list settled" id="hzSettled" aria-label="Settled"></section>
+  <p class="hints"><kbd>↑</kbd> ahead · <kbd>↓</kbd> settled · <kbd>D</kbd> not now · <kbd>Esc</kbd> home</p>
+</div>
+</template>
 
 <script src="newtab.js"></script>
+
 
 
 </body>

@@ -3446,6 +3446,46 @@
     .focus-view, .focus-view.open { transition: none; }
   }
 
+  /* ---- Horizon ----
+     The ambient view covers the page the same way Drift does; its styles
+     live in its own shadow root (see horizonTemplate). On the toolbar its
+     button carries a small ember that warms as something starts to need you. */
+  .horizon-view {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.6s ease, visibility 0s linear 0.6s;
+  }
+  .horizon-view.open {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.6s ease;
+  }
+  body.horizon-open { overflow: hidden; }
+  .toolbar .horizon-btn { position: relative; }
+  .toolbar .horizon-btn .hz-ember {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ff6a1a;
+    box-shadow: 0 0 8px 1px #ff6a1a;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    pointer-events: none;
+  }
+  .toolbar .horizon-btn[data-tier="steady"] .hz-ember { opacity: 0.75; }
+  .toolbar .horizon-btn[data-tier="flare"] .hz-ember { opacity: 1; animation: hz-ember 1.6s ease-in-out infinite; }
+  @keyframes hz-ember { 50% { box-shadow: 0 0 14px 4px #ff6a1a; } }
+  @media (prefers-reduced-motion: reduce) {
+    .horizon-view, .horizon-view.open { transition: none; }
+    .toolbar .horizon-btn .hz-ember { animation: none !important; }
+  }
+
   /* ---- Group tabs, refined: a segmented control ----
      One frosted track; the accent pill glides between tabs behind them. On a
      narrow screen the row scrolls sideways instead of wrapping. */
@@ -3525,6 +3565,7 @@
 
 <div class="toolbar">
   <button class="icon-btn focus-btn" id="focusBtn" aria-label="Focus timer" data-tip="Focus · F"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.8M10 2.5h4"/></svg><span class="tb-label">Focus</span></button>
+  <button class="icon-btn horizon-btn" id="horizonBtn" aria-label="Horizon" data-tip="Horizon · H" data-tier="quiet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 15.5h19"/><path d="M7.5 15.5a4.5 4.5 0 0 1 9 0"/><path d="M5.5 19.5h13"/><path d="M12 5.5v2.5M5.3 8.8l1.6 1.6M18.7 8.8l-1.6 1.6"/></svg><span class="hz-ember" aria-hidden="true"></span><span class="tb-label">Horizon</span></button>
   <button class="icon-btn scratch-btn" id="scratchBtn" aria-label="Scratchpad" data-tip="Scratchpad · Shift S"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 3.5H7a2.5 2.5 0 0 0-2.5 2.5v12A2.5 2.5 0 0 0 7 20.5h10a2.5 2.5 0 0 0 2.5-2.5V8.5z"/><path d="M14.5 3.5v5h5M8.5 13h7M8.5 16.5h4.5"/></svg><span class="tb-label">Notes</span></button>
   <button class="icon-btn edit-btn" id="editBtn" aria-label="Edit shortcuts" data-tip="Edit shortcuts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 4.5l4 4L9 19H5v-4z"/><path d="M13 7l4 4"/></svg><span class="tb-label">Edit</span></button>
   <button class="icon-btn settings-btn" id="settingsBtn" aria-label="Settings" data-tip="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg><span class="tb-label">Settings</span></button>
@@ -3661,6 +3702,7 @@
       <span><kbd class="k">Alt</kbd><kbd class="k">1–9</kbd></span><span>Open a tile</span>
       <span><kbd class="k">Shift</kbd><kbd class="k">S</kbd></span><span>Scratchpad</span>
       <span><kbd class="k">Z</kbd></span><span>Zen mode</span>
+      <span><kbd class="k">H</kbd></span><span>Horizon</span>
       <span><kbd class="k">Esc</kbd></span><span>Close</span>
     </div>
   </div>
@@ -3720,6 +3762,7 @@
 </div>
 
 <div class="focus-view" id="focusView" role="dialog" aria-label="Drift focus timer" aria-hidden="true"></div>
+<div class="horizon-view" id="horizonView" role="dialog" aria-label="Horizon" aria-hidden="true"></div>
 
 <template id="driftTemplate">
 <style>
@@ -4112,6 +4155,291 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
 </aside>
 
 <div class="toast" id="toast" role="status"></div>
+</div>
+</template>
+<template id="horizonTemplate">
+<style>
+/* Horizon: a dark sky, slate ground, and one lit line between them. The line
+   warms as something starts to need you; the sentence above it is the one
+   thing that matters now. Everything else waits above (ahead) or below (settled). */
+:host {
+  color-scheme: dark;
+  --sky: #040404;
+  --ground-top: #23272b;
+  --ground-bottom: #04060a;
+  --ember: #ff6a1a;
+  --ember-hot: #ffb27a;
+  --ink: #ece6e1;
+  --mist: #9c958f;
+  --faint: #5d5853;
+  --edge: rgba(236, 230, 225, 0.12);
+  --line-y: 57%;
+  --heat: 0.15;
+  --display: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+  --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+[hidden] { display: none !important; }
+.hz {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--sky);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: normal;
+  text-align: left;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; }
+
+/* ---- the scene ---- */
+.ground {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  top: var(--line-y);
+  background: linear-gradient(to bottom, var(--ground-top), #12161b 30%, var(--ground-bottom));
+}
+/* Warm haze in the sky just above the line; it rises and spreads with heat. */
+.haze {
+  position: absolute;
+  left: -10%; right: -10%;
+  bottom: calc(100% - var(--line-y));
+  height: calc(10% + 26% * var(--heat));
+  background: radial-gradient(ellipse 60% 100% at 50% 100%, rgba(255, 106, 26, 0.55), rgba(140, 45, 10, 0.25) 45%, transparent 75%);
+  opacity: calc(0.25 + 0.75 * var(--heat));
+  transition: height 2.4s ease, opacity 2.4s ease;
+  pointer-events: none;
+}
+/* The ground catches a little of the light, fading fast. */
+.reflect {
+  position: absolute;
+  left: 15%; right: 15%;
+  top: var(--line-y);
+  height: 14%;
+  background: radial-gradient(ellipse 50% 100% at 50% 0%, rgba(255, 120, 50, 0.22), transparent 70%);
+  opacity: calc(0.2 + 0.8 * var(--heat));
+  transition: opacity 2.4s ease;
+  pointer-events: none;
+}
+.line {
+  position: absolute;
+  left: 0; right: 0;
+  top: var(--line-y);
+  height: 1px;
+  transform: translateY(-0.5px);
+  background: linear-gradient(to right, transparent, rgba(255, 106, 26, 0.45) 8%, rgba(255, 106, 26, 0.6) 50%, rgba(255, 106, 26, 0.45) 92%, transparent);
+  pointer-events: none;
+}
+/* The bright core at the centre of the line. */
+.line::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(16% + 48% * var(--heat));
+  height: calc(3px + 3px * var(--heat));
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, #fff3e8 0%, var(--ember-hot) 12%, var(--ember) 35%, transparent 70%);
+  opacity: calc(0.35 + 0.65 * var(--heat));
+  filter: blur(0.5px);
+  transition: width 2.4s ease, height 2.4s ease, opacity 2.4s ease;
+}
+.hz[data-tier="flare"] .line::after { animation: flare 2.2s ease-in-out infinite; }
+.hz[data-tier="flare"] .haze { animation: flare-haze 2.2s ease-in-out infinite; }
+@keyframes flare { 50% { opacity: 0.7; } }
+@keyframes flare-haze { 50% { opacity: 0.75; } }
+.hz:not([data-tier="flare"]) .line::after { animation: breathe 9s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: calc(0.25 + 0.6 * var(--heat)); } }
+
+/* ---- the bar ---- */
+.bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: max(16px, env(safe-area-inset-top, 0px)) 20px 0;
+  z-index: 2;
+  transition: opacity 0.6s ease;
+}
+.lead, .tools { display: flex; align-items: center; gap: 6px; }
+.brand { font-family: var(--display); font-size: 21px; letter-spacing: 0.04em; color: var(--mist); margin-left: 6px; }
+.phase { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); margin-left: 10px; }
+.tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mist);
+  cursor: pointer;
+  font-size: 13px;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+.tool:hover { color: var(--ink); background: rgba(236, 230, 225, 0.06); }
+.tool:focus-visible, .chip:focus-visible, .item button:focus-visible, .link:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.tool[aria-pressed="true"] { color: var(--ember-hot); border-color: rgba(255, 106, 26, 0.35); }
+.tool svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hz.still .bar, .hz.still .hints, .hz.still .actions { opacity: 0; }
+.hz.still { cursor: none; }
+
+/* ---- the sentence ---- */
+.say {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - var(--line-y) + 28px);
+  width: min(760px, calc(100% - 40px));
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 1;
+}
+.msg {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(26px, 4.4vw, 44px);
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  text-wrap: balance;
+  transition: opacity 0.5s ease, transform 0.5s ease, color 1.2s ease;
+}
+.hz[data-tier="quiet"] .msg { color: var(--mist); }
+.hz[data-tier="flare"] .msg { color: #fff1e6; text-shadow: 0 0 28px rgba(255, 106, 26, 0.35); }
+.msg.swap { opacity: 0; transform: translateY(6px); }
+.why {
+  margin: 10px 0 0;
+  min-height: 1.2em;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+}
+
+/* ---- actions under the line ---- */
+.actions {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--line-y) + 22px);
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 1;
+  transition: opacity 0.6s ease;
+}
+.chip {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: rgba(10, 12, 15, 0.5);
+  color: var(--mist);
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.chip:hover { color: var(--ink); border-color: rgba(236, 230, 225, 0.28); }
+.chip[aria-expanded="true"] { color: var(--ember-hot); border-color: rgba(255, 106, 26, 0.4); }
+
+/* ---- ahead (in the sky) and settled (in the ground) ---- */
+.list {
+  position: absolute;
+  left: 50%;
+  width: min(520px, calc(100% - 40px));
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  z-index: 1;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.45s ease, visibility 0s linear 0.45s;
+}
+.list.open { opacity: 1; visibility: visible; transition: opacity 0.45s ease; }
+.ahead { top: 84px; max-height: calc(var(--line-y) - 84px - 200px); overflow: auto; }
+.settled { top: calc(var(--line-y) + 72px); max-height: calc(100% - var(--line-y) - 140px); overflow: auto; }
+.list-head { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); padding: 0 0 8px; }
+.item {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--edge);
+}
+.item .when { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+.item .what { color: var(--ink); overflow-wrap: anywhere; }
+.item[data-tier="steady"] .when, .item[data-tier="flare"] .when { color: var(--ember); }
+.item.done .what { color: var(--mist); }
+.empty { color: var(--faint); font-size: 13px; padding: 9px 0; border-top: 1px solid var(--edge); }
+.link { background: none; border: 0; padding: 0; color: var(--mist); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: 12.5px; }
+.learned { color: var(--faint); font-size: 12.5px; padding: 12px 0 0; line-height: 1.5; }
+/* Wide enough for the sentence and a list side by side: lists slide over. */
+.hz[data-view="ahead"] .say, .hz[data-view="settled"] .say { opacity: 0.35; }
+.hz[data-view="settled"] .actions { opacity: 1; }
+
+.hints {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: max(18px, env(safe-area-inset-bottom, 0px));
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  transition: opacity 0.6s ease;
+}
+.hints kbd { font: inherit; color: var(--mist); }
+@media (max-width: 640px) {
+  .hints, .phase { display: none; }
+  .t-label { display: none; }
+  .item { grid-template-columns: 52px 1fr auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+<div class="hz" id="hz" data-tier="quiet" data-view="line">
+  <div class="ground"></div>
+  <div class="haze"></div>
+  <div class="reflect"></div>
+  <div class="line"></div>
+  <header class="bar">
+    <div class="lead">
+      <button class="tool" id="hzBack" title="Back to your shortcuts (Esc)" aria-label="Back to your shortcuts">
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+        <span class="t-label">Home</span>
+      </button>
+      <div class="brand">Horizon</div>
+      <div class="phase" id="hzPhase"></div>
+    </div>
+    <div class="tools">
+      <button class="tool" id="hzSound" aria-pressed="false" title="A soft tone when something needs you now">
+        <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>
+        <span class="t-label">Tone</span>
+      </button>
+    </div>
+  </header>
+  <section class="list ahead" id="hzAhead" aria-label="Ahead"></section>
+  <div class="say" role="status" aria-live="polite">
+    <p class="msg" id="hzMsg"></p>
+    <p class="why" id="hzWhy"></p>
+  </div>
+  <div class="actions">
+    <button class="chip" id="hzAheadBtn" aria-expanded="false" aria-controls="hzAhead">Ahead ↑</button>
+    <button class="chip" id="hzDismiss" hidden>Not now</button>
+    <button class="chip" id="hzSettledBtn" aria-expanded="false" aria-controls="hzSettled">Settled ↓</button>
+  </div>
+  <section class="list settled" id="hzSettled" aria-label="Settled"></section>
+  <p class="hints"><kbd>↑</kbd> ahead · <kbd>↓</kbd> settled · <kbd>D</kbd> not now · <kbd>Esc</kbd> home</p>
 </div>
 </template>
 
@@ -8623,8 +8951,8 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
 
   // The toolbar sits above the scrim, so its other buttons can be pressed
   // with a sheet open. Like switching tabs, that leaves the sheet rather than
-  // acting behind it, and Focus never opens over one (the F key won't either).
-  [editBtn, zenBtn, document.getElementById('focusBtn')].forEach(function (btn) {
+  // acting behind it, and Focus and Horizon never open over one (nor do their keys).
+  [editBtn, zenBtn, document.getElementById('focusBtn'), document.getElementById('horizonBtn')].forEach(function (btn) {
     btn.addEventListener('click', closePanels);
   });
 
@@ -8651,7 +8979,8 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
       engine: engineSelect.value,
       scratch: scratchText.value,
       visits: visits,
-      focus: window.SimpleHomeFocus ? window.SimpleHomeFocus.exportData() : undefined
+      focus: window.SimpleHomeFocus ? window.SimpleHomeFocus.exportData() : undefined,
+      horizon: window.SimpleHomeHorizon ? window.SimpleHomeHorizon.exportData() : undefined
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -8751,6 +9080,7 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
         }
 
         if (data.focus && window.SimpleHomeFocus) window.SimpleHomeFocus.importData(data.focus);
+        if (data.horizon && window.SimpleHomeHorizon) window.SimpleHomeHorizon.importData(data.horizon);
 
         flashBackupStatus('Settings imported.');
       } catch (err) {
@@ -8762,7 +9092,8 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
   });
 
   document.addEventListener('keydown', function (e) {
-    if (document.body.classList.contains('focus-open')) return; // the focus timer has the keyboard
+    // the focus timer and Horizon each have the keyboard while they're open
+    if (document.body.classList.contains('focus-open') || document.body.classList.contains('horizon-open')) return;
     // The edit dialog is modal: page shortcuts mustn't reach behind it.
     if (!modalOverlay.classList.contains('hidden') && e.key !== 'Escape') return;
     var tag = (e.target.tagName || '').toLowerCase();
@@ -8935,6 +9266,7 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
   function gestureBlocked(target) {
     return editing ||
       document.body.classList.contains('focus-open') ||
+      document.body.classList.contains('horizon-open') ||
       !modalOverlay.classList.contains('hidden') ||
       !settingsPanel.classList.contains('hidden') ||
       !scratchPanel.classList.contains('hidden') ||
@@ -11300,6 +11632,7 @@ function renderLog() {
 
 let open = false;
 function homeLayerOpen() {
+  if (document.body.classList.contains("horizon-open")) return true;
   return ["settingsPanel", "scratchPanel", "modalOverlay"].some(id => {
     const el = document.getElementById(id);
     return el && !el.classList.contains("hidden");
@@ -11345,6 +11678,12 @@ $("#backBtn").addEventListener("click", closeFocus);
 
 // Settings → Backup carries sessions and sound settings too
 window.SimpleHomeFocus = {
+  // what Horizon reads: the timer as it stands, and the session log
+  status() {
+    const remaining = T.state === "running" ? (T.endAt - Date.now()) / 1000 : T.remaining;
+    return { state: T.state, mode: T.mode, remaining: Math.max(0, remaining), open };
+  },
+  sessions() { return store.all(); },
   exportData() {
     return { sessions: store.all(), levels, planned, place: current.id, master, bell: bellOn, breaks: breaksOn };
   },
@@ -11442,6 +11781,474 @@ view.init();
 setPlace(current, true);
 setState("idle");
 renderLog();
+})();
+</script>
+<script>
+// ---- Horizon: an ambient view that shows the one thing that needs you ----
+// Reads what the page already knows (the scratchpad and Drift's sessions),
+// scores it, and puts the winner on a single lit line. Nothing leaves the page.
+(() => {
+const host = document.getElementById("horizonView");
+const tpl = document.getElementById("horizonTemplate");
+const tab = document.getElementById("horizonBtn");
+if (!host || !tpl || !host.attachShadow) { if (tab) tab.hidden = true; return; }
+const root = host.attachShadow({ mode: "open" });
+root.append(tpl.content.cloneNode(true));
+const $ = s => root.querySelector(s);
+const ui = $("#hz");
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem("homepage.horizon." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("homepage.horizon." + k, JSON.stringify(v)); } catch {} },
+};
+const MIN = 60 * 1000;
+const SNOOZE = 30 * MIN;
+const pad = n => String(n).padStart(2, "0");
+const dayKey = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+
+/* ================= reading the scratchpad ================= */
+
+// "- [ ] 14:30 Call the dentist", "- [ ] 2pm standup", "- [x] 9:15 – gym".
+// A bare number isn't a time ("- [ ] 3 eggs"): it needs minutes or am/pm.
+const ITEM = /^\s*[-*]\s*\[( |x|X)\]\s*(.*)$/;
+const TIMED = /^@?(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|a|p)?(?![\w:])\s*[-–—:·]?\s*(.*)$/i;
+
+function parseTime(text, now) {
+  const m = TIMED.exec(text);
+  if (!m || (!m[2] && !m[3])) return null;
+  let h = +m[1];
+  const min = m[2] ? +m[2] : 0;
+  const mer = m[3] && m[3][0].toLowerCase();
+  if (min > 59) return null;
+  if (mer) { if (h < 1 || h > 12) return null; h = (h % 12) + (mer === "p" ? 12 : 0); }
+  else if (h > 23) return null;
+  const d = new Date(now);
+  d.setHours(h, min, 0, 0);
+  return { at: d.getTime(), what: m[4].trim() || text };
+}
+
+function readItems(now) {
+  let raw = "";
+  try { raw = localStorage.getItem("homepage.scratch") || ""; } catch {}
+  const items = [];
+  for (const line of raw.split("\n")) {
+    const m = ITEM.exec(line);
+    if (!m || !m[2].trim()) continue;
+    const text = m[2].trim();
+    const t = parseTime(text, now);
+    items.push({ done: m[1] !== " ", text, what: t ? t.what : text, at: t ? t.at : null });
+  }
+  return items;
+}
+
+/* ================= reading Drift ================= */
+
+function focusInfo(now) {
+  const F = window.SimpleHomeFocus;
+  const status = F && F.status ? F.status() : { state: "idle" };
+  const sessions = F && F.sessions ? F.sessions() : [];
+  const byDay = new Map();
+  for (const s of sessions) { const k = dayKey(s.start); byDay.set(k, (byDay.get(k) || 0) + s.mins); }
+  const today = byDay.get(dayKey(now)) || 0;
+  // the streak through yesterday: what today's first session would keep alive
+  let streak = 0;
+  const d = new Date(now); d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() - 1);
+  while (byDay.get(dayKey(d.getTime()))) { streak++; d.setDate(d.getDate() - 1); }
+  return { status, today, streak };
+}
+
+/* ================= the phase of the day ================= */
+
+const PHASES = [
+  { id: "night", from: 0, label: "Night", floor: 0.06 },
+  { id: "dawn", from: 5, label: "Dawn", floor: 0.3 },
+  { id: "day", from: 10, label: "Day", floor: 0.18 },
+  { id: "dusk", from: 17, label: "Dusk", floor: 0.24 },
+  { id: "night", from: 22, label: "Night", floor: 0.06 },
+];
+function phaseAt(now) {
+  const h = new Date(now).getHours();
+  let p = PHASES[0];
+  for (const q of PHASES) if (h >= q.from) p = q;
+  return p;
+}
+
+/* ================= the engine ================= */
+
+// Each signal: { id, kind, text, why, weight 0..1, at? }. The heaviest one
+// becomes the line; its weight sets how brightly the line burns.
+const fmtClock = ms => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+function inWords(mins) {
+  if (mins < 1) return "now";
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"}`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h} hour${h === 1 ? "" : "s"}`;
+}
+
+function gather(now) {
+  const items = readItems(now);
+  const focus = focusInfo(now);
+  const phase = phaseAt(now);
+  const hour = new Date(now).getHours() + new Date(now).getMinutes() / 60;
+  const open = items.filter(i => !i.done);
+  const timed = open.filter(i => i.at != null).sort((a, b) => a.at - b.at);
+  const loose = open.filter(i => i.at == null);
+  const signals = [];
+
+  for (const i of timed) {
+    const mins = Math.round((i.at - now) / MIN);
+    const id = "item:" + i.text;
+    if (mins > 0) {
+      const w = mins <= 15 ? 0.86 : mins <= 60 ? 0.58 : mins <= 120 ? 0.34 : 0.16;
+      signals.push({ id, kind: "due", at: i.at, weight: w,
+        text: `${i.what} in ${inWords(mins)}.`, why: `at ${fmtClock(i.at)} · from your scratchpad` });
+    } else if (mins > -60) {
+      signals.push({ id, kind: "due", at: i.at, weight: 0.95,
+        text: mins === 0 ? `${i.what} — now.` : `${i.what} was due ${inWords(-mins)} ago.`, why: `at ${fmtClock(i.at)} · still unchecked` });
+    } else {
+      signals.push({ id, kind: "overdue", at: i.at, weight: 0.42,
+        text: `Still open from ${fmtClock(i.at)}: ${i.what}.`, why: "check it off in the scratchpad, or let it go" });
+    }
+  }
+
+  const st = focus.status;
+  if (st.state === "running" || st.state === "paused") {
+    const left = Math.max(1, Math.ceil(st.remaining / 60));
+    const brk = st.mode === "break";
+    signals.push({ id: "focus", kind: "focus", weight: 0.3,
+      text: st.state === "paused" ? `${brk ? "Break" : "Focus"} paused · ${inWords(left)} left.` : brk ? `On a break · ${inWords(left)} left.` : `Focusing · ${inWords(left)} left.`,
+      why: "Drift is running" });
+  } else if (st.state === "done") {
+    signals.push({ id: "focus:done", kind: "focus", weight: 0.5,
+      text: "Session finished. Note what you worked on.", why: "press F to open Drift" });
+  }
+
+  if (focus.streak > 0 && focus.today === 0 && hour >= 17) {
+    signals.push({ id: "streak:" + dayKey(now), kind: "streak", weight: hour >= 21 ? 0.62 : 0.4,
+      text: `Your ${focus.streak}-day focus streak ends at midnight.`, why: "one session keeps it alive · F" });
+  }
+
+  if (loose.length) {
+    signals.push({ id: "open:" + loose[0].text, kind: "open", weight: Math.min(0.32, 0.18 + loose.length * 0.025),
+      text: loose.length === 1 ? `One thing open: ${loose[0].what}.` : `${loose.length} things open. Next: ${loose[0].what}.`,
+      why: "from your scratchpad" });
+  }
+
+  if (phase.id === "dawn" && (timed.length || loose.length)) {
+    const first = timed.find(i => i.at > now);
+    signals.push({ id: "dawn:" + dayKey(now), kind: "brief", weight: 0.26,
+      text: `Morning. ${open.length} thing${open.length === 1 ? "" : "s"} ahead today${first ? ` — first, ${first.what} at ${fmtClock(first.at)}` : ""}.`,
+      why: "your dawn briefing" });
+  }
+  if (hour >= 22.5 || hour < 4) {
+    signals.push({ id: "late:" + dayKey(now - 4 * 60 * MIN), kind: "late", weight: hour < 4 ? 0.48 : 0.36,
+      text: open.length ? "It's late. What's still open can wait for morning." : "It's late. Everything's settled — time to rest.",
+      why: "dusk wind-down" });
+  }
+
+  return { items, focus, phase, signals, timed, loose };
+}
+
+/* ================= learning what you dismiss ================= */
+
+// Every "Not now" quietens that kind of signal a little (never below half),
+// so the things you always wave away stop winning the line.
+let learned = LS.get("learned", {});
+let snoozed = LS.get("snoozed", {});
+const damp = kind => Math.max(0.5, Math.pow(0.88, learned[kind] || 0));
+const KIND_NAMES = { due: "upcoming times", overdue: "overdue items", focus: "focus sessions", streak: "your streak", open: "open items", brief: "the dawn briefing", late: "late-night nudges" };
+
+function rank(signals, now) {
+  for (const id in snoozed) if (snoozed[id] <= now) delete snoozed[id];
+  return signals
+    .filter(s => !snoozed[s.id])
+    .map(s => ({ ...s, score: s.weight * damp(s.kind) }))
+    .sort((a, b) => b.score - a.score || (a.at || 0) - (b.at || 0));
+}
+
+const tierOf = score => score >= 0.8 ? "flare" : score >= 0.5 ? "steady" : score >= 0.12 ? "ember" : "quiet";
+
+/* ================= sound ================= */
+
+let soundOn = LS.get("sound", false);
+let audio = null;
+function chime(tier) {
+  if (!soundOn) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  try {
+    if (!audio) audio = new AC();
+    if (audio.state === "suspended") audio.resume();
+    const t0 = audio.currentTime + 0.02;
+    // a low, rising pair: higher for more urgent
+    const base = tier === "flare" ? 392 : 262;
+    [base, base * 1.5].forEach((f, i) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(f * 0.98, t0 + i * 0.35);
+      o.frequency.linearRampToValueAtTime(f, t0 + i * 0.35 + 0.4);
+      g.gain.setValueAtTime(0, t0 + i * 0.35);
+      g.gain.linearRampToValueAtTime(0.08, t0 + i * 0.35 + 0.08);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.35 + 2.2);
+      o.connect(g).connect(audio.destination);
+      o.start(t0 + i * 0.35);
+      o.stop(t0 + i * 0.35 + 2.3);
+    });
+  } catch {}
+}
+function syncSound() { $("#hzSound").setAttribute("aria-pressed", String(soundOn)); }
+
+/* ================= drawing ================= */
+
+let open = false;
+let view = "line";
+let shown = null; // the signal on the line
+let lastTier = "quiet";
+let heat = 0;
+
+function row(when, what, cls, tier) {
+  const li = document.createElement("div");
+  li.className = "item" + (cls ? " " + cls : "");
+  if (tier) li.dataset.tier = tier;
+  li.innerHTML = '<span class="when"></span><span class="what"></span><span></span>';
+  li.querySelector(".when").textContent = when;
+  li.querySelector(".what").textContent = what;
+  return li;
+}
+function head(text) {
+  const h = document.createElement("div");
+  h.className = "list-head";
+  h.textContent = text;
+  return h;
+}
+function empty(text) {
+  const p = document.createElement("div");
+  p.className = "empty";
+  p.textContent = text;
+  return p;
+}
+
+let listKey = "";
+function renderLists(g, ranked, now) {
+  // rebuilt only when something in them changes, so focus inside survives the tick
+  const st = g.focus.status;
+  const key = JSON.stringify([g.items, g.focus.today, g.focus.streak, st.state, st.mode, Math.ceil((st.remaining || 0) / 60),
+    ranked.map(r => tierOf(r.score)), learned, Math.floor(now / MIN)]);
+  if (key === listKey) return;
+  listKey = key;
+  const ahead = $("#hzAhead");
+  ahead.replaceChildren(head("Ahead"));
+  const later = g.timed.filter(i => i.at > now);
+  for (const i of later) {
+    const s = ranked.find(r => r.id === "item:" + i.text);
+    ahead.append(row(fmtClock(i.at), i.what, "", s ? tierOf(s.score) : "ember"));
+  }
+  for (const i of g.loose) ahead.append(row("open", i.what));
+  if (st.state === "running" || st.state === "paused") ahead.append(row("drift", `${Math.max(1, Math.ceil(st.remaining / 60))} min left in this ${st.mode === "break" ? "break" : "session"}`));
+  if (!later.length && !g.loose.length && st.state !== "running") ahead.append(empty("Nothing ahead. Add “- [ ] 3:30pm something” to your scratchpad and it shows up here."));
+
+  const settled = $("#hzSettled");
+  settled.replaceChildren(head("Settled"));
+  const done = g.items.filter(i => i.done);
+  const past = g.timed.filter(i => i.at <= now);
+  for (const i of done) settled.append(row(i.at ? fmtClock(i.at) : "done", i.what, "done"));
+  if (g.focus.today) settled.append(row("drift", `${g.focus.today} min focused today`, "done"));
+  if (g.focus.streak && g.focus.today) settled.append(row("streak", `${g.focus.streak + 1} days in a row`, "done"));
+  if (!past.length) settled.append(row("✓", "Nothing overdue", "done"));
+  if (!done.length && !g.focus.today && past.length) settled.append(empty("Nothing checked off yet today."));
+
+  const quieter = Object.keys(learned).filter(k => learned[k] > 0 && KIND_NAMES[k]);
+  if (quieter.length) {
+    const p = document.createElement("p");
+    p.className = "learned";
+    p.textContent = "Quieter about " + quieter.map(k => `${KIND_NAMES[k]} (${learned[k]}× not now)`).join(", ") + ". ";
+    const b = document.createElement("button");
+    b.className = "link";
+    b.textContent = "Forget this";
+    b.addEventListener("click", () => { learned = {}; LS.set("learned", learned); refresh(true); $("#hzSettledBtn").focus(); });
+    p.append(b);
+    settled.append(p);
+  }
+}
+
+function refresh(force) {
+  const now = Date.now();
+  const g = gather(now);
+  const ranked = rank(g.signals, now);
+  const top = ranked[0] && ranked[0].score >= 0.12 ? ranked[0] : null;
+  const tier = top ? tierOf(top.score) : "quiet";
+  // the line never drops below the light the time of day gives it
+  heat = Math.max(g.phase.floor, top ? top.score : 0);
+
+  if (tier === "flare" && lastTier !== "flare") chime("flare");
+  else if (tier === "steady" && lastTier !== "steady" && lastTier !== "flare") chime("steady");
+  lastTier = tier;
+
+  // toolbar: a small ember, and the line itself as the tooltip
+  if (tab) {
+    tab.dataset.tier = tier;
+    const say = top ? top.text : "All clear.";
+    tab.dataset.tip = `${say.length > 52 ? say.slice(0, 51) + "…" : say} · H`;
+    tab.setAttribute("aria-label", `Horizon: ${say}`);
+  }
+  if (!open && !force) return;
+
+  ui.dataset.tier = tier;
+  ui.dataset.phase = g.phase.id;
+  ui.style.setProperty("--heat", heat.toFixed(3));
+  $("#hzPhase").textContent = `${g.phase.label} · ${fmtClock(now)}`;
+  const text = top ? top.text : quietLine(g);
+  const why = top ? top.why : "";
+  const msg = $("#hzMsg");
+  if (msg.textContent !== text) {
+    if (msg.textContent && !force) {
+      msg.classList.add("swap");
+      setTimeout(() => { msg.textContent = text; msg.classList.remove("swap"); }, 420);
+    } else msg.textContent = text;
+  }
+  $("#hzWhy").textContent = why;
+  shown = top;
+  $("#hzDismiss").hidden = !top;
+  renderLists(g, ranked, now);
+}
+
+function quietLine(g) {
+  if (g.phase.id === "night") return "All quiet. Rest.";
+  if (g.phase.id === "dawn") return "Morning. Nothing needs you yet.";
+  return "All clear.";
+}
+
+function setView(v) {
+  view = view === v ? "line" : v;
+  ui.dataset.view = view;
+  $("#hzAhead").classList.toggle("open", view === "ahead");
+  $("#hzSettled").classList.toggle("open", view === "settled");
+  $("#hzAheadBtn").setAttribute("aria-expanded", String(view === "ahead"));
+  $("#hzSettledBtn").setAttribute("aria-expanded", String(view === "settled"));
+  wake();
+}
+
+function dismiss() {
+  if (!shown) return;
+  snoozed[shown.id] = Date.now() + SNOOZE;
+  learned[shown.kind] = (learned[shown.kind] || 0) + 1;
+  LS.set("snoozed", snoozed);
+  LS.set("learned", learned);
+  refresh();
+}
+
+/* ================= stillness ================= */
+
+// Like Drift, the chrome fades when you stop moving; only the line stays.
+let stillT;
+function wake() {
+  ui.classList.remove("still");
+  clearTimeout(stillT);
+  if (open && view === "line") stillT = setTimeout(() => ui.classList.add("still"), 6000);
+}
+ui.addEventListener("pointermove", wake);
+ui.addEventListener("pointerdown", wake);
+
+/* ================= opening and closing ================= */
+
+let ticker = null;
+function openHorizon() {
+  if (open) return;
+  open = true;
+  host.classList.add("open");
+  host.setAttribute("aria-hidden", "false");
+  document.body.classList.add("horizon-open");
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+  if (tab) tab.classList.add("active");
+  refresh(true);
+  clearInterval(ticker);
+  ticker = setInterval(refresh, 1000);
+  wake();
+  setTimeout(() => $("#hzBack").focus({ preventScroll: true }), 80);
+}
+function closeHorizon() {
+  if (!open) return;
+  open = false;
+  if (view !== "line") setView(view);
+  host.classList.remove("open");
+  host.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("horizon-open");
+  if (tab) tab.classList.remove("active");
+  clearInterval(ticker);
+  ticker = setInterval(refresh, 30 * 1000);
+  clearTimeout(stillT);
+  if (tab && getComputedStyle(tab).display !== "none") tab.focus({ preventScroll: true });
+}
+
+if (tab) tab.addEventListener("click", () => (open ? closeHorizon() : openHorizon()));
+$("#hzBack").addEventListener("click", closeHorizon);
+$("#hzAheadBtn").addEventListener("click", () => setView("ahead"));
+$("#hzSettledBtn").addEventListener("click", () => setView("settled"));
+$("#hzDismiss").addEventListener("click", dismiss);
+$("#hzSound").addEventListener("click", () => {
+  soundOn = !soundOn;
+  LS.set("sound", soundOn);
+  syncSound();
+  if (soundOn) chime("steady"); // a preview, and the gesture audio needs
+});
+// a scratchpad edit in another tab shows up straight away
+addEventListener("storage", e => { if (e.key === "homepage.scratch") refresh(); });
+
+// swipe up for ahead, down for settled
+let touchY = null;
+ui.addEventListener("touchstart", e => { touchY = e.touches.length === 1 ? e.touches[0].clientY : null; }, { passive: true });
+ui.addEventListener("touchend", e => {
+  if (touchY == null) return;
+  const dy = e.changedTouches[0].clientY - touchY;
+  touchY = null;
+  if (Math.abs(dy) < 60 || e.target.closest(".list")) return;
+  if (dy < 0) setView(view === "settled" ? "settled" : "ahead");
+  else setView(view === "ahead" ? "ahead" : "settled");
+});
+
+function homeLayerOpen() {
+  if (document.body.classList.contains("focus-open")) return true;
+  return ["settingsPanel", "scratchPanel", "modalOverlay"].some(id => {
+    const el = document.getElementById(id);
+    return el && !el.classList.contains("hidden");
+  });
+}
+
+addEventListener("keydown", e => {
+  const target = e.composedPath()[0] || e.target;
+  const typing = !!(target.closest && target.closest("input, textarea, select, [contenteditable]"));
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!open) {
+    if ((e.key === "h" || e.key === "H") && !e.shiftKey && !typing && !homeLayerOpen()) { e.preventDefault(); openHorizon(); }
+    return;
+  }
+  wake();
+  if (e.key === "Escape") { if (view !== "line") setView(view); else closeHorizon(); return; }
+  if (typing) return;
+  if (e.key === "ArrowUp") { e.preventDefault(); setView("ahead"); }
+  else if (e.key === "ArrowDown") { e.preventDefault(); setView("settled"); }
+  else if (e.key === "d" || e.key === "D") dismiss();
+  else if (e.key === "h" || e.key === "H") closeHorizon();
+});
+
+// Settings → Backup carries the tone setting and what Horizon has learned
+window.SimpleHomeHorizon = {
+  exportData() { return { sound: soundOn, learned }; },
+  importData(d) {
+    if (!d || typeof d !== "object") return;
+    if (typeof d.sound === "boolean") { soundOn = d.sound; LS.set("sound", soundOn); syncSound(); }
+    if (d.learned && typeof d.learned === "object") {
+      learned = {};
+      for (const k in KIND_NAMES) if (typeof d.learned[k] === "number" && d.learned[k] > 0) learned[k] = Math.min(50, Math.floor(d.learned[k]));
+      LS.set("learned", learned);
+    }
+    refresh();
+  },
+};
+
+syncSound();
+refresh();
+ticker = setInterval(refresh, 30 * 1000);
 })();
 </script>
 </body>

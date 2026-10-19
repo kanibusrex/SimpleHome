@@ -126,7 +126,7 @@ test(
       return !panel.classList.contains('hidden') && !panel.classList.contains('entering');
     });
     const covered = await page.evaluate(() =>
-      ['focusBtn', 'scratchBtn', 'editBtn', 'settingsBtn', 'zenBtn'].filter((id) => {
+      ['focusBtn', 'horizonBtn', 'scratchBtn', 'editBtn', 'settingsBtn', 'zenBtn'].filter((id) => {
         const r = document.getElementById(id).getBoundingClientRect();
         const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
         return !hit || !hit.closest('#' + id);

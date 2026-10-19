@@ -64,6 +64,7 @@ test('export writes a JSON backup with the documented keys', async (t) => {
     'exportedAt',
     'focus',
     'groups',
+    'horizon',
     'scratch',
     'shortcuts',
     'theme',

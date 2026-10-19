@@ -1,6 +1,6 @@
 # SimpleHome
 
-A custom browser home page. One HTML file, no build step, no dependencies, no tracking — clock, launcher search, editable shortcuts, a scratchpad, a focus timer with generated soundscapes, and thirty-six themes with animated backgrounds and customizable accent colors.
+A custom browser home page. One HTML file, no build step, no dependencies, no tracking — clock, launcher search, editable shortcuts, a scratchpad, a focus timer with generated soundscapes, an ambient view that shows only what needs you, and thirty-six themes with animated backgrounds and customizable accent colors.
 
 Optionally, an accompanying Chrome extension puts it on your new tab page and blocks ads using EasyList.
 
@@ -38,6 +38,17 @@ Settings → History shows how many sites are remembered and clears them, with a
 **Zen mode.** `Z` (or the ◎ button) strips everything down to just the clock and search bar, dead-centered, with the theme's background animation still running as ambience. `Esc` or `Z` again brings everything back. The state is remembered across reloads.
 
 **Focus.** `F` (or the timer button) opens Drift, a focus timer that fills the screen with a place to work in: Rain on Glass, Night Train, Corner Café, Night Shore, Server Room, Fireside, Night Forest or Reading Room. Each place is a live canvas scene with a soundscape generated in the browser by the Web Audio API — there are no audio files — and the two are tied together: a drop you hear lands on the glass, the view jolts as the wheels cross a rail joint, foam runs up the sand as a wave breaks, drive lights flicker as the disks seek, sparks fly when the sap pops, an owl's eyes catch the light when it calls, and the pendulum swings in time with the clock. A mixer sets the four layers of each place, remembered per place. Pick 15 to 90 minutes (or any length in 5-minute steps) and the controls fade away until you move; the session ends with a slow fade and an optional bell, then asks what you worked on. Pomodoro breaks are a switch away: 5 minutes after each round and 15 after every fourth, played quieter, with the note taken during the break instead. The log shows today, this week, your streak and all-time totals, a 26-week heatmap and recent sessions with their notes. `Esc` or Home goes back to your shortcuts without stopping anything: the toolbar button counts down, as does the tab title, and the timer reopens itself when a session or break ends. The timer has its own styles inside a shadow root, so the themes and it never touch.
+
+**Horizon.** `H` (or the sunrise button) opens an ambient view: a black sky, slate ground, and a single lit line between them, with one sentence above it — the one thing that needs you now. It reads what the page already knows, scores it, and puts the winner on the line; nothing is sent anywhere and there is no model behind it, just rules you can read in the source.
+
+- *What it reads.* Scratchpad checklist items, with or without a time — `- [ ] 14:40 Call the dentist` and `- [ ] 4pm design review` are timed, `- [ ] 3 eggs` isn't (a time needs minutes or am/pm). Drift's running timer and session log, for the time left and your streak. And the time of day.
+- *What it says.* "Call the dentist in 8 minutes." "Design review was due 5 minutes ago." "3 things open. Next: reply to Sam." "Your 4-day focus streak ends at midnight." A dawn briefing in the morning, a wind-down nudge late at night. With nothing to say it says "All clear."
+- *How bright.* The line's glow is the urgency: a faint ember for something on the way, a steady orange for something soon, and a pulsing flare for now — an item within 15 minutes or just overdue. The haze over the line rises with it, and the time of day sets a floor, warmer at dawn and nearly dark at night. On the home page the toolbar button carries a small ember that lights at steady and pulses at flare, and its tooltip is the line itself, so you can check it without opening anything.
+- *Ahead and settled.* `↑` (or swipe up) lists what's ahead in the sky: timed items in order, open ones, the focus session. `↓` (or swipe down) lists what's settled in the ground: what you've checked off, minutes focused today, the streak.
+- *Not now.* `D` snoozes the line for 30 minutes and teaches Horizon that you wave that kind of signal away: each dismissal quietens the kind a little (never below half), so things you always dismiss stop winning the line. The settled list says what it has learned to be quieter about, with a button to forget it.
+- *Tone.* Optional and off by default: a soft, low two-note tone when the line steps up to steady, higher when it flares.
+
+The controls fade after a few seconds without movement, leaving only the line. `Esc` or Home goes back. Like Drift, it lives in its own shadow root. The tone setting and what it has learned are kept under `homepage.horizon.*` and travel with the backup.
 
 **Scratchpad.** A persistent notes panel that saves as you type, on a ruled page whose lines scroll with the text, with a live saved indicator, a word count, and buttons to start a checklist item or copy the whole note. `Shift+S` from anywhere. Lines starting with `- [ ]` are checklist items — click the brackets to check them off (toggles to `- [x]`); clicking anywhere else on the line just places the cursor like normal text.
 
@@ -96,7 +107,7 @@ The greeting, clock and date sit on a frosted-glass card so they read cleanly ov
 
 **Time-of-day greeting** above the clock, switching between morning, afternoon, evening, and night.
 
-**Export / import.** Everything lives in `localStorage`, which is per-browser and one "clear browsing data" away from gone. Settings → Backup writes a JSON file with your shortcuts, groups, theme, custom accent colors, engine, notes, autocomplete history, and focus sessions and sound settings, and reads it back on another machine.
+**Export / import.** Everything lives in `localStorage`, which is per-browser and one "clear browsing data" away from gone. Settings → Backup writes a JSON file with your shortcuts, groups, theme, custom accent colors, engine, notes, autocomplete history, focus sessions and sound settings, and Horizon's tone setting and what it has learned, and reads it back on another machine.
 
 ## Keyboard
 
@@ -110,7 +121,10 @@ The greeting, clock and date sit on a frosted-glass card so they read cleanly ov
 | `Shift+S` | Toggle the scratchpad |
 | `Z` | Toggle zen mode |
 | `F` | Open the focus timer |
-| `Esc` | Clear search / close the open panel or modal / exit zen mode / leave the focus timer |
+| `H` | Open Horizon |
+| `Esc` | Clear search / close the open panel or modal / exit zen mode / leave the focus timer or Horizon |
+
+Inside Horizon: `↑` shows what's ahead, `↓` what's settled, `D` dismisses the line for now.
 
 Inside the focus timer: `Space` starts or pauses, `←` `→` or `1`–`8` change place, `↑` `↓` change the length, `B` toggles Pomodoro breaks, `M` opens the mixer and `L` the log.
 
