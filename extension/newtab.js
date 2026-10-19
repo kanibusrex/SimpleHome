@@ -4507,8 +4507,8 @@
 
   // The toolbar sits above the scrim, so its other buttons can be pressed
   // with a sheet open. Like switching tabs, that leaves the sheet rather than
-  // acting behind it, and Focus never opens over one (the F key won't either).
-  [editBtn, zenBtn, document.getElementById('focusBtn')].forEach(function (btn) {
+  // acting behind it, and Focus and Horizon never open over one (nor do their keys).
+  [editBtn, zenBtn, document.getElementById('focusBtn'), document.getElementById('horizonBtn')].forEach(function (btn) {
     btn.addEventListener('click', closePanels);
   });
 
@@ -4535,7 +4535,8 @@
       engine: engineSelect.value,
       scratch: scratchText.value,
       visits: visits,
-      focus: window.SimpleHomeFocus ? window.SimpleHomeFocus.exportData() : undefined
+      focus: window.SimpleHomeFocus ? window.SimpleHomeFocus.exportData() : undefined,
+      horizon: window.SimpleHomeHorizon ? window.SimpleHomeHorizon.exportData() : undefined
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -4635,6 +4636,7 @@
         }
 
         if (data.focus && window.SimpleHomeFocus) window.SimpleHomeFocus.importData(data.focus);
+        if (data.horizon && window.SimpleHomeHorizon) window.SimpleHomeHorizon.importData(data.horizon);
 
         flashBackupStatus('Settings imported.');
       } catch (err) {
@@ -4646,7 +4648,8 @@
   });
 
   document.addEventListener('keydown', function (e) {
-    if (document.body.classList.contains('focus-open')) return; // the focus timer has the keyboard
+    // the focus timer and Horizon each have the keyboard while they're open
+    if (document.body.classList.contains('focus-open') || document.body.classList.contains('horizon-open')) return;
     // The edit dialog is modal: page shortcuts mustn't reach behind it.
     if (!modalOverlay.classList.contains('hidden') && e.key !== 'Escape') return;
     var tag = (e.target.tagName || '').toLowerCase();
@@ -4819,6 +4822,7 @@
   function gestureBlocked(target) {
     return editing ||
       document.body.classList.contains('focus-open') ||
+      document.body.classList.contains('horizon-open') ||
       !modalOverlay.classList.contains('hidden') ||
       !settingsPanel.classList.contains('hidden') ||
       !scratchPanel.classList.contains('hidden') ||
@@ -7182,6 +7186,7 @@ function renderLog() {
 
 let open = false;
 function homeLayerOpen() {
+  if (document.body.classList.contains("horizon-open")) return true;
   return ["settingsPanel", "scratchPanel", "modalOverlay"].some(id => {
     const el = document.getElementById(id);
     return el && !el.classList.contains("hidden");
@@ -7227,6 +7232,12 @@ $("#backBtn").addEventListener("click", closeFocus);
 
 // Settings → Backup carries sessions and sound settings too
 window.SimpleHomeFocus = {
+  // what Horizon reads: the timer as it stands, and the session log
+  status() {
+    const remaining = T.state === "running" ? (T.endAt - Date.now()) / 1000 : T.remaining;
+    return { state: T.state, mode: T.mode, remaining: Math.max(0, remaining), open };
+  },
+  sessions() { return store.all(); },
   exportData() {
     return { sessions: store.all(), levels, planned, place: current.id, master, bell: bellOn, breaks: breaksOn };
   },
@@ -7324,4 +7335,471 @@ view.init();
 setPlace(current, true);
 setState("idle");
 renderLog();
+})();
+
+// ---- Horizon: an ambient view that shows the one thing that needs you ----
+// Reads what the page already knows (the scratchpad and Drift's sessions),
+// scores it, and puts the winner on a single lit line. Nothing leaves the page.
+(() => {
+const host = document.getElementById("horizonView");
+const tpl = document.getElementById("horizonTemplate");
+const tab = document.getElementById("horizonBtn");
+if (!host || !tpl || !host.attachShadow) { if (tab) tab.hidden = true; return; }
+const root = host.attachShadow({ mode: "open" });
+root.append(tpl.content.cloneNode(true));
+const $ = s => root.querySelector(s);
+const ui = $("#hz");
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem("homepage.horizon." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("homepage.horizon." + k, JSON.stringify(v)); } catch {} },
+};
+const MIN = 60 * 1000;
+const SNOOZE = 30 * MIN;
+const pad = n => String(n).padStart(2, "0");
+const dayKey = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+
+/* ================= reading the scratchpad ================= */
+
+// "- [ ] 14:30 Call the dentist", "- [ ] 2pm standup", "- [x] 9:15 – gym".
+// A bare number isn't a time ("- [ ] 3 eggs"): it needs minutes or am/pm.
+const ITEM = /^\s*[-*]\s*\[( |x|X)\]\s*(.*)$/;
+const TIMED = /^@?(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|a|p)?(?![\w:])\s*[-–—:·]?\s*(.*)$/i;
+
+function parseTime(text, now) {
+  const m = TIMED.exec(text);
+  if (!m || (!m[2] && !m[3])) return null;
+  let h = +m[1];
+  const min = m[2] ? +m[2] : 0;
+  const mer = m[3] && m[3][0].toLowerCase();
+  if (min > 59) return null;
+  if (mer) { if (h < 1 || h > 12) return null; h = (h % 12) + (mer === "p" ? 12 : 0); }
+  else if (h > 23) return null;
+  const d = new Date(now);
+  d.setHours(h, min, 0, 0);
+  return { at: d.getTime(), what: m[4].trim() || text };
+}
+
+function readItems(now) {
+  let raw = "";
+  try { raw = localStorage.getItem("homepage.scratch") || ""; } catch {}
+  const items = [];
+  for (const line of raw.split("\n")) {
+    const m = ITEM.exec(line);
+    if (!m || !m[2].trim()) continue;
+    const text = m[2].trim();
+    const t = parseTime(text, now);
+    items.push({ done: m[1] !== " ", text, what: t ? t.what : text, at: t ? t.at : null });
+  }
+  return items;
+}
+
+/* ================= reading Drift ================= */
+
+function focusInfo(now) {
+  const F = window.SimpleHomeFocus;
+  const status = F && F.status ? F.status() : { state: "idle" };
+  const sessions = F && F.sessions ? F.sessions() : [];
+  const byDay = new Map();
+  for (const s of sessions) { const k = dayKey(s.start); byDay.set(k, (byDay.get(k) || 0) + s.mins); }
+  const today = byDay.get(dayKey(now)) || 0;
+  // the streak through yesterday: what today's first session would keep alive
+  let streak = 0;
+  const d = new Date(now); d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() - 1);
+  while (byDay.get(dayKey(d.getTime()))) { streak++; d.setDate(d.getDate() - 1); }
+  return { status, today, streak };
+}
+
+/* ================= the phase of the day ================= */
+
+const PHASES = [
+  { id: "night", from: 0, label: "Night", floor: 0.06 },
+  { id: "dawn", from: 5, label: "Dawn", floor: 0.3 },
+  { id: "day", from: 10, label: "Day", floor: 0.18 },
+  { id: "dusk", from: 17, label: "Dusk", floor: 0.24 },
+  { id: "night", from: 22, label: "Night", floor: 0.06 },
+];
+function phaseAt(now) {
+  const h = new Date(now).getHours();
+  let p = PHASES[0];
+  for (const q of PHASES) if (h >= q.from) p = q;
+  return p;
+}
+
+/* ================= the engine ================= */
+
+// Each signal: { id, kind, text, why, weight 0..1, at? }. The heaviest one
+// becomes the line; its weight sets how brightly the line burns.
+const fmtClock = ms => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+function inWords(mins) {
+  if (mins < 1) return "now";
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"}`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h} hour${h === 1 ? "" : "s"}`;
+}
+
+function gather(now) {
+  const items = readItems(now);
+  const focus = focusInfo(now);
+  const phase = phaseAt(now);
+  const hour = new Date(now).getHours() + new Date(now).getMinutes() / 60;
+  const open = items.filter(i => !i.done);
+  const timed = open.filter(i => i.at != null).sort((a, b) => a.at - b.at);
+  const loose = open.filter(i => i.at == null);
+  const signals = [];
+
+  for (const i of timed) {
+    const mins = Math.round((i.at - now) / MIN);
+    const id = "item:" + i.text;
+    if (mins > 0) {
+      const w = mins <= 15 ? 0.86 : mins <= 60 ? 0.58 : mins <= 120 ? 0.34 : 0.16;
+      signals.push({ id, kind: "due", at: i.at, weight: w,
+        text: `${i.what} in ${inWords(mins)}.`, why: `at ${fmtClock(i.at)} · from your scratchpad` });
+    } else if (mins > -60) {
+      signals.push({ id, kind: "due", at: i.at, weight: 0.95,
+        text: mins === 0 ? `${i.what} — now.` : `${i.what} was due ${inWords(-mins)} ago.`, why: `at ${fmtClock(i.at)} · still unchecked` });
+    } else {
+      signals.push({ id, kind: "overdue", at: i.at, weight: 0.42,
+        text: `Still open from ${fmtClock(i.at)}: ${i.what}.`, why: "check it off in the scratchpad, or let it go" });
+    }
+  }
+
+  const st = focus.status;
+  if (st.state === "running" || st.state === "paused") {
+    const left = Math.max(1, Math.ceil(st.remaining / 60));
+    const brk = st.mode === "break";
+    signals.push({ id: "focus", kind: "focus", weight: 0.3,
+      text: st.state === "paused" ? `${brk ? "Break" : "Focus"} paused · ${inWords(left)} left.` : brk ? `On a break · ${inWords(left)} left.` : `Focusing · ${inWords(left)} left.`,
+      why: "Drift is running" });
+  } else if (st.state === "done") {
+    signals.push({ id: "focus:done", kind: "focus", weight: 0.5,
+      text: "Session finished. Note what you worked on.", why: "press F to open Drift" });
+  }
+
+  if (focus.streak > 0 && focus.today === 0 && hour >= 17) {
+    signals.push({ id: "streak:" + dayKey(now), kind: "streak", weight: hour >= 21 ? 0.62 : 0.4,
+      text: `Your ${focus.streak}-day focus streak ends at midnight.`, why: "one session keeps it alive · F" });
+  }
+
+  if (loose.length) {
+    signals.push({ id: "open:" + loose[0].text, kind: "open", weight: Math.min(0.32, 0.18 + loose.length * 0.025),
+      text: loose.length === 1 ? `One thing open: ${loose[0].what}.` : `${loose.length} things open. Next: ${loose[0].what}.`,
+      why: "from your scratchpad" });
+  }
+
+  if (phase.id === "dawn" && (timed.length || loose.length)) {
+    const first = timed.find(i => i.at > now);
+    signals.push({ id: "dawn:" + dayKey(now), kind: "brief", weight: 0.26,
+      text: `Morning. ${open.length} thing${open.length === 1 ? "" : "s"} ahead today${first ? ` — first, ${first.what} at ${fmtClock(first.at)}` : ""}.`,
+      why: "your dawn briefing" });
+  }
+  if (hour >= 22.5 || hour < 4) {
+    signals.push({ id: "late:" + dayKey(now - 4 * 60 * MIN), kind: "late", weight: hour < 4 ? 0.48 : 0.36,
+      text: open.length ? "It's late. What's still open can wait for morning." : "It's late. Everything's settled — time to rest.",
+      why: "dusk wind-down" });
+  }
+
+  return { items, focus, phase, signals, timed, loose };
+}
+
+/* ================= learning what you dismiss ================= */
+
+// Every "Not now" quietens that kind of signal a little (never below half),
+// so the things you always wave away stop winning the line.
+let learned = LS.get("learned", {});
+let snoozed = LS.get("snoozed", {});
+const damp = kind => Math.max(0.5, Math.pow(0.88, learned[kind] || 0));
+const KIND_NAMES = { due: "upcoming times", overdue: "overdue items", focus: "focus sessions", streak: "your streak", open: "open items", brief: "the dawn briefing", late: "late-night nudges" };
+
+function rank(signals, now) {
+  for (const id in snoozed) if (snoozed[id] <= now) delete snoozed[id];
+  return signals
+    .filter(s => !snoozed[s.id])
+    .map(s => ({ ...s, score: s.weight * damp(s.kind) }))
+    .sort((a, b) => b.score - a.score || (a.at || 0) - (b.at || 0));
+}
+
+const tierOf = score => score >= 0.8 ? "flare" : score >= 0.5 ? "steady" : score >= 0.12 ? "ember" : "quiet";
+
+/* ================= sound ================= */
+
+let soundOn = LS.get("sound", false);
+let audio = null;
+function chime(tier) {
+  if (!soundOn) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  try {
+    if (!audio) audio = new AC();
+    if (audio.state === "suspended") audio.resume();
+    const t0 = audio.currentTime + 0.02;
+    // a low, rising pair: higher for more urgent
+    const base = tier === "flare" ? 392 : 262;
+    [base, base * 1.5].forEach((f, i) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(f * 0.98, t0 + i * 0.35);
+      o.frequency.linearRampToValueAtTime(f, t0 + i * 0.35 + 0.4);
+      g.gain.setValueAtTime(0, t0 + i * 0.35);
+      g.gain.linearRampToValueAtTime(0.08, t0 + i * 0.35 + 0.08);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.35 + 2.2);
+      o.connect(g).connect(audio.destination);
+      o.start(t0 + i * 0.35);
+      o.stop(t0 + i * 0.35 + 2.3);
+    });
+  } catch {}
+}
+function syncSound() { $("#hzSound").setAttribute("aria-pressed", String(soundOn)); }
+
+/* ================= drawing ================= */
+
+let open = false;
+let view = "line";
+let shown = null; // the signal on the line
+let lastTier = "quiet";
+let heat = 0;
+
+function row(when, what, cls, tier) {
+  const li = document.createElement("div");
+  li.className = "item" + (cls ? " " + cls : "");
+  if (tier) li.dataset.tier = tier;
+  li.innerHTML = '<span class="when"></span><span class="what"></span><span></span>';
+  li.querySelector(".when").textContent = when;
+  li.querySelector(".what").textContent = what;
+  return li;
+}
+function head(text) {
+  const h = document.createElement("div");
+  h.className = "list-head";
+  h.textContent = text;
+  return h;
+}
+function empty(text) {
+  const p = document.createElement("div");
+  p.className = "empty";
+  p.textContent = text;
+  return p;
+}
+
+let listKey = "";
+function renderLists(g, ranked, now) {
+  // rebuilt only when something in them changes, so focus inside survives the tick
+  const st = g.focus.status;
+  const key = JSON.stringify([g.items, g.focus.today, g.focus.streak, st.state, st.mode, Math.ceil((st.remaining || 0) / 60),
+    ranked.map(r => tierOf(r.score)), learned, Math.floor(now / MIN)]);
+  if (key === listKey) return;
+  listKey = key;
+  const ahead = $("#hzAhead");
+  ahead.replaceChildren(head("Ahead"));
+  const later = g.timed.filter(i => i.at > now);
+  for (const i of later) {
+    const s = ranked.find(r => r.id === "item:" + i.text);
+    ahead.append(row(fmtClock(i.at), i.what, "", s ? tierOf(s.score) : "ember"));
+  }
+  for (const i of g.loose) ahead.append(row("open", i.what));
+  if (st.state === "running" || st.state === "paused") ahead.append(row("drift", `${Math.max(1, Math.ceil(st.remaining / 60))} min left in this ${st.mode === "break" ? "break" : "session"}`));
+  if (!later.length && !g.loose.length && st.state !== "running") ahead.append(empty("Nothing ahead. Add “- [ ] 3:30pm something” to your scratchpad and it shows up here."));
+
+  const settled = $("#hzSettled");
+  settled.replaceChildren(head("Settled"));
+  const done = g.items.filter(i => i.done);
+  const past = g.timed.filter(i => i.at <= now);
+  for (const i of done) settled.append(row(i.at ? fmtClock(i.at) : "done", i.what, "done"));
+  if (g.focus.today) settled.append(row("drift", `${g.focus.today} min focused today`, "done"));
+  if (g.focus.streak && g.focus.today) settled.append(row("streak", `${g.focus.streak + 1} days in a row`, "done"));
+  if (!past.length) settled.append(row("✓", "Nothing overdue", "done"));
+  if (!done.length && !g.focus.today && past.length) settled.append(empty("Nothing checked off yet today."));
+
+  const quieter = Object.keys(learned).filter(k => learned[k] > 0 && KIND_NAMES[k]);
+  if (quieter.length) {
+    const p = document.createElement("p");
+    p.className = "learned";
+    p.textContent = "Quieter about " + quieter.map(k => `${KIND_NAMES[k]} (${learned[k]}× not now)`).join(", ") + ". ";
+    const b = document.createElement("button");
+    b.className = "link";
+    b.textContent = "Forget this";
+    b.addEventListener("click", () => { learned = {}; LS.set("learned", learned); refresh(true); $("#hzSettledBtn").focus(); });
+    p.append(b);
+    settled.append(p);
+  }
+}
+
+function refresh(force) {
+  const now = Date.now();
+  const g = gather(now);
+  const ranked = rank(g.signals, now);
+  const top = ranked[0] && ranked[0].score >= 0.12 ? ranked[0] : null;
+  const tier = top ? tierOf(top.score) : "quiet";
+  // the line never drops below the light the time of day gives it
+  heat = Math.max(g.phase.floor, top ? top.score : 0);
+
+  if (tier === "flare" && lastTier !== "flare") chime("flare");
+  else if (tier === "steady" && lastTier !== "steady" && lastTier !== "flare") chime("steady");
+  lastTier = tier;
+
+  // toolbar: a small ember, and the line itself as the tooltip
+  if (tab) {
+    tab.dataset.tier = tier;
+    const say = top ? top.text : "All clear.";
+    tab.dataset.tip = `${say.length > 52 ? say.slice(0, 51) + "…" : say} · H`;
+    tab.setAttribute("aria-label", `Horizon: ${say}`);
+  }
+  if (!open && !force) return;
+
+  ui.dataset.tier = tier;
+  ui.dataset.phase = g.phase.id;
+  ui.style.setProperty("--heat", heat.toFixed(3));
+  $("#hzPhase").textContent = `${g.phase.label} · ${fmtClock(now)}`;
+  const text = top ? top.text : quietLine(g);
+  const why = top ? top.why : "";
+  const msg = $("#hzMsg");
+  if (msg.textContent !== text) {
+    if (msg.textContent && !force) {
+      msg.classList.add("swap");
+      setTimeout(() => { msg.textContent = text; msg.classList.remove("swap"); }, 420);
+    } else msg.textContent = text;
+  }
+  $("#hzWhy").textContent = why;
+  shown = top;
+  $("#hzDismiss").hidden = !top;
+  renderLists(g, ranked, now);
+}
+
+function quietLine(g) {
+  if (g.phase.id === "night") return "All quiet. Rest.";
+  if (g.phase.id === "dawn") return "Morning. Nothing needs you yet.";
+  return "All clear.";
+}
+
+function setView(v) {
+  view = view === v ? "line" : v;
+  ui.dataset.view = view;
+  $("#hzAhead").classList.toggle("open", view === "ahead");
+  $("#hzSettled").classList.toggle("open", view === "settled");
+  $("#hzAheadBtn").setAttribute("aria-expanded", String(view === "ahead"));
+  $("#hzSettledBtn").setAttribute("aria-expanded", String(view === "settled"));
+  wake();
+}
+
+function dismiss() {
+  if (!shown) return;
+  snoozed[shown.id] = Date.now() + SNOOZE;
+  learned[shown.kind] = (learned[shown.kind] || 0) + 1;
+  LS.set("snoozed", snoozed);
+  LS.set("learned", learned);
+  refresh();
+}
+
+/* ================= stillness ================= */
+
+// Like Drift, the chrome fades when you stop moving; only the line stays.
+let stillT;
+function wake() {
+  ui.classList.remove("still");
+  clearTimeout(stillT);
+  if (open && view === "line") stillT = setTimeout(() => ui.classList.add("still"), 6000);
+}
+ui.addEventListener("pointermove", wake);
+ui.addEventListener("pointerdown", wake);
+
+/* ================= opening and closing ================= */
+
+let ticker = null;
+function openHorizon() {
+  if (open) return;
+  open = true;
+  host.classList.add("open");
+  host.setAttribute("aria-hidden", "false");
+  document.body.classList.add("horizon-open");
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+  if (tab) tab.classList.add("active");
+  refresh(true);
+  clearInterval(ticker);
+  ticker = setInterval(refresh, 1000);
+  wake();
+  setTimeout(() => $("#hzBack").focus({ preventScroll: true }), 80);
+}
+function closeHorizon() {
+  if (!open) return;
+  open = false;
+  if (view !== "line") setView(view);
+  host.classList.remove("open");
+  host.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("horizon-open");
+  if (tab) tab.classList.remove("active");
+  clearInterval(ticker);
+  ticker = setInterval(refresh, 30 * 1000);
+  clearTimeout(stillT);
+  if (tab && getComputedStyle(tab).display !== "none") tab.focus({ preventScroll: true });
+}
+
+if (tab) tab.addEventListener("click", () => (open ? closeHorizon() : openHorizon()));
+$("#hzBack").addEventListener("click", closeHorizon);
+$("#hzAheadBtn").addEventListener("click", () => setView("ahead"));
+$("#hzSettledBtn").addEventListener("click", () => setView("settled"));
+$("#hzDismiss").addEventListener("click", dismiss);
+$("#hzSound").addEventListener("click", () => {
+  soundOn = !soundOn;
+  LS.set("sound", soundOn);
+  syncSound();
+  if (soundOn) chime("steady"); // a preview, and the gesture audio needs
+});
+// a scratchpad edit in another tab shows up straight away
+addEventListener("storage", e => { if (e.key === "homepage.scratch") refresh(); });
+
+// swipe up for ahead, down for settled
+let touchY = null;
+ui.addEventListener("touchstart", e => { touchY = e.touches.length === 1 ? e.touches[0].clientY : null; }, { passive: true });
+ui.addEventListener("touchend", e => {
+  if (touchY == null) return;
+  const dy = e.changedTouches[0].clientY - touchY;
+  touchY = null;
+  if (Math.abs(dy) < 60 || e.target.closest(".list")) return;
+  if (dy < 0) setView(view === "settled" ? "settled" : "ahead");
+  else setView(view === "ahead" ? "ahead" : "settled");
+});
+
+function homeLayerOpen() {
+  if (document.body.classList.contains("focus-open")) return true;
+  return ["settingsPanel", "scratchPanel", "modalOverlay"].some(id => {
+    const el = document.getElementById(id);
+    return el && !el.classList.contains("hidden");
+  });
+}
+
+addEventListener("keydown", e => {
+  const target = e.composedPath()[0] || e.target;
+  const typing = !!(target.closest && target.closest("input, textarea, select, [contenteditable]"));
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!open) {
+    if ((e.key === "h" || e.key === "H") && !e.shiftKey && !typing && !homeLayerOpen()) { e.preventDefault(); openHorizon(); }
+    return;
+  }
+  wake();
+  if (e.key === "Escape") { if (view !== "line") setView(view); else closeHorizon(); return; }
+  if (typing) return;
+  if (e.key === "ArrowUp") { e.preventDefault(); setView("ahead"); }
+  else if (e.key === "ArrowDown") { e.preventDefault(); setView("settled"); }
+  else if (e.key === "d" || e.key === "D") dismiss();
+  else if (e.key === "h" || e.key === "H") closeHorizon();
+});
+
+// Settings → Backup carries the tone setting and what Horizon has learned
+window.SimpleHomeHorizon = {
+  exportData() { return { sound: soundOn, learned }; },
+  importData(d) {
+    if (!d || typeof d !== "object") return;
+    if (typeof d.sound === "boolean") { soundOn = d.sound; LS.set("sound", soundOn); syncSound(); }
+    if (d.learned && typeof d.learned === "object") {
+      learned = {};
+      for (const k in KIND_NAMES) if (typeof d.learned[k] === "number" && d.learned[k] > 0) learned[k] = Math.min(50, Math.floor(d.learned[k]));
+      LS.set("learned", learned);
+    }
+    refresh();
+  },
+};
+
+syncSound();
+refresh();
+ticker = setInterval(refresh, 30 * 1000);
 })();
