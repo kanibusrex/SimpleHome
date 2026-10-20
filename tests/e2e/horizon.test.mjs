@@ -248,3 +248,166 @@ test('a scratchpad edit from another tab reaches Horizon and is not written back
   await page.keyboard.press('Enter');
   assert.equal(await app.stored('homepage.scratch'), '- [ ] book flights\n- [x] 14:40 Call the dentist');
 });
+
+// ---- Claude ----
+// The API is answered by the test: page routes win over the harness's
+// network block, so nothing here leaves the machine.
+
+const AI = { key: 'sk-ant-test-0000-1234', model: 'claude-opus-5-5', decide: true, parse: true };
+const shadowText = (page, sel, text) =>
+  page.waitForFunction(([s, t]) => document.querySelector('#horizonView').shadowRoot.querySelector(s).textContent === t, [sel, text]);
+
+async function mockClaude(page, answer) {
+  const calls = [];
+  await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+    const req = route.request();
+    const body = JSON.parse(req.postData());
+    calls.push({ headers: req.headers(), body });
+    const out = await answer(body, calls.length);
+    if (out.status) return route.fulfill({ status: out.status, contentType: 'application/json', body: JSON.stringify({ type: 'error', error: { message: 'nope' } }) });
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        stop_reason: 'end_turn',
+        content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: JSON.stringify(out) }],
+      }),
+    });
+  });
+  return calls;
+}
+
+test('Claude can choose and word the line; the rules keep the countdown, the button and the alerts', async (t) => {
+  const app = await openAt(t, {
+    'homepage.horizon.ai': AI,
+    'homepage.scratch': '- [ ] 14:40 water the plants\n- [ ] 15:00 flight to Denver ~20m',
+  });
+  const { page } = app;
+  const calls = await mockClaude(page, () => ({
+    pick: 'item:15:00 flight to Denver ~20m',
+    line: 'Leave for your Denver flight in {countdown}.',
+    why: 'a flight won’t wait',
+    urgency: 0.97,
+  }));
+
+  await page.keyboard.press('h');
+  await shadowText(page, '#hzMsg', 'Leave for your Denver flight in 8 minutes.');
+  assert.equal(await page.locator('#horizonView #hzWhy').textContent(), 'a flight won’t wait · Claude');
+  assert.equal(await tier(page), 'flare');
+  // the toolbar, the tone and the alerts stay on the rules' own pick
+  assert.match(await page.getAttribute('#horizonBtn', 'data-tip'), /^water the plants in 8 minutes\./);
+
+  assert.equal(calls.length, 1);
+  const { headers, body } = calls[0];
+  assert.equal(headers['x-api-key'], AI.key);
+  assert.equal(headers['anthropic-version'], '2023-06-01');
+  assert.equal(headers['anthropic-dangerous-direct-browser-access'], 'true');
+  assert.equal(headers['anthropic-beta'], 'server-side-fallback-2026-07-01');
+  assert.equal(body.model, 'claude-opus-5-5');
+  assert.equal(body.fallbacks, 'default');
+  assert.equal(body.output_config.effort, 'low');
+  assert.equal(body.output_config.format.type, 'json_schema');
+  // something flares, so "none" is not on offer
+  assert.deepEqual(body.output_config.format.schema.properties.pick.enum, ['item:14:40 water the plants', 'item:15:00 flight to Denver ~20m']);
+  const sent = JSON.parse(body.messages[0].content);
+  assert.equal(sent.candidates[1].countdown, '8 minutes');
+
+  // The button belongs to Claude's pick.
+  await page.keyboard.press('Enter');
+  assert.equal(await app.stored('homepage.scratch'), '- [ ] 14:40 water the plants\n- [x] 15:00 flight to Denver ~20m');
+
+  // Nothing changed for the candidates after that answer... until the check-off: one new call.
+  await page.waitForTimeout(1500);
+  assert.equal(calls.length, 2, 'asks again once the candidates change, not every tick');
+});
+
+test('Claude may call it quiet only while nothing is steady or flaring', async (t) => {
+  const app = await openAt(t, { 'homepage.horizon.ai': AI, 'homepage.scratch': '- [ ] buy milk' });
+  const { page } = app;
+  const calls = await mockClaude(page, () => ({ pick: 'none', line: 'Nothing pressing. Enjoy the afternoon.', why: 'just milk, later', urgency: 0.1 }));
+  await page.keyboard.press('h');
+  await shadowText(page, '#hzMsg', 'Nothing pressing. Enjoy the afternoon.');
+  assert.ok(calls[0].body.output_config.format.schema.properties.pick.enum.includes('none'));
+  assert.equal(await tier(page), 'quiet');
+  assert.ok(await page.locator('#horizonView #hzAct').isHidden());
+});
+
+test('when Claude can\'t be reached the rules carry on, and the sheet says why', async (t) => {
+  const app = await openAt(t, { 'homepage.horizon.ai': AI, 'homepage.scratch': '- [ ] 14:40 Call the dentist' });
+  const { page } = app;
+  const calls = await mockClaude(page, () => ({ status: 401 }));
+  await page.keyboard.press('h');
+  await shadowText(page, '#hzAiStatus', 'Anthropic rejected the API key. Check it and save it again.');
+  assert.equal(await line(page), 'Call the dentist in 8 minutes.');
+  await page.waitForTimeout(1500);
+  assert.equal(calls.length, 1, 'no retry on every tick');
+
+  await page.locator('#horizonView #hzAiBtn').click();
+  assert.ok(await page.locator('#horizonView #hzAi').isVisible());
+  assert.equal(await page.getAttribute('#horizonView #hzKey', 'placeholder'), 'Saved: ••••1234');
+  await page.keyboard.press('Escape');
+  assert.ok(await page.locator('#horizonView #hzAi').isHidden(), 'Esc closes the sheet first');
+  assert.equal(await isOpen(page), true);
+  // The browser logs the fake 401 itself; that one line is this test's doing.
+  app.errors = app.errors.filter((e) => !/status of 401 \(Unauthorized\) \(https:\/\/api\.anthropic\.com\//.test(e));
+});
+
+test('A adds an item: Claude reads a loose note into the scratchpad syntax', async (t) => {
+  const app = await openAt(t, { 'homepage.horizon.ai': { ...AI, decide: false }, 'homepage.scratch': '- [ ] buy milk' });
+  const { page } = app;
+  const calls = await mockClaude(page, () => ({ lines: ['tomorrow 1pm call mom'] }));
+  // A pressed straight after H: the opening focus mustn't pull the typing away
+  await page.keyboard.press('h');
+  await page.keyboard.press('a');
+  await page.waitForTimeout(150);
+  await page.keyboard.type('remind me to call mom tomorrow after lunch');
+  await page.keyboard.press('Enter');
+  await shadowText(page, '#hzWhy', 'Added: call mom — Tomorrow 1:00 PM');
+  assert.equal(await app.stored('homepage.scratch'), '- [ ] buy milk\n- [ ] tomorrow 1pm call mom');
+  assert.equal(calls.length, 1, 'only the note was sent: choosing the line is off');
+  assert.match(calls[0].body.messages[0].content, /Note: remind me to call mom tomorrow after lunch$/);
+  assert.ok(calls[0].body.output_config.format.schema.properties.lines);
+  assert.ok(await page.locator('#horizonView #hzAdd').isHidden());
+});
+
+test('without a key, an added item goes in as written', async (t) => {
+  const app = await openAt(t, {});
+  const { page } = app;
+  await page.keyboard.press('h');
+  await page.waitForFunction(() => document.body.classList.contains('horizon-open'));
+  await page.locator('#horizonView #hzAddBtn').click();
+  await page.locator('#horizonView #hzAddText').fill('fri 3pm dentist ~20m');
+  await page.keyboard.press('Enter');
+  await shadowText(page, '#hzWhy', 'Added: dentist — Fri 3:00 PM');
+  assert.equal(await app.stored('homepage.scratch'), '- [ ] fri 3pm dentist ~20m');
+});
+
+test('the API key is saved in this browser only, never in a backup', async (t) => {
+  const app = await openAt(t, {});
+  const { page } = app;
+  await page.keyboard.press('h');
+  await page.waitForFunction(() => document.body.classList.contains('horizon-open'));
+  await page.locator('#horizonView #hzAiBtn').click();
+  await page.locator('#horizonView #hzKey').fill('sk-ant-secret-9876');
+  await page.locator('#horizonView #hzModel').selectOption('claude-haiku-5-5');
+  assert.equal(await page.inputValue('#horizonView #hzKey'), 'sk-ant-secret-9876', 'a model change keeps the key being typed');
+  await page.locator('#horizonView #hzKeySave').click();
+  assert.equal(await page.inputValue('#horizonView #hzKey'), '');
+  assert.equal(await page.getAttribute('#horizonView #hzKey', 'placeholder'), 'Saved: ••••9876');
+  assert.deepEqual(await app.stored('homepage.horizon.ai'), { key: 'sk-ant-secret-9876', model: 'claude-haiku-5-5', decide: true, parse: true });
+  const exported = await page.evaluate(() => JSON.stringify(window.SimpleHomeHorizon.exportData()));
+  assert.ok(!exported.includes('sk-ant'), exported);
+  assert.deepEqual(JSON.parse(exported).claude, { model: 'claude-haiku-5-5', decide: true, parse: true });
+});
+
+test('a 400 over server-side fallbacks is retried once without them', async (t) => {
+  const app = await openAt(t, { 'homepage.horizon.ai': AI, 'homepage.scratch': '- [ ] 14:40 Call the dentist' });
+  const { page } = app;
+  const calls = await mockClaude(page, (body) => (body.fallbacks
+    ? { status: 400 }
+    : { pick: 'item:14:40 Call the dentist', line: 'Call the dentist in {countdown}.', why: 'it’s nearly time', urgency: 0.9 }));
+  await page.keyboard.press('h');
+  await shadowText(page, '#hzWhy', 'it’s nearly time · Claude');
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].headers['anthropic-beta'], undefined);
+  app.errors = app.errors.filter((e) => !/status of 400 \(Bad Request\) \(https:\/\/api\.anthropic\.com\//.test(e));
+});

@@ -4389,6 +4389,68 @@ button { font: inherit; color: inherit; }
 .hz[data-view="ahead"] .say, .hz[data-view="settled"] .say { opacity: 0.35; }
 .hz[data-view="settled"] .actions { opacity: 1; }
 
+.add {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--line-y) + 72px);
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 32px));
+  display: flex;
+  gap: 8px;
+  z-index: 2;
+}
+.add input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 106, 26, 0.35);
+  background: rgba(8, 10, 13, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+.add input::placeholder { color: var(--faint); }
+.add input:focus { outline: none; border-color: var(--ember); box-shadow: 0 0 0 3px rgba(255, 106, 26, 0.18); }
+.add input:disabled { opacity: 0.6; }
+.add .chip { height: 40px; }
+.hz[data-adding] .settled { visibility: hidden; }
+.sheet, .sheet *, .add input { box-sizing: border-box; }
+.sheet {
+  position: absolute;
+  top: 64px;
+  right: 16px;
+  width: min(380px, calc(100% - 32px));
+  max-height: calc(100% - 96px);
+  overflow: auto;
+  padding: 18px 18px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--edge);
+  background: rgba(12, 14, 18, 0.97);
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.8);
+  z-index: 4;
+}
+.sheet h2 { margin: 0 0 8px; font-family: var(--display); font-weight: 500; font-size: 24px; color: var(--ink); }
+.fine { margin: 0 0 12px; color: var(--mist); font-size: 12.5px; line-height: 1.5; }
+.fine.status:empty { display: none; }
+.fine.status { color: var(--ember-hot); }
+.field { display: grid; gap: 6px; margin: 0 0 12px; color: var(--mist); font-size: 12.5px; }
+.field input, .field select {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.field select option { background: #12151a; }
+.field input:focus, .field select:focus { outline: 2px solid var(--ember); outline-offset: 1px; }
+.check { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; color: var(--ink); font-size: 13.5px; cursor: pointer; }
+.check input { accent-color: var(--ember); width: 16px; height: 16px; }
+.sheet-row { display: flex; align-items: center; gap: 14px; margin: 4px 0 12px; }
 .hints {
   position: absolute;
   left: 0; right: 0;
@@ -4429,6 +4491,14 @@ button { font: inherit; color: inherit; }
       <div class="phase" id="hzPhase"></div>
     </div>
     <div class="tools">
+      <button class="tool" id="hzAddBtn" title="Add an item (A)" aria-label="Add an item" aria-expanded="false" aria-controls="hzAdd">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        <span class="t-label">Add</span>
+      </button>
+      <button class="tool" id="hzAiBtn" title="Claude: let a language model choose and word the line" aria-label="Claude settings" aria-expanded="false" aria-controls="hzAi">
+        <svg viewBox="0 0 24 24"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1-5.1-1.9 5.1-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg>
+        <span class="t-label">Claude</span>
+      </button>
       <button class="tool" id="hzNotify" aria-pressed="false" title="A browser notification when something needs you now and this tab isn't in front">
         <svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></svg>
         <span class="t-label">Alerts</span>
@@ -4451,7 +4521,29 @@ button { font: inherit; color: inherit; }
     <button class="chip" id="hzSettledBtn" aria-expanded="false" aria-controls="hzSettled">Settled ↓</button>
   </div>
   <section class="list settled" id="hzSettled" aria-label="Settled"></section>
-  <p class="hints"><kbd>Enter</kbd> do it · <kbd>↑</kbd> ahead · <kbd>↓</kbd> settled · <kbd>D</kbd> not now · <kbd>Esc</kbd> home</p>
+  <form class="add" id="hzAdd" hidden>
+    <input id="hzAddText" autocomplete="off" spellcheck="true" maxlength="300" aria-label="Add an item" placeholder="Add something — “fri 3pm dentist ~20m”">
+    <button class="chip act" type="submit">Add</button>
+  </form>
+  <section class="sheet" id="hzAi" hidden role="dialog" aria-labelledby="hzAiTitle">
+    <h2 id="hzAiTitle">Claude</h2>
+    <p class="fine">Optional. With your own Anthropic API key, Claude picks the line from what Horizon already sees and words it, and reads quick notes into items when you add them.</p>
+    <label class="field">API key
+      <input type="password" id="hzKey" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
+    </label>
+    <label class="field">Model
+      <select id="hzModel"></select>
+    </label>
+    <label class="check"><input type="checkbox" id="hzDecide"> Let Claude choose and word the line</label>
+    <label class="check"><input type="checkbox" id="hzParse"> Read added items with Claude</label>
+    <div class="sheet-row">
+      <button class="chip act" id="hzKeySave" type="button">Save key</button>
+      <button class="link" id="hzKeyForget" type="button">Forget key</button>
+    </div>
+    <p class="fine status" id="hzAiStatus" role="status"></p>
+    <p class="fine">While it's on, each time the line's candidates change (at most every half hour otherwise) Horizon sends Anthropic's API the time, your unchecked items with their times, and today's focus minutes; adding an item sends what you typed. Nothing else leaves the page. The key stays in this browser's storage, where anything running on this page can read it, and is never put in backups — use a key with a spending limit.</p>
+  </section>
+  <p class="hints"><kbd>Enter</kbd> do it · <kbd>A</kbd> add · <kbd>↑</kbd> ahead · <kbd>↓</kbd> settled · <kbd>D</kbd> not now · <kbd>Esc</kbd> home</p>
 </div>
 </template>
 

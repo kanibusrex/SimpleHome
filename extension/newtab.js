@@ -7572,9 +7572,10 @@ function phaseAt(now) {
 
 /* ================= the engine ================= */
 
-// Each signal: { id, kind, text, why, weight 0..1, at?, action?, stage? }. The
-// heaviest one becomes the line; its weight sets how brightly the line burns.
-// A signal with a stage is worth a notification when it flares.
+// Each signal: { id, kind, text, why, weight 0..1, at?, action?, stage?,
+// countdown? }. The heaviest one becomes the line; its weight sets how brightly
+// the line burns. A signal with a stage is worth a notification when it
+// flares; its countdown is the live time left, for Claude's wording.
 const fmtClock = ms => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 function inWords(mins) {
   if (mins < 1) return "now";
@@ -7616,16 +7617,16 @@ function gather(now) {
     const base = { id, kind: "due", at: i.at, item: i, action: CHECK };
     if (i.lead && now < leaveAt) {
       const toLeave = Math.round((leaveAt - now) / MIN);
-      signals.push({ ...base, weight: urgency(toLeave), stage: toLeave <= 15 ? "soon" : null,
+      signals.push({ ...base, weight: urgency(toLeave), stage: toLeave <= 15 ? "soon" : null, countdown: inWords(toLeave),
         text: `${i.what} at ${fmtClock(i.at)} — leave in ${inWords(toLeave)}.`, why: `allowing ${inWords(i.lead)} to get there` });
     } else if (i.lead && now < i.at) {
       signals.push({ ...base, weight: 0.95, stage: "go",
         text: `Time to go: ${i.what} at ${fmtClock(i.at)}.`, why: `allowing ${inWords(i.lead)} to get there` });
     } else if (mins > 0) {
-      signals.push({ ...base, weight: urgency(mins), stage: mins <= 15 ? "soon" : null,
+      signals.push({ ...base, weight: urgency(mins), stage: mins <= 15 ? "soon" : null, countdown: inWords(mins),
         text: `${i.what} in ${inWords(mins)}.`, why: `at ${fmtClock(i.at)} · from your scratchpad` });
     } else if (mins > -60) {
-      signals.push({ ...base, weight: 0.95, stage: "due",
+      signals.push({ ...base, weight: 0.95, stage: "due", countdown: inWords(-mins),
         text: mins === 0 ? `${i.what} — now.` : `${i.what} was due ${inWords(-mins)} ago.`, why: `at ${fmtClock(i.at)} · still unchecked` });
     } else {
       signals.push({ ...base, kind: "overdue", weight: 0.42,
@@ -7641,7 +7642,7 @@ function gather(now) {
   if (st.state === "running" || st.state === "paused") {
     const left = Math.max(1, Math.ceil(st.remaining / 60));
     const brk = st.mode === "break";
-    signals.push({ id: "focus", kind: "focus", weight: 0.3, action: FOCUS("Open Drift"),
+    signals.push({ id: "focus", kind: "focus", weight: 0.3, action: FOCUS("Open Drift"), countdown: inWords(left),
       text: st.state === "paused" ? `${brk ? "Break" : "Focus"} paused · ${inWords(left)} left.` : brk ? `On a break · ${inWords(left)} left.` : `Focusing · ${inWords(left)} left.`,
       why: "Drift is running" });
   } else if (st.state === "done") {
@@ -7790,13 +7791,281 @@ function maybeNotify(ranked, now) {
   if (changed) LS.set("notified", notified);
 }
 
+/* ================= Claude ================= */
+
+// Optional, and the one place Horizon talks to a server: with the person's
+// own Anthropic API key it asks Claude to choose and word the line, and to
+// read quick notes into checklist lines. The rules still compute every
+// candidate, its urgency, the notifications and the actions; Claude only
+// chooses among them and phrases the winner, within bounds. A plain fetch,
+// since the page has no build step to bring in the SDK.
+const API = "https://api.anthropic.com/v1/messages";
+const MODELS = [
+  ["claude-opus-5-5", "Claude Opus 5.5"],
+  ["claude-sonnet-5-5", "Claude Sonnet 5.5"],
+  ["claude-haiku-5-5", "Claude Haiku 5.5"],
+];
+function loadAi(v) {
+  const o = v && typeof v === "object" ? v : {};
+  return {
+    key: typeof o.key === "string" ? o.key : "",
+    model: MODELS.some(m => m[0] === o.model) ? o.model : MODELS[0][0],
+    decide: o.decide !== false,
+    parse: o.parse !== false,
+  };
+}
+let ai = loadAi(LS.get("ai", null));
+const saveAi = () => LS.set("ai", ai);
+const aiReady = () => !!ai.key;
+
+class AiError extends Error {}
+const AI_ERRORS = {
+  401: "Anthropic rejected the API key. Check it and save it again.",
+  403: "This API key isn't allowed to use that model.",
+  404: "That model isn't available to this API key.",
+  429: "Rate limited by Anthropic. Horizon will try again later.",
+  529: "Anthropic is overloaded right now. Horizon will try again later.",
+};
+
+// One request, one JSON answer shaped by `schema`.
+let fallbacksOk = true;
+async function askClaude(system, user, schema) {
+  const body = {
+    model: ai.model,
+    max_tokens: 16000,
+    system,
+    messages: [{ role: "user", content: user }],
+    output_config: { effort: "low", format: { type: "json_schema", schema } },
+  };
+  const headers = {
+    "content-type": "application/json",
+    "x-api-key": ai.key,
+    "anthropic-version": "2023-06-01",
+    // the key is the person's own, typed into their own page
+    "anthropic-dangerous-direct-browser-access": "true",
+  };
+  // a declined request is retried on another model rather than failing
+  // (Haiku has no server-side fallback)
+  if (ai.model !== "claude-haiku-5-5" && fallbacksOk) {
+    body.fallbacks = "default";
+    headers["anthropic-beta"] = "server-side-fallback-2026-07-01";
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 60 * 1000);
+  let res, data;
+  try {
+    res = await fetch(API, { method: "POST", headers, body: JSON.stringify(body), signal: ctrl.signal });
+    data = await res.json().catch(() => null);
+  } catch {
+    throw new AiError("Couldn't reach Anthropic. Check the connection.");
+  } finally {
+    clearTimeout(timer);
+  }
+  // if this account or model won't take fallbacks, go on without them
+  if (res.status === 400 && body.fallbacks) {
+    fallbacksOk = false;
+    return askClaude(system, user, schema);
+  }
+  if (!res.ok) {
+    const msg = AI_ERRORS[res.status] || (res.status >= 500 ? "Anthropic had a problem. Horizon will try again later." : null);
+    throw new AiError(msg || `Anthropic said: ${(data && data.error && data.error.message) || res.status}`);
+  }
+  if (data.stop_reason === "refusal") throw new AiError("Claude declined this one.");
+  const block = (data.content || []).find(b => b.type === "text");
+  if (!block || data.stop_reason === "max_tokens") throw new AiError("Claude's answer came back incomplete.");
+  try { return JSON.parse(block.text); } catch { throw new AiError("Claude's answer couldn't be read."); }
+}
+
+function aiStatus(text) { $("#hzAiStatus").textContent = text; }
+
+const LINE_SYSTEM = `You choose the single line shown on Horizon, a calm ambient display on someone's browser home page: a dark sky, a lit horizon, one sentence.
+
+You get the local time, the phase of the day, and candidate lines produced by simple rules, each with an id, the rule's urgency from 0 to 1, and what pressing the button under the line would do. Pick the candidate that matters most to the person right now. The rules weigh time pressure well but can't read meaning: use the text to judge what's important (a flight, a doctor or a deadline outranks a chore at a similar time), and don't let something trivial win just because it's close. Pick "none" only when it's offered and nothing really needs them.
+
+Write "line" as one short, calm sentence, at most 80 characters: plain words, no emoji, no exclamation marks, no quotation marks around it. Keep what the item is called recognisable. Never invent items, times, people or facts that aren't in the input. Where the candidate has a countdown, don't write the time remaining as a number: put the literal token {countdown} where it goes, as in "Leave for the dentist in {countdown}." — the display fills it in live. Clock times like 3:00 PM are fine as given.
+
+"why" is a few words on why this matters now, at most 60 characters. "urgency" is your own judgment from 0 (nothing) to 1 (needs them this minute).`;
+
+const LINE_SCHEMA = picks => ({
+  type: "object",
+  properties: {
+    pick: { type: "string", enum: picks },
+    line: { type: "string" },
+    why: { type: "string" },
+    urgency: { type: "number" },
+  },
+  required: ["pick", "line", "why", "urgency"],
+  additionalProperties: false,
+});
+
+// The last answer, kept for as long as the candidates it was given stay the same.
+let aiLine = null;
+let aiBusy = false;
+let aiNextTry = 0;
+const AI_REFRESH = 30 * MIN;
+
+// Which candidates are in play, and how pressing: when this changes, ask again.
+const candidatesOf = ranked => ranked.slice(0, 8);
+const aiSig = ranked => JSON.stringify(candidatesOf(ranked).map(s => [s.id, tierOf(s.score)]));
+
+function maybeDecide(ranked, g, now) {
+  if (!aiReady() || !ai.decide || aiBusy || now < aiNextTry || document.hidden) return;
+  const sig = aiSig(ranked);
+  if (aiLine && aiLine.sig === sig && now - aiLine.at < AI_REFRESH) return;
+  const cands = candidatesOf(ranked).filter(s => s.score >= 0.12);
+  if (!cands.length) { aiLine = null; return; }
+  // "nothing" is only on offer while nothing is steady or flaring
+  const mayPass = cands[0].score < 0.5;
+  const snapshot = {
+    now: new Date(now).toLocaleString([], { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }),
+    phase: g.phase.label.toLowerCase(),
+    candidates: cands.map(s => ({
+      id: s.id,
+      line: s.text,
+      about: s.why,
+      urgency: +s.score.toFixed(2),
+      countdown: s.countdown || null,
+      button: s.action ? s.action.label : null,
+    })),
+    open_today: g.timed.concat(g.loose).map(i => whenOf(i, now) + " · " + i.what).slice(0, 20),
+    checked_off: g.items.filter(i => i.done).length,
+    focused_today_minutes: g.focus.today,
+  };
+  const picks = cands.map(s => s.id).concat(mayPass ? ["none"] : []);
+  aiBusy = true;
+  askClaude(LINE_SYSTEM, JSON.stringify(snapshot), LINE_SCHEMA(picks))
+    .then(r => {
+      aiLine = { sig, at: Date.now(), pick: r.pick, line: String(r.line).trim().slice(0, 120), why: String(r.why).trim().slice(0, 80), urgency: +r.urgency || 0 };
+      aiStatus("");
+    })
+    .catch(err => {
+      aiLine = null;
+      aiNextTry = Date.now() + 10 * MIN;
+      aiStatus(err.message);
+    })
+    .finally(() => { aiBusy = false; refresh(); });
+}
+
+// The line Claude chose, made live: its countdown filled in, its glow kept
+// within a fifth of what the rules say, and only while its pick is still a
+// candidate. Anything else falls back to the rules' own line.
+function aiDisplay(ranked, top) {
+  if (!aiReady() || !ai.decide || !aiLine || aiLine.sig !== aiSig(ranked)) return null;
+  if (aiLine.pick === "none") {
+    if (top && top.score >= 0.5) return null;
+    return { none: true, text: aiLine.line, why: aiLine.why ? aiLine.why + " · Claude" : "Claude" };
+  }
+  const s = ranked.find(r => r.id === aiLine.pick);
+  if (!s) return null;
+  const text = aiLine.line.replace(/\{countdown\}/g, s.countdown || "a moment");
+  const score = Math.min(s.score + 0.2, Math.max(s.score - 0.2, Math.min(1, Math.max(0, aiLine.urgency))));
+  return { ...s, text, why: (aiLine.why || s.why) + " · Claude", score };
+}
+
+const ADD_SYSTEM = `You turn a quick note into checklist lines for a scratchpad that a home-page display called Horizon reads. Return one line per separate thing to do; most notes are one line.
+
+Each line is, in this order, all optional except the last part:
+1. a day or a repeat: today, tonight, tomorrow, a day name (mon, tue, wed, thu, fri, sat, sun — meaning the coming one), a date as "oct 24", or a repeat: daily, weekdays, weekends, mondays (any day + "s"), every tue
+2. a time: 14:40, 2pm, 9.30am
+3. what it is, in the person's own words, minus filler like "remind me to" or "I need to"
+4. optionally, how long it takes to get there, as ~20m or ~1h30m
+
+Examples: "tomorrow 9am standup", "fri 3pm dentist ~20m", "weekdays 7:30am run", "oct 30 renew passport", "buy milk".
+
+Only add a day or time the note gives or clearly implies: "after lunch" is 1pm, "this morning" or "in the morning" 9am, "this evening" 6pm, "tonight" 8pm. A relative day like "in 3 days" or "next week Tuesday" becomes a date like "oct 23" worked out from the current date you're given. Without a day, a line is for today. Never invent details. Don't start lines with "- [ ]".`;
+
+const ADD_SCHEMA = {
+  type: "object",
+  properties: { lines: { type: "array", items: { type: "string" } } },
+  required: ["lines"],
+  additionalProperties: false,
+};
+
+function appendItems(lines) {
+  const raw = readScratch();
+  const sep = raw && !raw.endsWith("\n") ? "\n" : "";
+  writeScratch(raw + sep + lines.map(l => "- [ ] " + l).join("\n"));
+}
+
+let adding = false;
+function setAdding(on) {
+  adding = on;
+  const form = $("#hzAdd");
+  form.hidden = !on;
+  $("#hzAddBtn").setAttribute("aria-expanded", String(on));
+  if (on) {
+    ui.dataset.adding = "";
+    if (view !== "line") setView(view);
+    $("#hzAddText").focus();
+  } else delete ui.dataset.adding;
+  wake();
+}
+
+async function addItem(text) {
+  text = text.replace(/^\s*[-*]\s*\[[ xX]\]\s*/, "").trim();
+  if (!text) return;
+  const input = $("#hzAddText");
+  let lines = [text], how = "";
+  if (aiReady() && ai.parse) {
+    input.disabled = true;
+    const was = input.placeholder;
+    input.placeholder = "Asking Claude…";
+    input.value = "";
+    try {
+      const now = Date.now();
+      const r = await askClaude(ADD_SYSTEM, `Now: ${new Date(now).toLocaleString([], { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })}\nNote: ${text}`, ADD_SCHEMA);
+      const got = (Array.isArray(r.lines) ? r.lines : [])
+        .map(l => String(l).replace(/^\s*[-*]\s*\[[ xX]\]\s*/, "").replace(/\s+/g, " ").trim().slice(0, 200))
+        .filter(Boolean).slice(0, 10);
+      if (got.length) lines = got;
+      aiStatus("");
+    } catch (err) {
+      how = " (as written — " + err.message.replace(/\.$/, "") + ")";
+      aiStatus(err.message);
+    } finally {
+      input.disabled = false;
+      input.placeholder = was;
+    }
+  }
+  appendItems(lines);
+  const now = Date.now();
+  const told = lines.map(l => {
+    const p = parseItem(l, now);
+    const i = { ...p, ...occurrence(p, now) };
+    const when = i.repeat ? repeatName(i.repeat) + (i.at != null ? " " + fmtClock(i.at) : "") : whenOf(i, now);
+    return `${i.what} — ${when}`;
+  });
+  setAdding(false);
+  say(`Added: ${told.join("; ")}${how}`);
+}
+
+function syncAi() {
+  const sel = $("#hzModel");
+  if (!sel.options.length) for (const [id, name] of MODELS) sel.append(new Option(name, id));
+  sel.value = ai.model;
+  $("#hzDecide").checked = ai.decide;
+  $("#hzParse").checked = ai.parse;
+  $("#hzKey").placeholder = ai.key ? `Saved: ••••${ai.key.slice(-4)}` : "sk-ant-…";
+  $("#hzKeyForget").hidden = !ai.key;
+  $("#hzAiBtn").setAttribute("aria-pressed", String(aiReady() && (ai.decide || ai.parse)));
+}
+let aiOpen = false;
+function setAiSheet(on) {
+  aiOpen = on;
+  $("#hzAi").hidden = !on;
+  $("#hzAiBtn").setAttribute("aria-expanded", String(on));
+  if (on) { syncAi(); (ai.key ? $("#hzModel") : $("#hzKey")).focus(); }
+  else $("#hzAiBtn").focus({ preventScroll: true });
+  wake();
+}
+function aiChanged() { aiLine = null; aiNextTry = 0; saveAi(); syncAi(); refresh(true); }
+
 /* ================= drawing ================= */
 
 let open = false;
 let view = "line";
 let shown = null; // the signal on the line
 let lastTier = "quiet";
-let heat = 0;
 let notice = null; // a passing message in place of the why line
 
 function say(text) { notice = { text, until: Date.now() + 4500 }; refresh(true); }
@@ -7887,8 +8156,6 @@ function refresh(force) {
   const ranked = rank(g.signals, now);
   const top = ranked[0] && ranked[0].score >= 0.12 ? ranked[0] : null;
   const tier = top ? tierOf(top.score) : "quiet";
-  // the line never drops below the light the time of day gives it
-  heat = Math.max(g.phase.floor, top ? Math.min(1, top.score) : 0);
 
   if (tier === "flare" && lastTier !== "flare") chime("flare");
   else if (tier === "steady" && lastTier !== "steady" && lastTier !== "flare") chime("steady");
@@ -7904,11 +8171,18 @@ function refresh(force) {
   }
   if (!open && !force) return;
 
-  ui.dataset.tier = tier;
+  // On screen, Claude may choose and word the line; the tone, the alerts and
+  // the toolbar above stay with the rules, so they never wait on a request.
+  if (open) maybeDecide(ranked, g, now);
+  const picked = aiDisplay(ranked, top);
+  const line = picked ? (picked.none ? null : picked) : top;
+  const lineTier = line ? tierOf(line.score) : "quiet";
+  ui.dataset.tier = lineTier;
   ui.dataset.phase = g.phase.id;
-  ui.style.setProperty("--heat", heat.toFixed(3));
+  // the line never drops below the light the time of day gives it
+  ui.style.setProperty("--heat", Math.max(g.phase.floor, line ? Math.min(1, line.score) : 0).toFixed(3));
   $("#hzPhase").textContent = `${g.phase.label} · ${fmtClock(now)}`;
-  const text = top ? top.text : quietLine(g);
+  const text = picked ? picked.text : top ? top.text : quietLine(g);
   const msg = $("#hzMsg");
   if (msg.textContent !== text) {
     if (msg.textContent && !force) {
@@ -7917,12 +8191,12 @@ function refresh(force) {
     } else msg.textContent = text;
   }
   if (notice && notice.until < now) notice = null;
-  $("#hzWhy").textContent = notice ? notice.text : top ? top.why : "";
-  shown = top;
-  $("#hzDismiss").hidden = !top;
+  $("#hzWhy").textContent = notice ? notice.text : picked ? picked.why : top ? top.why : "";
+  shown = line;
+  $("#hzDismiss").hidden = !line;
   const act = $("#hzAct");
-  act.hidden = !(top && top.action);
-  if (top && top.action) act.textContent = top.action.label;
+  act.hidden = !(line && line.action);
+  if (line && line.action) act.textContent = line.action.label;
   renderLists(g, ranked, now);
 }
 
@@ -7996,12 +8270,17 @@ function openHorizon() {
   clearInterval(ticker);
   ticker = setInterval(refresh, 1000);
   wake();
-  setTimeout(() => ($("#hzAct").hidden ? $("#hzBack") : $("#hzAct")).focus({ preventScroll: true }), 80);
+  // unless a key pressed straight away (A, say) has already put focus somewhere
+  setTimeout(() => {
+    if (open && !root.activeElement) ($("#hzAct").hidden ? $("#hzBack") : $("#hzAct")).focus({ preventScroll: true });
+  }, 80);
 }
 function closeHorizon() {
   if (!open) return;
   open = false;
   if (view !== "line") setView(view);
+  if (adding) setAdding(false);
+  if (aiOpen) { aiOpen = false; $("#hzAi").hidden = true; $("#hzAiBtn").setAttribute("aria-expanded", "false"); }
   host.classList.remove("open");
   host.setAttribute("aria-hidden", "true");
   document.body.classList.remove("horizon-open");
@@ -8019,6 +8298,21 @@ $("#hzSettledBtn").addEventListener("click", () => setView("settled"));
 $("#hzDismiss").addEventListener("click", dismiss);
 $("#hzAct").addEventListener("click", act);
 $("#hzNotify").addEventListener("click", toggleNotify);
+$("#hzAddBtn").addEventListener("click", () => setAdding(!adding));
+$("#hzAdd").addEventListener("submit", e => { e.preventDefault(); addItem($("#hzAddText").value); });
+$("#hzAiBtn").addEventListener("click", () => setAiSheet(!aiOpen));
+$("#hzKeySave").addEventListener("click", () => {
+  const key = $("#hzKey").value.trim();
+  if (!key) { aiStatus(ai.key ? "Key unchanged." : "Paste an API key first."); return; }
+  ai.key = key;
+  $("#hzKey").value = "";
+  aiChanged();
+  aiStatus("Key saved. Claude takes over the line on its next change.");
+});
+$("#hzKeyForget").addEventListener("click", () => { ai.key = ""; $("#hzKey").value = ""; aiChanged(); aiStatus("Key forgotten."); $("#hzKey").focus(); });
+$("#hzModel").addEventListener("change", e => { ai.model = e.target.value; aiChanged(); });
+$("#hzDecide").addEventListener("change", e => { ai.decide = e.target.checked; aiChanged(); });
+$("#hzParse").addEventListener("change", e => { ai.parse = e.target.checked; aiChanged(); });
 $("#hzSound").addEventListener("click", () => {
   soundOn = !soundOn;
   LS.set("sound", soundOn);
@@ -8059,30 +8353,40 @@ addEventListener("keydown", e => {
     return;
   }
   wake();
-  if (e.key === "Escape") { if (view !== "line") setView(view); else closeHorizon(); return; }
-  if (typing) return;
+  if (e.key === "Escape") {
+    if (aiOpen) setAiSheet(false);
+    else if (adding) setAdding(false);
+    else if (view !== "line") setView(view);
+    else closeHorizon();
+    return;
+  }
+  if (typing || aiOpen) return;
   if (e.key === "Enter") { if (!(target.closest && target.closest("button"))) { e.preventDefault(); act(); } }
   else if (e.key === "ArrowUp") { e.preventDefault(); setView("ahead"); }
   else if (e.key === "ArrowDown") { e.preventDefault(); setView("settled"); }
   else if (e.key === "d" || e.key === "D") dismiss();
+  else if (e.key === "a" || e.key === "A") { e.preventDefault(); setAdding(true); }
   else if (e.key === "h" || e.key === "H") closeHorizon();
 });
 
-// Settings → Backup carries the tone and alert settings and what Horizon has learned
+// Settings → Backup carries the tone, alert and Claude settings and what Horizon has learned
 window.SimpleHomeHorizon = {
-  exportData() { return { sound: soundOn, notify: notifyOn, learned }; },
+  // the API key stays out of backups on purpose
+  exportData() { return { sound: soundOn, notify: notifyOn, learned, claude: { model: ai.model, decide: ai.decide, parse: ai.parse } }; },
   importData(d) {
     if (!d || typeof d !== "object") return;
     if (typeof d.sound === "boolean") { soundOn = d.sound; LS.set("sound", soundOn); syncSound(); }
     // alerts still need this browser's permission, asked for from the Alerts button
     if (typeof d.notify === "boolean") { notifyOn = d.notify; LS.set("notify", notifyOn); syncNotify(); }
     if (d.learned && typeof d.learned === "object") { learned = loadLearned(d.learned); LS.set("learned", learned); }
+    if (d.claude && typeof d.claude === "object") { ai = loadAi({ ...d.claude, key: ai.key }); aiChanged(); }
     refresh();
   },
 };
 
 syncSound();
 syncNotify();
+syncAi();
 refresh();
 ticker = setInterval(refresh, 30 * 1000);
 })();
