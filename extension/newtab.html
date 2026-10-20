@@ -4372,7 +4372,7 @@ button { font: inherit; color: inherit; }
 .list-head { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); padding: 0 0 8px; }
 .item {
   display: grid;
-  grid-template-columns: 104px 1fr auto;
+  grid-template-columns: 124px 1fr auto;
   align-items: baseline;
   gap: 12px;
   padding: 9px 0;
@@ -4451,6 +4451,13 @@ button { font: inherit; color: inherit; }
 .check { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; color: var(--ink); font-size: 13.5px; cursor: pointer; }
 .check input { accent-color: var(--ember); width: 16px; height: 16px; }
 .sheet-row { display: flex; align-items: center; gap: 14px; margin: 4px 0 12px; }
+.cal-list:empty { display: none; }
+.cal-list { margin: 0 0 12px; border-top: 1px solid var(--edge); }
+.cal-row { display: flex; align-items: baseline; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--edge); font-size: 13.5px; }
+.cal-row .name { color: var(--ink); overflow-wrap: anywhere; }
+.cal-row .meta { flex: 1; color: var(--faint); font-size: 12px; }
+.item.cal .what::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 8px 1px 0; border-radius: 50%; background: var(--mist); vertical-align: middle; }
+.hz.dropping .line::after { opacity: 1; width: 80%; }
 .hints {
   position: absolute;
   left: 0; right: 0;
@@ -4463,6 +4470,7 @@ button { font: inherit; color: inherit; }
   transition: opacity 0.6s ease;
 }
 .hints kbd { font: inherit; color: var(--mist); }
+@media (max-width: 420px) { .brand { display: none; } }
 @media (max-width: 640px) {
   .hints, .phase { display: none; }
   .t-label { display: none; }
@@ -4495,6 +4503,10 @@ button { font: inherit; color: inherit; }
         <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
         <span class="t-label">Add</span>
       </button>
+      <button class="tool" id="hzCalBtn" title="Import a calendar (.ics)" aria-label="Calendar" aria-expanded="false" aria-controls="hzCal">
+        <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+        <span class="t-label">Calendar</span>
+      </button>
       <button class="tool" id="hzAiBtn" title="Claude: let a language model choose and word the line" aria-label="Claude settings" aria-expanded="false" aria-controls="hzAi">
         <svg viewBox="0 0 24 24"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1-5.1-1.9 5.1-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg>
         <span class="t-label">Claude</span>
@@ -4525,6 +4537,17 @@ button { font: inherit; color: inherit; }
     <input id="hzAddText" autocomplete="off" spellcheck="true" maxlength="300" aria-label="Add an item" placeholder="Add something — “fri 3pm dentist ~20m”">
     <button class="chip act" type="submit">Add</button>
   </form>
+  <section class="sheet" id="hzCal" hidden role="dialog" aria-labelledby="hzCalTitle">
+    <h2 id="hzCalTitle">Calendar</h2>
+    <p class="fine">Import a calendar exported as an .ics file, or drop one onto Horizon. It's read here in the browser and nothing is sent anywhere. Its events count down on the line, fill Ahead and Settled, and raise alerts like everything else.</p>
+    <div class="cal-list" id="hzCalList"></div>
+    <div class="sheet-row">
+      <button class="chip act" id="hzCalImport" type="button">Import .ics…</button>
+      <input type="file" id="hzCalFile" accept=".ics,text/calendar" multiple hidden>
+    </div>
+    <p class="fine status" id="hzCalStatus" role="status"></p>
+    <p class="fine">It's a snapshot: import again when the calendar changes, and a file with the same name replaces the old one. To export — Google Calendar: Settings → Import &amp; export → Export, then unzip. Apple Calendar: pick the calendar, then File → Export → Export…. Outlook on Windows: File → Save Calendar.</p>
+  </section>
   <section class="sheet" id="hzAi" hidden role="dialog" aria-labelledby="hzAiTitle">
     <h2 id="hzAiTitle">Claude</h2>
     <p class="fine">Optional. With your own Anthropic API key, Claude picks the line from what Horizon already sees and words it, and reads quick notes into items when you add them.</p>
@@ -4541,7 +4564,7 @@ button { font: inherit; color: inherit; }
       <button class="link" id="hzKeyForget" type="button">Forget key</button>
     </div>
     <p class="fine status" id="hzAiStatus" role="status"></p>
-    <p class="fine">While it's on, each time the line's candidates change (at most every half hour otherwise) Horizon sends Anthropic's API the time, your unchecked items with their times, and today's focus minutes; adding an item sends what you typed. Nothing else leaves the page. The key stays in this browser's storage, where anything running on this page can read it, and is never put in backups — use a key with a spending limit.</p>
+    <p class="fine">While it's on, each time the line's candidates change (at most every half hour otherwise) Horizon sends Anthropic's API the time, your unchecked items and today's calendar events with their times, and today's focus minutes; adding an item sends what you typed. Nothing else leaves the page. The key stays in this browser's storage, where anything running on this page can read it, and is never put in backups — use a key with a spending limit.</p>
   </section>
   <p class="hints"><kbd>Enter</kbd> do it · <kbd>A</kbd> add · <kbd>↑</kbd> ahead · <kbd>↓</kbd> settled · <kbd>D</kbd> not now · <kbd>Esc</kbd> home</p>
 </div>

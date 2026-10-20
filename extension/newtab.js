@@ -7537,6 +7537,291 @@ function rollDay(now) {
   if (last != null) rewriteItems((text, done) => done && !!parseItem(text, now).repeat, "[ ]");
 }
 
+/* ================= reading calendars ================= */
+
+// Calendars come in as .ics files exported from Google, Apple or Outlook and
+// are read here, in the browser; nothing is fetched. What's kept is only what
+// Horizon shows: each event's title, place, meeting link, start, length and
+// how it repeats. Repeats are expanded on the fly for the days around today.
+//
+// Times are kept as wall-clock fields plus a zone: "Z" (UTC), "L" (floating,
+// i.e. this browser's local time) or an IANA zone. Expanding a repeat in its
+// own zone keeps a 9am meeting at 9am across a daylight-saving change.
+
+// Outlook writes Windows zone names; these are the common ones.
+const WIN_ZONES = {
+  "Eastern Standard Time": "America/New_York", "Central Standard Time": "America/Chicago",
+  "Mountain Standard Time": "America/Denver", "US Mountain Standard Time": "America/Phoenix",
+  "Pacific Standard Time": "America/Los_Angeles", "Alaskan Standard Time": "America/Anchorage",
+  "Hawaiian Standard Time": "Pacific/Honolulu", "Atlantic Standard Time": "America/Halifax",
+  "GMT Standard Time": "Europe/London", "Greenwich Standard Time": "Atlantic/Reykjavik",
+  "W. Europe Standard Time": "Europe/Berlin", "Romance Standard Time": "Europe/Paris",
+  "Central Europe Standard Time": "Europe/Budapest", "Central European Standard Time": "Europe/Warsaw",
+  "E. Europe Standard Time": "Europe/Chisinau", "FLE Standard Time": "Europe/Kiev",
+  "India Standard Time": "Asia/Kolkata", "China Standard Time": "Asia/Shanghai",
+  "Tokyo Standard Time": "Asia/Tokyo", "Korea Standard Time": "Asia/Seoul",
+  "Singapore Standard Time": "Asia/Singapore", "AUS Eastern Standard Time": "Australia/Sydney",
+  "New Zealand Standard Time": "Pacific/Auckland", "UTC": "UTC",
+};
+const zoneFormats = new Map();
+function zoneOffset(ms, tz) {
+  let f = zoneFormats.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" });
+    zoneFormats.set(tz, f);
+  }
+  const p = {};
+  for (const part of f.formatToParts(ms)) p[part.type] = +part.value;
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second) - Math.floor(ms / 1000) * 1000;
+}
+// Wall-clock fields [y, m, d, h, mi, s] (m from 1) in a zone, to an instant.
+function toInstant(f, tz) {
+  const [y, m, d, h = 0, mi = 0, s = 0] = f;
+  if (tz === "Z") return Date.UTC(y, m - 1, d, h, mi, s);
+  if (tz === "L") return new Date(y, m - 1, d, h, mi, s).getTime();
+  const guess = Date.UTC(y, m - 1, d, h, mi, s);
+  const first = guess - zoneOffset(guess, tz);
+  return guess - zoneOffset(first, tz);
+}
+function zoneOf(tzid) {
+  if (!tzid) return "L";
+  const name = tzid.replace(/^"|"$/g, "").replace(/^\/[^/]*\/[^/]*\//, ""); // drop "/mozilla.org/20070129_1/" style prefixes
+  const iana = WIN_ZONES[name] || name;
+  try { zoneOffset(Date.now(), iana); return iana; } catch { return null; }
+}
+
+// "20261020T150000Z", "20261020T110000", "20261020"
+function parseStamp(value, params) {
+  const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/.exec(value.trim());
+  if (!m) return null;
+  const f = [+m[1], +m[2], +m[3]];
+  if (!m[4] || /VALUE=DATE(?!-)/i.test(params)) return { f, allDay: true, tz: "L" };
+  f.push(+m[4], +m[5], +(m[6] || 0));
+  if (m[7]) return { f, allDay: false, tz: "Z" };
+  const tzid = /TZID=("[^"]*"|[^;:]*)/i.exec(params);
+  const tz = tzid ? zoneOf(tzid[1]) : "L";
+  return { f, allDay: false, tz: tz || "L", badZone: tz === null };
+}
+// "PT1H30M", "P1D", "-PT15M"
+function parseDuration(v) {
+  const m = /^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec((v || "").trim());
+  if (!m) return null;
+  const ms = ((+m[2] || 0) * 7 * 24 * 3600 + (+m[3] || 0) * 24 * 3600 + (+m[4] || 0) * 3600 + (+m[5] || 0) * 60 + (+m[6] || 0)) * 1000;
+  return m[1] === "-" ? -ms : ms;
+}
+const unescapeText = v => v.replace(/\\([nN])/g, "\n").replace(/\\([,;\\])/g, "$1");
+const MEETING = /https:\/\/[^\s<>"']*(?:meet\.google\.com|zoom\.us|teams\.microsoft\.com|teams\.live\.com|webex\.com|whereby\.com|meet\.jit\.si)[^\s<>"']*/i;
+const DAYS2 = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+
+function parseRule(v, tz) {
+  const r = {};
+  for (const part of v.split(";")) { const [k, val] = part.split("="); if (k && val != null) r[k.toUpperCase()] = val.toUpperCase(); }
+  const freq = r.FREQ;
+  // the subset that covers what calendars write in practice; anything else
+  // shows its first date only, and the import says how many those were
+  const known = ["FREQ", "INTERVAL", "COUNT", "UNTIL", "BYDAY", "BYMONTHDAY", "BYMONTH", "WKST"];
+  if (!["DAILY", "WEEKLY", "MONTHLY", "YEARLY"].includes(freq) || Object.keys(r).some(k => !known.includes(k))) return null;
+  const rule = { freq, interval: Math.max(1, +r.INTERVAL || 1) };
+  if (r.COUNT) rule.count = +r.COUNT;
+  if (r.UNTIL) {
+    const u = parseStamp(r.UNTIL, "");
+    if (!u) return null;
+    rule.until = u.allDay ? toInstant([...u.f, 23, 59, 59], tz) : toInstant(u.f, u.tz === "L" ? tz : u.tz);
+  }
+  if (r.BYDAY) {
+    rule.byday = [];
+    for (const d of r.BYDAY.split(",")) {
+      const m = /^([+-]?\d{1,2})?(SU|MO|TU|WE|TH|FR|SA)$/.exec(d);
+      if (!m) return null;
+      rule.byday.push([m[1] ? +m[1] : 0, DAYS2.indexOf(m[2])]);
+    }
+  }
+  if (r.BYMONTHDAY) rule.bymonthday = r.BYMONTHDAY.split(",").map(Number);
+  if (r.BYMONTH) rule.bymonth = r.BYMONTH.split(",").map(Number);
+  return rule;
+}
+
+// Reads one .ics file. Returns { events, skipped, unsupported, badZones }.
+// Events that ended more than two days ago, or start over a year out, are
+// dropped so a calendar with years of history fits in storage.
+function parseIcs(text, now) {
+  const lines = text.replace(/\r\n?/g, "\n").replace(/\n[ \t]/g, "").split("\n");
+  const raw = [];
+  let cur = null, nested = 0;
+  for (const line of lines) {
+    if (/^BEGIN:VEVENT\s*$/i.test(line)) { cur = { ex: [] }; nested = 0; continue; }
+    if (/^END:VEVENT\s*$/i.test(line)) { if (cur) raw.push(cur); cur = null; continue; }
+    if (!cur) continue;
+    // reminders (VALARM) sit inside events with fields of their own: skip them
+    if (/^BEGIN:/i.test(line)) { nested++; continue; }
+    if (/^END:/i.test(line)) { nested = Math.max(0, nested - 1); continue; }
+    if (nested) continue;
+    const c = line.indexOf(":");
+    if (c < 0) continue;
+    const head = line.slice(0, c), value = line.slice(c + 1);
+    const semi = head.indexOf(";");
+    const name = (semi < 0 ? head : head.slice(0, semi)).toUpperCase();
+    const params = semi < 0 ? "" : head.slice(semi + 1);
+    if (name === "UID") cur.uid = value.trim();
+    else if (name === "SUMMARY") cur.title = unescapeText(value).trim();
+    else if (name === "LOCATION") cur.loc = unescapeText(value).trim();
+    else if (name === "DESCRIPTION") cur.desc = unescapeText(value);
+    else if (name === "URL") cur.url = value.trim();
+    else if (name === "X-GOOGLE-CONFERENCE") cur.conf = value.trim();
+    else if (name === "STATUS") cur.status = value.trim().toUpperCase();
+    else if (name === "DTSTART") cur.start = parseStamp(value, params);
+    else if (name === "DTEND") cur.end = parseStamp(value, params);
+    else if (name === "DURATION") cur.dur = parseDuration(value);
+    else if (name === "RRULE") cur.rrule = value.trim();
+    else if (name === "RECURRENCE-ID") cur.recur = parseStamp(value, params);
+    else if (name === "EXDATE") for (const v of value.split(",")) { const s = parseStamp(v, params); if (s) cur.ex.push(s); }
+  }
+
+  const out = [], masters = new Map(), moved = [];
+  let skipped = 0, unsupported = 0, badZones = 0;
+  const instantOf = s => toInstant(s.f, s.tz);
+  for (const e of raw) {
+    if (!e.start) continue;
+    if (e.start.badZone) badZones++;
+    const s = e.start;
+    let dur;
+    if (e.end && !e.end.allDay === !s.allDay) dur = instantOf(e.end) - instantOf(s);
+    else if (e.dur != null) dur = e.dur;
+    else dur = s.allDay ? 24 * 3600 * 1000 : 0;
+    const link = [e.conf, e.loc, e.url, e.desc].map(v => v && (v.match(MEETING) || [])[0]).find(Boolean) || null;
+    const ev = {
+      uid: e.uid || "", title: (e.title || "(no title)").slice(0, 160), loc: e.loc ? e.loc.slice(0, 120) : "",
+      link, allDay: s.allDay, tz: s.tz, f: s.f, dur: Math.max(0, dur), rule: null, ex: [],
+    };
+    if (e.recur) {
+      // one changed or cancelled instance of a repeating event
+      moved.push({ uid: ev.uid, at: e.recur.allDay ? startOfDay(instantOf(e.recur)) : instantOf(e.recur) });
+      if (e.status === "CANCELLED") continue;
+    } else if (e.status === "CANCELLED") continue;
+    if (e.rrule && !e.recur) {
+      ev.rule = parseRule(e.rrule, s.tz);
+      if (!ev.rule) unsupported++;
+      ev.ex = e.ex.map(x => x.allDay ? startOfDay(instantOf(x)) : instantOf(x));
+      if (ev.rule && ev.rule.until != null && ev.rule.until < now - 2 * DAY) { skipped++; continue; }
+      if (ev.rule && ev.uid) masters.set(ev.uid, ev);
+    } else {
+      const at = instantOf(s);
+      if (at + ev.dur < now - 2 * DAY || at > now + 400 * DAY) { skipped++; continue; }
+    }
+    out.push(ev);
+  }
+  for (const m of moved) { const master = masters.get(m.uid); if (master) master.ex.push(m.at); }
+  return { events: out.slice(0, 5000), skipped, unsupported, badZones };
+}
+
+// Every occurrence of an event starting in [from, to), as { start, end }.
+function occurrencesOf(ev, from, to) {
+  const first = toInstant(ev.f, ev.tz);
+  const one = s => ({ start: s, end: s + ev.dur });
+  if (!ev.rule) return first < to && first + Math.max(ev.dur, 1) > from ? [one(first)] : [];
+  const r = ev.rule, out = [], ex = new Set(ev.ex);
+  const [y0, m0, d0, h, mi, sec] = ev.f;
+  const at = (y, m, d) => toInstant(ev.allDay ? [y, m, d] : [y, m, d, h, mi, sec], ev.tz);
+  const keyOf = t => ev.allDay ? startOfDay(t) : t;
+  let n = 0, guard = 0;
+  // emits one candidate date; false once the rule has run out
+  const emit = (y, m, d) => {
+    const t = at(y, m, d);
+    if (t < first) return true;
+    if (r.until != null && t > r.until) return false;
+    if (r.count && ++n > r.count) return false;
+    if (t >= to) return false;
+    if (t + Math.max(ev.dur, 1) > from && !ex.has(keyOf(t))) out.push(one(t));
+    return true;
+  };
+  const dim = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const dowOf = (y, m, d) => new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const wdays = r.byday ? r.byday.map(b => b[1]) : [dowOf(y0, m0, d0)];
+
+  if (r.freq === "DAILY" || r.freq === "WEEKLY") {
+    const stepDays = r.freq === "DAILY" ? r.interval : 7 * r.interval;
+    // the week (Monday-based) or day the rule started in, in UTC day numbers
+    const startDay = Date.UTC(y0, m0 - 1, d0) / DAY;
+    let base = r.freq === "WEEKLY" ? startDay - ((dowOf(y0, m0, d0) + 6) % 7) : startDay;
+    // without a count nothing before the window matters: jump close to it
+    if (!r.count) {
+      const fromDay = Math.floor(from / DAY) - 2;
+      if (fromDay > base) base += Math.floor((fromDay - base) / stepDays) * stepDays;
+    }
+    for (; guard < 5000; guard++, base += stepDays) {
+      const days = r.freq === "DAILY" ? [base] : [0, 1, 2, 3, 4, 5, 6].map(k => base + k).filter(dn => wdays.includes(new Date(dn * DAY).getUTCDay()));
+      for (const dn of days) {
+        const dt = new Date(dn * DAY);
+        const y = dt.getUTCFullYear(), m = dt.getUTCMonth() + 1, d = dt.getUTCDate();
+        if (r.bymonth && !r.bymonth.includes(m)) continue;
+        if (r.freq === "DAILY" && r.byday && !wdays.includes(dt.getUTCDay())) continue;
+        if (!emit(y, m, d)) return out;
+      }
+    }
+    return out;
+  }
+
+  // MONTHLY and YEARLY step a month or a year at a time
+  const monthsStep = r.freq === "MONTHLY" ? r.interval : 12 * r.interval;
+  for (let k = 0; guard < 3000; guard++, k += monthsStep) {
+    const months = r.freq === "YEARLY" && r.bymonth ? r.bymonth.map(bm => [y0 + k / 12, bm]) : [[y0 + Math.floor((m0 - 1 + k) / 12), ((m0 - 1 + k) % 12) + 1]];
+    for (const [y, m] of months) {
+      if (r.freq === "MONTHLY" && r.bymonth && !r.bymonth.includes(m)) continue;
+      const len = dim(y, m);
+      let days = [];
+      if (r.bymonthday) days = r.bymonthday.map(d => d < 0 ? len + 1 + d : d).filter(d => d >= 1 && d <= len);
+      else if (r.byday) {
+        for (const [nth, wd] of r.byday) {
+          const all = [];
+          for (let d = 1; d <= len; d++) if (dowOf(y, m, d) === wd) all.push(d);
+          if (!nth) days.push(...all);
+          else { const d = nth > 0 ? all[nth - 1] : all[all.length + nth]; if (d) days.push(d); }
+        }
+      } else if (d0 <= len) days = [d0];
+      days.sort((a, b) => a - b);
+      for (const d of days) if (!emit(y, m, d)) return out;
+    }
+    if (Date.UTC(y0 + Math.floor((m0 - 1 + k) / 12), 0, 1) > to + 400 * DAY) break;
+  }
+  return out;
+}
+
+let calendars = LS.get("calendars", []);
+let calCache = { key: "", list: [] };
+let calVersion = 0;
+// This week's events, around today, as items Horizon can show: cached per day.
+function calendarItems(now) {
+  const key = calVersion + ":" + dayKey(now);
+  if (calCache.key === key) return calCache.list;
+  const from = addDays(startOfDay(now), -1), to = addDays(startOfDay(now), 8);
+  const list = [];
+  for (const cal of calendars) for (const ev of cal.events) {
+    let occ;
+    try { occ = occurrencesOf(ev, from, to); } catch { continue; }
+    for (const o of occ) {
+      const day = startOfDay(o.start);
+      list.push({
+        cal: true, done: false, text: "cal:" + (ev.uid || ev.title) + "@" + o.start,
+        what: ev.title, loc: ev.loc, link: ev.link, repeat: null, lead: 0,
+        day, at: ev.allDay ? null : o.start, end: ev.allDay ? addDays(day, Math.max(1, Math.round(ev.dur / DAY))) : o.end,
+      });
+    }
+  }
+  list.sort((a, b) => (a.at || a.day) - (b.at || b.day));
+  calCache = { key, list };
+  return list;
+}
+
+function saveCalendars() {
+  try {
+    localStorage.setItem("homepage.horizon.calendars", JSON.stringify(calendars));
+  } catch {
+    return false;
+  }
+  calVersion++;
+  return true;
+}
+
 /* ================= reading Drift ================= */
 
 function focusInfo(now) {
@@ -7608,6 +7893,12 @@ function gather(now) {
   const loose = todays.filter(i => i.at == null);
   const later = pending.filter(i => i.day > today).sort((a, b) => (a.at || a.day) - (b.at || b.day));
   const missed = pending.filter(i => i.day < today);
+  // calendar events: coming up or under way today, all-day today, done today, later
+  const cal = calendarItems(now);
+  const calToday = cal.filter(e => e.at != null && e.day === today && (e.at > now - 5 * MIN || e.end > now));
+  const calAllDay = cal.filter(e => e.at == null && e.day <= today && e.end > today);
+  const calDone = cal.filter(e => e.at != null && e.day === today && !calToday.includes(e));
+  const calLater = cal.filter(e => e.day > today);
   const signals = [];
 
   for (const i of timed) {
@@ -7633,6 +7924,29 @@ function gather(now) {
         text: `Still open from ${fmtClock(i.at)}: ${i.what}.`, why: "check it off, or let it go" });
     }
   }
+  // An event is never overdue: it counts down, is "now" for its first five
+  // minutes, is under way until it ends, and then it's settled.
+  for (const e of calToday) {
+    const mins = Math.round((e.at - now) / MIN);
+    const where = e.loc ? " · " + e.loc : "";
+    const base = { id: e.text, kind: "event", at: e.at, item: e, action: e.link ? { type: "open", label: "Join", url: e.link } : null };
+    if (mins > 0) {
+      signals.push({ ...base, weight: urgency(mins), stage: mins <= 15 ? "soon" : null, countdown: inWords(mins),
+        text: `${e.what} in ${inWords(mins)}.`, why: `at ${fmtClock(e.at)}${where}` });
+    } else if (mins > -5) {
+      signals.push({ ...base, weight: 0.92, stage: "due",
+        text: `${e.what} — now.`, why: (e.end > e.at ? `${fmtClock(e.at)}–${fmtClock(e.end)}` : `at ${fmtClock(e.at)}`) + where });
+    } else {
+      signals.push({ ...base, weight: 0.24,
+        text: `${e.what} until ${fmtClock(e.end)}.`, why: `under way${where}` });
+    }
+  }
+  if (calAllDay.length) {
+    signals.push({ id: "allday:" + dayKey(now), kind: "event", weight: 0.22, action: AHEAD,
+      text: calAllDay.length === 1 ? `Today: ${calAllDay[0].what}.` : `Today: ${calAllDay[0].what} and ${calAllDay.length - 1} more.`,
+      why: "all day · from your calendar" });
+  }
+
   for (const i of missed) {
     signals.push({ id: "item:" + i.text, kind: "overdue", at: i.at || i.day, item: i, action: CHECK, weight: 0.42,
       text: `Still open from ${dayLabel(i.day, now)}: ${i.what}.`, why: "check it off, or let it go" });
@@ -7661,13 +7975,14 @@ function gather(now) {
       why: "from your scratchpad" });
   }
 
-  if (phase.id === "dawn" && todays.length) {
-    const first = timed.find(i => i.at > now);
+  const dayCount = todays.length + calToday.length + calAllDay.length;
+  if (phase.id === "dawn" && dayCount) {
+    const first = timed.concat(calToday).filter(i => i.at > now).sort((a, b) => a.at - b.at)[0];
     signals.push({ id: "dawn:" + dayKey(now), kind: "brief", weight: 0.26, action: AHEAD,
-      text: `Morning. ${todays.length} thing${todays.length === 1 ? "" : "s"} ahead today${first ? ` — first, ${first.what} at ${fmtClock(first.at)}` : ""}.`,
+      text: `Morning. ${dayCount} thing${dayCount === 1 ? "" : "s"} ahead today${first ? ` — first, ${first.what} at ${fmtClock(first.at)}` : ""}.`,
       why: "your dawn briefing" });
   }
-  const tomorrow = later.filter(i => i.day === addDays(today, 1));
+  const tomorrow = later.concat(calLater).filter(i => i.day === addDays(today, 1)).sort((a, b) => (a.at || a.day) - (b.at || b.day));
   if (hour >= 18 && tomorrow.length) {
     const first = tomorrow.find(i => i.at != null);
     signals.push({ id: "tomorrow:" + dayKey(now), kind: "brief", weight: 0.2, action: AHEAD,
@@ -7680,7 +7995,7 @@ function gather(now) {
       why: "dusk wind-down" });
   }
 
-  return { items, focus, phase, signals, timed, loose, later, missed };
+  return { items, focus, phase, signals, timed, loose, later, missed, calToday, calAllDay, calDone, calLater };
 }
 
 /* ================= learning ================= */
@@ -7699,7 +8014,7 @@ function loadLearned(v) {
   }
   return out;
 }
-const KIND_NAMES = { due: "upcoming times", overdue: "overdue items", focus: "focus sessions", streak: "your streak", open: "open items", brief: "briefings", late: "late-night nudges" };
+const KIND_NAMES = { event: "calendar events", due: "upcoming times", overdue: "overdue items", focus: "focus sessions", streak: "your streak", open: "open items", brief: "briefings", late: "late-night nudges" };
 let learned = loadLearned(LS.get("learned", null));
 let snoozed = LS.get("snoozed", {});
 const factor = kind => Math.min(1.25, Math.max(0.5, Math.pow(0.88, learned.dismissed[kind] || 0) * Math.pow(1.06, learned.acted[kind] || 0)));
@@ -7927,7 +8242,8 @@ function maybeDecide(ranked, g, now) {
       countdown: s.countdown || null,
       button: s.action ? s.action.label : null,
     })),
-    open_today: g.timed.concat(g.loose).map(i => whenOf(i, now) + " · " + i.what).slice(0, 20),
+    open_today: g.timed.concat(g.loose).map(i => whenOf(i, now) + " · " + i.what)
+      .concat(g.calToday.concat(g.calAllDay).map(e => (e.at != null ? fmtClock(e.at) : "all day") + " · " + e.what + " (calendar)")).slice(0, 24),
     checked_off: g.items.filter(i => i.done).length,
     focused_today_minutes: g.focus.today,
   };
@@ -8049,8 +8365,74 @@ function syncAi() {
   $("#hzKeyForget").hidden = !ai.key;
   $("#hzAiBtn").setAttribute("aria-pressed", String(aiReady() && (ai.decide || ai.parse)));
 }
+// ---- the Calendar sheet ----
+function calStatus(text) { $("#hzCalStatus").textContent = text; }
+function renderCalList() {
+  const list = $("#hzCalList");
+  list.replaceChildren();
+  for (const cal of calendars) {
+    const r = document.createElement("div");
+    r.className = "cal-row";
+    r.innerHTML = '<span class="name"></span><span class="meta"></span>';
+    r.querySelector(".name").textContent = cal.name;
+    r.querySelector(".meta").textContent = `${cal.events.length} event${cal.events.length === 1 ? "" : "s"} · ${new Date(cal.at).toLocaleDateString([], { month: "short", day: "numeric" })}`;
+    const b = document.createElement("button");
+    b.className = "link";
+    b.type = "button";
+    b.textContent = "Remove";
+    b.setAttribute("aria-label", `Remove ${cal.name}`);
+    b.addEventListener("click", () => {
+      calendars = calendars.filter(c => c !== cal);
+      saveCalendars();
+      renderCalList();
+      calStatus(`Removed ${cal.name}.`);
+      refresh(true);
+      $("#hzCalImport").focus();
+    });
+    r.append(b);
+    list.append(r);
+  }
+  $("#hzCalBtn").setAttribute("aria-pressed", String(calendars.length > 0));
+}
+async function importCalendars(files) {
+  const now = Date.now(), notes = [];
+  for (const file of files) {
+    const name = file.name.replace(/\.(ics|ical|ifb|icalendar)$/i, "");
+    if (file.size > 25 * 1024 * 1024) { notes.push(`${file.name} is too big to read.`); continue; }
+    let text;
+    try { text = await file.text(); } catch { notes.push(`${file.name} couldn't be read.`); continue; }
+    if (!/BEGIN:VCALENDAR/i.test(text)) { notes.push(`${file.name} isn't a calendar (.ics) file.`); continue; }
+    const r = parseIcs(text, now);
+    const before = calendars;
+    calendars = calendars.filter(c => c.name !== name).concat([{ name, at: now, events: r.events }]);
+    if (!saveCalendars()) {
+      calendars = before;
+      notes.push(`${name} is too big to keep in this browser's storage.`);
+      continue;
+    }
+    let msg = `${name}: ${r.events.length} event${r.events.length === 1 ? "" : "s"}` + (r.skipped ? `, leaving out ${r.skipped} that are over` : "") + ".";
+    if (r.unsupported) msg += ` ${r.unsupported} repeat${r.unsupported === 1 ? "s" : ""} in a way Horizon can't follow, so ${r.unsupported === 1 ? "it shows" : "they show"} only once.`;
+    if (r.badZones) msg += ` ${r.badZones} use${r.badZones === 1 ? "s" : ""} a time zone this browser doesn't know, shown in local time.`;
+    notes.push(msg);
+  }
+  calStatus(notes.join(" "));
+  renderCalList();
+  refresh(true);
+}
+let calOpen = false;
+function setCalSheet(on) {
+  if (on && aiOpen) setAiSheet(false);
+  calOpen = on;
+  $("#hzCal").hidden = !on;
+  $("#hzCalBtn").setAttribute("aria-expanded", String(on));
+  if (on) { renderCalList(); $("#hzCalImport").focus(); }
+  else $("#hzCalBtn").focus({ preventScroll: true });
+  wake();
+}
+
 let aiOpen = false;
 function setAiSheet(on) {
+  if (on && calOpen) setCalSheet(false);
   aiOpen = on;
   $("#hzAi").hidden = !on;
   $("#hzAiBtn").setAttribute("aria-expanded", String(on));
@@ -8103,7 +8485,7 @@ let listKey = "";
 function renderLists(g, ranked, now) {
   // rebuilt only when something in them changes, so focus inside survives the tick
   const st = g.focus.status;
-  const key = JSON.stringify([g.items, g.focus.today, g.focus.streak, st.state, st.mode, Math.ceil((st.remaining || 0) / 60),
+  const key = JSON.stringify([calVersion, g.items, g.focus.today, g.focus.streak, st.state, st.mode, Math.ceil((st.remaining || 0) / 60),
     ranked.map(r => tierOf(r.score)), learned, Math.floor(now / MIN)]);
   if (key === listKey) return;
   listKey = key;
@@ -8112,20 +8494,27 @@ function renderLists(g, ranked, now) {
   // what's slipped comes first: earlier days, then earlier today
   for (const i of g.missed) ahead.append(row(dayLabel(i.day, now), whatOf(i), "", "steady"));
   for (const i of g.timed.filter(i => i.at <= now)) ahead.append(row(fmtClock(i.at), whatOf(i), "", "steady"));
-  for (const i of g.timed.filter(i => i.at > now)) {
-    const s = ranked.find(r => r.id === "item:" + i.text);
-    ahead.append(row(fmtClock(i.at), whatOf(i) + (i.lead ? ` · leave ${fmtClock(i.at - i.lead * MIN)}` : ""), "", s ? tierOf(s.score) : "ember"));
+  // today's timed items and events, in time order; events wear a small dot
+  const coming = g.timed.filter(i => i.at > now).concat(g.calToday).sort((a, b) => a.at - b.at);
+  for (const i of coming) {
+    const s = ranked.find(r => r.id === (i.cal ? i.text : "item:" + i.text));
+    const tier = s ? tierOf(s.score) : "ember";
+    if (i.cal) ahead.append(row(fmtClock(i.at), i.what + (i.loc ? ` · ${i.loc}` : "") + (i.at <= now && i.end > now ? ` · until ${fmtClock(i.end)}` : ""), "cal", tier));
+    else ahead.append(row(fmtClock(i.at), whatOf(i) + (i.lead ? ` · leave ${fmtClock(i.at - i.lead * MIN)}` : ""), "", tier));
   }
+  for (const e of g.calAllDay) ahead.append(row("today", e.what, "cal"));
   for (const i of g.loose) ahead.append(row("today", whatOf(i)));
   if (st.state === "running" || st.state === "paused") ahead.append(row("drift", `${Math.max(1, Math.ceil(st.remaining / 60))} min left in this ${st.mode === "break" ? "break" : "session"}`));
-  for (const i of g.later.slice(0, 12)) ahead.append(row(whenOf(i, now), whatOf(i)));
-  if (ahead.children.length === 1) ahead.append(empty("Nothing ahead. Add “- [ ] tomorrow 3pm something” to your scratchpad and it shows up here."));
+  const later = g.later.concat(g.calLater).sort((a, b) => (a.at || a.day) - (b.at || b.day));
+  for (const i of later.slice(0, 16)) ahead.append(row(whenOf(i, now), i.cal ? i.what : whatOf(i), i.cal ? "cal" : ""));
+  if (ahead.children.length === 1) ahead.append(empty("Nothing ahead. Add “- [ ] tomorrow 3pm something” to your scratchpad, or import a calendar, and it shows up here."));
 
   const settled = $("#hzSettled");
   settled.replaceChildren(head("Settled"));
   const done = g.items.filter(i => i.done);
   const past = g.timed.filter(i => i.at <= now);
   for (const i of done) settled.append(row(i.repeat ? repeatName(i.repeat) : i.at != null && i.day === startOfDay(now) ? fmtClock(i.at) : "done", i.what, "done"));
+  for (const e of g.calDone) settled.append(row(fmtClock(e.at), e.what, "done cal"));
   if (g.focus.today) settled.append(row("drift", `${g.focus.today} min focused today`, "done"));
   if (g.focus.streak && g.focus.today) settled.append(row("streak", `${g.focus.streak + 1} days in a row`, "done"));
   if (!past.length && !g.missed.length) settled.append(row("✓", "Nothing overdue", "done"));
@@ -8230,6 +8619,7 @@ function act() {
   const s = shown, a = s.action;
   if (a.type === "ahead") { if (view !== "ahead") setView("ahead"); return; }
   learn("acted", s.kind);
+  if (a.type === "open") { window.open(a.url, "_blank", "noopener"); return; }
   if (a.type === "focus") {
     closeHorizon();
     if (window.SimpleHomeFocus && window.SimpleHomeFocus.open) window.SimpleHomeFocus.open();
@@ -8281,6 +8671,7 @@ function closeHorizon() {
   if (view !== "line") setView(view);
   if (adding) setAdding(false);
   if (aiOpen) { aiOpen = false; $("#hzAi").hidden = true; $("#hzAiBtn").setAttribute("aria-expanded", "false"); }
+  if (calOpen) { calOpen = false; $("#hzCal").hidden = true; $("#hzCalBtn").setAttribute("aria-expanded", "false"); }
   host.classList.remove("open");
   host.setAttribute("aria-hidden", "true");
   document.body.classList.remove("horizon-open");
@@ -8301,6 +8692,24 @@ $("#hzNotify").addEventListener("click", toggleNotify);
 $("#hzAddBtn").addEventListener("click", () => setAdding(!adding));
 $("#hzAdd").addEventListener("submit", e => { e.preventDefault(); addItem($("#hzAddText").value); });
 $("#hzAiBtn").addEventListener("click", () => setAiSheet(!aiOpen));
+$("#hzCalBtn").addEventListener("click", () => setCalSheet(!calOpen));
+$("#hzCalImport").addEventListener("click", () => $("#hzCalFile").click());
+$("#hzCalFile").addEventListener("change", e => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  if (files.length) importCalendars(files);
+});
+// drop an .ics anywhere on Horizon
+const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].includes("Files");
+ui.addEventListener("dragover", e => { if (!hasFiles(e)) return; e.preventDefault(); ui.classList.add("dropping"); });
+ui.addEventListener("dragleave", e => { if (e.target === ui || !ui.contains(e.relatedTarget)) ui.classList.remove("dropping"); });
+ui.addEventListener("drop", e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  ui.classList.remove("dropping");
+  if (!calOpen) setCalSheet(true);
+  importCalendars([...e.dataTransfer.files]);
+});
 $("#hzKeySave").addEventListener("click", () => {
   const key = $("#hzKey").value.trim();
   if (!key) { aiStatus(ai.key ? "Key unchanged." : "Paste an API key first."); return; }
@@ -8320,7 +8729,10 @@ $("#hzSound").addEventListener("click", () => {
   if (soundOn) chime("steady"); // a preview, and the gesture audio needs
 });
 // a scratchpad edit in another tab shows up straight away
-addEventListener("storage", e => { if (e.key === "homepage.scratch") refresh(); });
+addEventListener("storage", e => {
+  if (e.key === "homepage.horizon.calendars") { calendars = LS.get("calendars", []); calVersion++; renderCalList(); }
+  if (e.key === "homepage.scratch" || e.key === "homepage.horizon.calendars") refresh();
+});
 // coming back to the tab catches up at once rather than on the next slow tick
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 
@@ -8355,12 +8767,13 @@ addEventListener("keydown", e => {
   wake();
   if (e.key === "Escape") {
     if (aiOpen) setAiSheet(false);
+    else if (calOpen) setCalSheet(false);
     else if (adding) setAdding(false);
     else if (view !== "line") setView(view);
     else closeHorizon();
     return;
   }
-  if (typing || aiOpen) return;
+  if (typing || aiOpen || calOpen) return;
   if (e.key === "Enter") { if (!(target.closest && target.closest("button"))) { e.preventDefault(); act(); } }
   else if (e.key === "ArrowUp") { e.preventDefault(); setView("ahead"); }
   else if (e.key === "ArrowDown") { e.preventDefault(); setView("settled"); }
@@ -8387,6 +8800,7 @@ window.SimpleHomeHorizon = {
 syncSound();
 syncNotify();
 syncAi();
+renderCalList();
 refresh();
 ticker = setInterval(refresh, 30 * 1000);
 })();
