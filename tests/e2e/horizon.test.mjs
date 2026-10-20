@@ -411,3 +411,132 @@ test('a 400 over server-side fallbacks is retried once without them', async (t) 
   assert.equal(calls[1].headers['anthropic-beta'], undefined);
   app.errors = app.errors.filter((e) => !/status of 400 \(Bad Request\) \(https:\/\/api\.anthropic\.com\//.test(e));
 });
+
+// ---- Calendar ----
+
+const ICS = [
+  'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//test//EN',
+  'BEGIN:VEVENT', 'UID:review', 'SUMMARY:Design review', 'LOCATION:Room 4',
+  'DTSTART:20261019T144000Z', 'DTEND:20261019T153000Z',
+  'X-GOOGLE-CONFERENCE:https://meet.google.com/abc-defg-hij',
+  // a reminder's own fields mustn't leak into the event
+  'BEGIN:VALARM', 'ACTION:DISPLAY', 'SUMMARY:Reminder', 'LOCATION:nowhere', 'TRIGGER:-PT10M', 'END:VALARM', 'END:VEVENT',
+  // weekdays at 9 in New York (1 PM UTC in October); Wednesday's is off, Thursday's moved to 10
+  'BEGIN:VEVENT', 'UID:standup', 'SUMMARY:Standup',
+  'DTSTART;TZID=America/New_York:20260105T090000', 'DTEND;TZID=America/New_York:20260105T091500',
+  'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR', 'EXDATE;TZID=America/New_York:20261021T090000', 'END:VEVENT',
+  'BEGIN:VEVENT', 'UID:standup', 'SUMMARY:Standup', 'RECURRENCE-ID;TZID=America/New_York:20261022T090000',
+  'DTSTART;TZID=America/New_York:20261022T100000', 'DTEND;TZID=America/New_York:20261022T101500', 'END:VEVENT',
+  // the fourth Saturday of each month
+  'BEGIN:VEVENT', 'UID:books', 'SUMMARY:Book club', 'DTSTART:20260124T180000Z', 'DURATION:PT2H',
+  'RRULE:FREQ=MONTHLY;BYDAY=4SA', 'END:VEVENT',
+  'BEGIN:VEVENT', 'UID:bday', 'SUMMARY:Mom\'s birthday', 'DTSTART;VALUE=DATE:20261019', 'DTEND;VALUE=DATE:20261020', 'END:VEVENT',
+  'BEGIN:VEVENT', 'UID:gone', 'SUMMARY:Cancelled sync', 'STATUS:CANCELLED', 'DTSTART:20261019T160000Z', 'END:VEVENT',
+  'BEGIN:VEVENT', 'UID:old', 'SUMMARY:Old thing', 'DTSTART:20200101T100000Z', 'END:VEVENT',
+  // floating time, folded across two lines, with an escaped comma
+  'BEGIN:VEVENT', 'UID:dentist', 'SUMMARY:Dentist\\, Dr', ' . Lee', 'DTSTART:20261023T150000', 'END:VEVENT',
+  'BEGIN:VEVENT', 'UID:hourly', 'SUMMARY:Ping', 'DTSTART:20261001T100000Z', 'RRULE:FREQ=HOURLY', 'END:VEVENT',
+  'END:VCALENDAR', '',
+].join('\r\n');
+
+async function importIcs(page, name = 'work.ics', text = ICS) {
+  await page.locator('#horizonView #hzCalBtn').click();
+  await page.locator('#horizonView #hzCalFile').setInputFiles({ name, mimeType: 'text/calendar', buffer: Buffer.from(text) });
+}
+
+test('an imported calendar counts down on the line, fills Ahead and Settled, and offers Join', async (t) => {
+  const app = await openAt(t, {});
+  const { page } = app;
+  await page.keyboard.press('h');
+  await page.waitForFunction(() => document.body.classList.contains('horizon-open'));
+  await importIcs(page);
+  await shadowText(page, '#hzCalStatus',
+    'work: 7 events, leaving out 1 that are over. 1 repeats in a way Horizon can\'t follow, so it shows only once.');
+  assert.deepEqual(await page.locator('#horizonView .cal-row .name').allTextContents(), ['work']);
+  await page.keyboard.press('Escape');
+
+  assert.equal(await line(page), 'Design review in 8 minutes.');
+  assert.equal(await page.locator('#horizonView #hzWhy').textContent(), 'at 2:40 PM · Room 4');
+  assert.equal(await tier(page), 'flare');
+
+  await page.keyboard.press('ArrowUp');
+  assert.deepEqual(await page.locator('#horizonView #hzAhead .item').allTextContents(), [
+    '2:40 PMDesign review · Room 4',
+    'todayMom\'s birthday',
+    'Tomorrow 1:00 PMStandup',
+    'Thu 2:00 PMStandup', // moved an hour; Wednesday's is off
+    'Fri 1:00 PMStandup',
+    'Fri 3:00 PMDentist, Dr. Lee',
+    'Sat 6:00 PMBook club',
+    'Oct 26 1:00 PMStandup',
+  ]);
+  await page.keyboard.press('ArrowDown');
+  assert.deepEqual(await page.locator('#horizonView #hzSettled .item').allTextContents(), ['1:00 PMStandup', '✓Nothing overdue']);
+  await page.keyboard.press('Escape');
+
+  // A meeting link becomes the button.
+  assert.equal(await page.locator('#horizonView #hzAct').textContent(), 'Join');
+  await page.locator('#horizonView #hzAct').click();
+  assert.deepEqual(await app.nextOpened(), { url: 'https://meet.google.com/abc-defg-hij', target: '_blank', features: 'noopener' });
+
+  // An event is never overdue: now, then under way, then settled.
+  await page.clock.setFixedTime(new Date('2026-10-19T14:42:00Z'));
+  await shadowText(page, '#hzMsg', 'Design review — now.');
+  assert.equal(await page.locator('#horizonView #hzWhy').textContent(), '2:40 PM–3:30 PM · Room 4');
+  await page.clock.setFixedTime(new Date('2026-10-19T14:50:00Z'));
+  await shadowText(page, '#hzMsg', 'Design review until 3:30 PM.');
+  await page.clock.setFixedTime(new Date('2026-10-19T15:31:00Z'));
+  await shadowText(page, '#hzMsg', 'Today: Mom\'s birthday.');
+});
+
+test('calendars persist, re-importing a file replaces it, and they can be removed', async (t) => {
+  const app = await openAt(t, {});
+  const { page } = app;
+  await page.keyboard.press('h');
+  await page.waitForFunction(() => document.body.classList.contains('horizon-open'));
+  await importIcs(page);
+  await shadowText(page, '#hzCalStatus', 'work: 7 events, leaving out 1 that are over. 1 repeats in a way Horizon can\'t follow, so it shows only once.');
+  await importIcs(page, 'work.ics', ICS.replace('Design review', 'Design crit'));
+  await importIcs(page, 'notes.txt', 'just some notes');
+  await shadowText(page, '#hzCalStatus', 'notes.txt isn\'t a calendar (.ics) file.');
+  assert.deepEqual(await page.locator('#horizonView .cal-row .name').allTextContents(), ['work']);
+
+  await app.reload();
+  await page.keyboard.press('h');
+  await shadowText(page, '#hzMsg', 'Design crit in 8 minutes.');
+  await page.locator('#horizonView #hzCalBtn').click();
+  await page.locator('#horizonView .cal-row .link').click();
+  await shadowText(page, '#hzCalStatus', 'Removed work.');
+  assert.deepEqual(await app.stored('homepage.horizon.calendars'), []);
+  await page.keyboard.press('Escape');
+  await shadowText(page, '#hzMsg', 'All clear.');
+});
+
+test('repeats keep their own time zone across daylight-saving changes on either side', async (t) => {
+  // Berlin leaves summer time on 25 October, New York on 1 November: for that
+  // week a 9 AM New York standup is at 2 PM in Berlin, then 3 PM again.
+  const app = await browser.open(t, { goto: false, context: { timezoneId: 'Europe/Berlin' } });
+  await app.page.clock.setFixedTime(new Date('2026-10-30T10:00:00Z')); // Friday, 11 AM in Berlin
+  await app.load();
+  const { page } = app;
+  await page.keyboard.press('h');
+  await page.waitForFunction(() => document.body.classList.contains('horizon-open'));
+  await importIcs(page, 'team.ics', [
+    'BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:s', 'SUMMARY:Standup',
+    'DTSTART;TZID=America/New_York:20260105T090000', 'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:b', 'SUMMARY:Day off', 'DTSTART;VALUE=DATE:20261030', 'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n'));
+  await shadowText(page, '#hzCalStatus', 'team: 2 events.');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('ArrowUp');
+  assert.deepEqual(await page.locator('#horizonView #hzAhead .item').allTextContents(), [
+    '2:00 PMStandup',
+    'todayDay off',
+    'Mon 3:00 PMStandup',
+    'Tue 3:00 PMStandup',
+    'Wed 3:00 PMStandup',
+    'Thu 3:00 PMStandup',
+    'Nov 6 3:00 PMStandup',
+  ]);
+});
