@@ -41,14 +41,26 @@ Settings → History shows how many sites are remembered and clears them, with a
 
 **Horizon.** `H` (or the sunrise button) opens an ambient view: a black sky, slate ground, and a single lit line between them, with one sentence above it — the one thing that needs you now. It reads what the page already knows, scores it, and puts the winner on the line; nothing is sent anywhere and there is no model behind it, just rules you can read in the source.
 
-- *What it reads.* Scratchpad checklist items, with or without a time — `- [ ] 14:40 Call the dentist` and `- [ ] 4pm design review` are timed, `- [ ] 3 eggs` isn't (a time needs minutes or am/pm). Drift's running timer and session log, for the time left and your streak. And the time of day.
-- *What it says.* "Call the dentist in 8 minutes." "Design review was due 5 minutes ago." "3 things open. Next: reply to Sam." "Your 4-day focus streak ends at midnight." A dawn briefing in the morning, a wind-down nudge late at night. With nothing to say it says "All clear."
+- *What it reads.* Scratchpad checklist items. Drift's running timer and session log, for the time left and your streak. And the time of day.
+- *Writing items.* After `- [ ] `, all optional and in this order: a day or a repeat, a time, then what it is, with a lead time anywhere in it.
+
+  | | Examples |
+  |---|---|
+  | Day | `today` `tonight` `tomorrow` · `fri` `next tue` (the coming one) · `oct 24` `24 oct` `2026-10-24` · `10/24` (in your locale's order) |
+  | Repeat | `daily` `weekdays` `weekends` `mondays` `every tue` |
+  | Time | `14:40` `2pm` `9.30am` — a bare number isn't one, so `- [ ] 3 eggs` stays untimed |
+  | Lead | `~20m` `~1h` `~1h30m` — how long it takes to get there |
+
+  So `- [ ] tomorrow 9am standup`, `- [ ] weekdays 7:30am run`, `- [ ] fri 3pm dentist ~20m`. Untimed items with no day are for today. A date with no year is this year's, unless it's more than two months gone, in which case it's next year's. `sun` and `sat` are words too ("sun cream"), so on their own they only mean a day when a time follows. Repeating items come back unchecked each new day they're due.
+- *What it says.* "Call the dentist in 8 minutes." "Dentist at 3:00 PM — leave in 5 minutes." then "Time to go." "Design review was due 5 minutes ago." "Still open from Fri: pay rent." "3 things open. Next: reply to Sam." "Your 4-day focus streak ends at midnight." A dawn briefing in the morning, a look at tomorrow in the evening, a wind-down nudge late at night. With nothing to say it says "All clear."
 - *How bright.* The line's glow is the urgency: a faint ember for something on the way, a steady orange for something soon, and a pulsing flare for now — an item within 15 minutes or just overdue. The haze over the line rises with it, and the time of day sets a floor, warmer at dawn and nearly dark at night. On the home page the toolbar button carries a small ember that lights at steady and pulses at flare, and its tooltip is the line itself, so you can check it without opening anything.
-- *Ahead and settled.* `↑` (or swipe up) lists what's ahead in the sky: timed items in order, open ones, the focus session. `↓` (or swipe down) lists what's settled in the ground: what you've checked off, minutes focused today, the streak.
-- *Not now.* `D` snoozes the line for 30 minutes and teaches Horizon that you wave that kind of signal away: each dismissal quietens the kind a little (never below half), so things you always dismiss stop winning the line. The settled list says what it has learned to be quieter about, with a button to forget it.
+- *Do it.* `Enter` (or the chip under the line) does what the line is asking for: **Done** checks the item off in the scratchpad, **Start focus** on a streak line opens Drift ready to go, **Open Drift** / **Add a note** for a running or finished session, and **Ahead** on a briefing opens the list.
+- *Ahead and settled.* `↑` (or swipe up) lists what's ahead in the sky: anything that has slipped, then today's timed items, open ones and the focus session, then the days to come. `↓` (or swipe down) lists what's settled in the ground: what you've checked off, minutes focused today, the streak.
+- *Learning.* `D` (**Not now**) snoozes the line for 30 minutes and quietens that kind of signal a little; doing what a line asks makes its kind a little louder. Each kind stays between half and one and a quarter of its weight, so the line drifts toward what you act on. The settled list says what it has become quieter and louder about, with a button to forget it.
+- *Alerts.* Optional and off by default: the **Alerts** button asks the browser for permission, then raises a notification when something flares (15 minutes out, time to leave, due) while this tab isn't in front. One per stage of each item, raised by the page itself, so nothing goes through a server. Clicking it brings the tab back with Horizon open. Background tabs only wake about once a minute, so an alert can be up to a minute late, and it needs the page open in some tab. Some browsers don't allow notifications from a `file://` page; the hosted page and the extension both can (the extension asks for the `notifications` permission for this).
 - *Tone.* Optional and off by default: a soft, low two-note tone when the line steps up to steady, higher when it flares.
 
-The controls fade after a few seconds without movement, leaving only the line. `Esc` or Home goes back. Like Drift, it lives in its own shadow root. The tone setting and what it has learned are kept under `homepage.horizon.*` and travel with the backup.
+The controls fade after a few seconds without movement, leaving only the line. `Esc` or Home goes back. Like Drift, it lives in its own shadow root. The tone and alert settings and what it has learned are kept under `homepage.horizon.*` and travel with the backup (alerts still need permission granted again in a new browser).
 
 **Scratchpad.** A persistent notes panel that saves as you type, on a ruled page whose lines scroll with the text, with a live saved indicator, a word count, and buttons to start a checklist item or copy the whole note. `Shift+S` from anywhere. Lines starting with `- [ ]` are checklist items — click the brackets to check them off (toggles to `- [x]`); clicking anywhere else on the line just places the cursor like normal text.
 
@@ -107,7 +119,7 @@ The greeting, clock and date sit on a frosted-glass card so they read cleanly ov
 
 **Time-of-day greeting** above the clock, switching between morning, afternoon, evening, and night.
 
-**Export / import.** Everything lives in `localStorage`, which is per-browser and one "clear browsing data" away from gone. Settings → Backup writes a JSON file with your shortcuts, groups, theme, custom accent colors, engine, notes, autocomplete history, focus sessions and sound settings, and Horizon's tone setting and what it has learned, and reads it back on another machine.
+**Export / import.** Everything lives in `localStorage`, which is per-browser and one "clear browsing data" away from gone. Settings → Backup writes a JSON file with your shortcuts, groups, theme, custom accent colors, engine, notes, autocomplete history, focus sessions and sound settings, and Horizon's tone and alert settings and what it has learned, and reads it back on another machine.
 
 ## Keyboard
 
@@ -124,7 +136,7 @@ The greeting, clock and date sit on a frosted-glass card so they read cleanly ov
 | `H` | Open Horizon |
 | `Esc` | Clear search / close the open panel or modal / exit zen mode / leave the focus timer or Horizon |
 
-Inside Horizon: `↑` shows what's ahead, `↓` what's settled, `D` dismisses the line for now.
+Inside Horizon: `Enter` does what the line asks, `↑` shows what's ahead, `↓` what's settled, `D` dismisses the line for now.
 
 Inside the focus timer: `Space` starts or pauses, `←` `→` or `1`–`8` change place, `↑` `↓` change the length, `B` toggles Pomodoro breaks, `M` opens the mixer and `L` the log.
 

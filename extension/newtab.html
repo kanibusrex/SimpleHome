@@ -4349,6 +4349,8 @@ button { font: inherit; color: inherit; }
 }
 .chip:hover { color: var(--ink); border-color: rgba(236, 230, 225, 0.28); }
 .chip[aria-expanded="true"] { color: var(--ember-hot); border-color: rgba(255, 106, 26, 0.4); }
+.chip.act { color: var(--ink); border-color: rgba(255, 106, 26, 0.45); background: rgba(255, 106, 26, 0.12); }
+.chip.act:hover { border-color: var(--ember); }
 
 /* ---- ahead (in the sky) and settled (in the ground) ---- */
 .list {
@@ -4370,7 +4372,7 @@ button { font: inherit; color: inherit; }
 .list-head { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); padding: 0 0 8px; }
 .item {
   display: grid;
-  grid-template-columns: 64px 1fr auto;
+  grid-template-columns: 104px 1fr auto;
   align-items: baseline;
   gap: 12px;
   padding: 9px 0;
@@ -4402,7 +4404,11 @@ button { font: inherit; color: inherit; }
 @media (max-width: 640px) {
   .hints, .phase { display: none; }
   .t-label { display: none; }
-  .item { grid-template-columns: 52px 1fr auto; }
+  .item { grid-template-columns: 88px 1fr auto; }
+}
+@media (max-width: 400px) {
+  .actions { gap: 5px; }
+  .chip { padding: 0 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -4423,6 +4429,10 @@ button { font: inherit; color: inherit; }
       <div class="phase" id="hzPhase"></div>
     </div>
     <div class="tools">
+      <button class="tool" id="hzNotify" aria-pressed="false" title="A browser notification when something needs you now and this tab isn't in front">
+        <svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></svg>
+        <span class="t-label">Alerts</span>
+      </button>
       <button class="tool" id="hzSound" aria-pressed="false" title="A soft tone when something needs you now">
         <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>
         <span class="t-label">Tone</span>
@@ -4436,11 +4446,12 @@ button { font: inherit; color: inherit; }
   </div>
   <div class="actions">
     <button class="chip" id="hzAheadBtn" aria-expanded="false" aria-controls="hzAhead">Ahead ↑</button>
+    <button class="chip act" id="hzAct" hidden>Done</button>
     <button class="chip" id="hzDismiss" hidden>Not now</button>
     <button class="chip" id="hzSettledBtn" aria-expanded="false" aria-controls="hzSettled">Settled ↓</button>
   </div>
   <section class="list settled" id="hzSettled" aria-label="Settled"></section>
-  <p class="hints"><kbd>↑</kbd> ahead · <kbd>↓</kbd> settled · <kbd>D</kbd> not now · <kbd>Esc</kbd> home</p>
+  <p class="hints"><kbd>Enter</kbd> do it · <kbd>↑</kbd> ahead · <kbd>↓</kbd> settled · <kbd>D</kbd> not now · <kbd>Esc</kbd> home</p>
 </div>
 </template>
 

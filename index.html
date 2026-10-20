@@ -4348,6 +4348,8 @@ button { font: inherit; color: inherit; }
 }
 .chip:hover { color: var(--ink); border-color: rgba(236, 230, 225, 0.28); }
 .chip[aria-expanded="true"] { color: var(--ember-hot); border-color: rgba(255, 106, 26, 0.4); }
+.chip.act { color: var(--ink); border-color: rgba(255, 106, 26, 0.45); background: rgba(255, 106, 26, 0.12); }
+.chip.act:hover { border-color: var(--ember); }
 
 /* ---- ahead (in the sky) and settled (in the ground) ---- */
 .list {
@@ -4369,7 +4371,7 @@ button { font: inherit; color: inherit; }
 .list-head { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); padding: 0 0 8px; }
 .item {
   display: grid;
-  grid-template-columns: 64px 1fr auto;
+  grid-template-columns: 104px 1fr auto;
   align-items: baseline;
   gap: 12px;
   padding: 9px 0;
@@ -4401,7 +4403,11 @@ button { font: inherit; color: inherit; }
 @media (max-width: 640px) {
   .hints, .phase { display: none; }
   .t-label { display: none; }
-  .item { grid-template-columns: 52px 1fr auto; }
+  .item { grid-template-columns: 88px 1fr auto; }
+}
+@media (max-width: 400px) {
+  .actions { gap: 5px; }
+  .chip { padding: 0 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -4422,6 +4428,10 @@ button { font: inherit; color: inherit; }
       <div class="phase" id="hzPhase"></div>
     </div>
     <div class="tools">
+      <button class="tool" id="hzNotify" aria-pressed="false" title="A browser notification when something needs you now and this tab isn't in front">
+        <svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></svg>
+        <span class="t-label">Alerts</span>
+      </button>
       <button class="tool" id="hzSound" aria-pressed="false" title="A soft tone when something needs you now">
         <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>
         <span class="t-label">Tone</span>
@@ -4435,11 +4445,12 @@ button { font: inherit; color: inherit; }
   </div>
   <div class="actions">
     <button class="chip" id="hzAheadBtn" aria-expanded="false" aria-controls="hzAhead">Ahead ↑</button>
+    <button class="chip act" id="hzAct" hidden>Done</button>
     <button class="chip" id="hzDismiss" hidden>Not now</button>
     <button class="chip" id="hzSettledBtn" aria-expanded="false" aria-controls="hzSettled">Settled ↓</button>
   </div>
   <section class="list settled" id="hzSettled" aria-label="Settled"></section>
-  <p class="hints"><kbd>↑</kbd> ahead · <kbd>↓</kbd> settled · <kbd>D</kbd> not now · <kbd>Esc</kbd> home</p>
+  <p class="hints"><kbd>Enter</kbd> do it · <kbd>↑</kbd> ahead · <kbd>↓</kbd> settled · <kbd>D</kbd> not now · <kbd>Esc</kbd> home</p>
 </div>
 </template>
 
@@ -8826,6 +8837,29 @@ button { font: inherit; color: inherit; }
     if (document.hidden) flushScratch();
   });
 
+  // Horizon checks items off from outside the panel: it goes through here so
+  // the textarea, its pending save and the stored copy never disagree.
+  window.SimpleHomeScratch = {
+    get: function () { return scratchText.value; },
+    set: function (value) {
+      flushScratch();
+      var start = scratchText.selectionStart, end = scratchText.selectionEnd;
+      scratchText.value = value;
+      scratchText.setSelectionRange(Math.min(start, value.length), Math.min(end, value.length));
+      saveScratch();
+      updateScratchCount();
+    }
+  };
+
+  // An edit saved in another tab replaces this one's copy, unless an edit
+  // here is still waiting to save; otherwise the next save here (or a
+  // Horizon check-off) would quietly write the old text back over it.
+  window.addEventListener('storage', function (e) {
+    if (e.key !== STORAGE_SCRATCH || scratchTimer !== null) return;
+    scratchText.value = e.newValue || '';
+    updateScratchCount();
+  });
+
   // Starts a checklist item on a fresh line at the cursor.
   document.getElementById('scratchCheck').addEventListener('click', function () {
     var v = scratchText.value, pos = scratchText.selectionStart != null ? scratchText.selectionStart : v.length;
@@ -11684,6 +11718,7 @@ window.SimpleHomeFocus = {
     return { state: T.state, mode: T.mode, remaining: Math.max(0, remaining), open };
   },
   sessions() { return store.all(); },
+  open: openFocus,
   exportData() {
     return { sessions: store.all(), levels, planned, place: current.id, master, bell: bellOn, breaks: breaksOn };
   },
@@ -11801,43 +11836,163 @@ const LS = {
   set(k, v) { try { localStorage.setItem("homepage.horizon." + k, JSON.stringify(v)); } catch {} },
 };
 const MIN = 60 * 1000;
+const DAY = 24 * 60 * MIN;
 const SNOOZE = 30 * MIN;
 const pad = n => String(n).padStart(2, "0");
 const dayKey = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+const startOfDay = ms => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const addDays = (ms, n) => { const d = new Date(ms); d.setDate(d.getDate() + n); return d.getTime(); };
 
 /* ================= reading the scratchpad ================= */
 
-// "- [ ] 14:30 Call the dentist", "- [ ] 2pm standup", "- [x] 9:15 – gym".
-// A bare number isn't a time ("- [ ] 3 eggs"): it needs minutes or am/pm.
+// A checklist line is "- [ ] " then, all optional and in this order:
+//   a day or a repeat   tomorrow · fri · oct 24 · 24 oct · 10/24 · 2026-10-24
+//                       daily · weekdays · weekends · mondays · every mon
+//   a time              14:40 · 2pm · 9.30am  (a bare number isn't one: "3 eggs")
+//   what it is          and anywhere in it, a lead time to leave: ~20m · ~1h
 const ITEM = /^\s*[-*]\s*\[( |x|X)\]\s*(.*)$/;
 const TIMED = /^@?(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|a|p)?(?![\w:])\s*[-–—:·]?\s*(.*)$/i;
+const TIMED_AFTER = /^@?\d{1,2}(?:[:.]\d{2}\s*(?:am|pm|a|p)?|\s*(?:am|pm|a|p))(?![\w:])/i;
+const LEAD = /(^|\s)~(?:(\d+)\s*h(?:rs?|ours?)?)?\s*(?:(\d+)\s*m(?:ins?|inutes?)?)?(?=$|[\s.,;])/i;
+const WD = "(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tues|tue|wed|thurs|thur|thu|fri|sat)";
+const MON = "(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)";
+const SEP = "\\b[\\s,·]*";
+const RX = {
+  daily: new RegExp("^(?:daily|every\\s*day)" + SEP, "i"),
+  weekdays: new RegExp("^(?:weekdays|every\\s+weekday)" + SEP, "i"),
+  weekends: new RegExp("^(?:weekends|every\\s+weekend)" + SEP, "i"),
+  weekly: new RegExp("^(?:every\\s+" + WD + "|(sun|mon|tues|wednes|thurs|fri|satur)days)" + SEP, "i"),
+  rel: /^(today|tonight|tomorrow|tmrw|tmr)\b[\s,·]*/i,
+  wd: new RegExp("^(?:next\\s+|this\\s+)?" + WD + SEP, "i"),
+  iso: /^(\d{4})-(\d{1,2})-(\d{1,2})\b[\s,·]*/,
+  monFirst: new RegExp("^" + MON + "\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?" + SEP, "i"),
+  dayFirst: new RegExp("^(\\d{1,2})(?:st|nd|rd|th)?\\s+" + MON + SEP, "i"),
+  slash: /^(\d{1,2})\/(\d{1,2})(?:\/(\d{2}|\d{4}))?(?![\d:])[\s,·]*/,
+};
+const wdIndex = w => ["sun", "mon", "tue", "wed", "thu", "fri", "sat"].indexOf(w.slice(0, 3).toLowerCase());
+const monIndex = w => ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(w.slice(0, 3).toLowerCase());
+// 10/24 or 24/10: whichever order this browser's locale writes dates in
+const DAY_FIRST = (() => {
+  try {
+    const parts = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "numeric" }).formatToParts(new Date(2026, 10, 24));
+    return parts.findIndex(p => p.type === "day") < parts.findIndex(p => p.type === "month");
+  } catch { return false; }
+})();
 
-function parseTime(text, now) {
-  const m = TIMED.exec(text);
-  if (!m || (!m[2] && !m[3])) return null;
-  let h = +m[1];
-  const min = m[2] ? +m[2] : 0;
-  const mer = m[3] && m[3][0].toLowerCase();
-  if (min > 59) return null;
-  if (mer) { if (h < 1 || h > 12) return null; h = (h % 12) + (mer === "p" ? 12 : 0); }
-  else if (h > 23) return null;
-  const d = new Date(now);
-  d.setHours(h, min, 0, 0);
-  return { at: d.getTime(), what: m[4].trim() || text };
+// A date without a year is this year's, unless that's two months gone: then next year's.
+function dateOf(y, mo, d, now) {
+  const guess = y == null;
+  if (guess) y = new Date(now).getFullYear();
+  else if (y < 100) y += 2000;
+  let t = new Date(y, mo, d);
+  if (t.getMonth() !== mo || t.getDate() !== d) return null;
+  if (guess && t.getTime() < startOfDay(now) - 60 * DAY) t = new Date(y + 1, mo, d);
+  return t.getTime();
+}
+
+function parseItem(text, now) {
+  const today = startOfDay(now);
+  let rest = text, lead = 0, repeat = null, day = null, m;
+  rest = rest.replace(LEAD, (all, pre, h, mm) => {
+    if (!h && !mm) return all;
+    lead = (+h || 0) * 60 + (+mm || 0);
+    return pre;
+  }).trim();
+  if ((m = RX.daily.exec(rest))) repeat = [0, 1, 2, 3, 4, 5, 6];
+  else if ((m = RX.weekdays.exec(rest))) repeat = [1, 2, 3, 4, 5];
+  else if ((m = RX.weekends.exec(rest))) repeat = [0, 6];
+  else if ((m = RX.weekly.exec(rest))) repeat = [wdIndex(m[1] || m[2])];
+  else if ((m = RX.rel.exec(rest))) day = /^(today|tonight)$/i.test(m[1]) ? today : addDays(today, 1);
+  // "sun" and "sat" are words too ("sun cream"): on their own they need a time after them
+  else if ((m = RX.wd.exec(rest)) && !(/^(sun|sat)$/i.test(m[1]) && !TIMED_AFTER.test(rest.slice(m[0].length)))) {
+    // a day name means the coming one: today if it's today
+    const ahead = (wdIndex(m[1]) - new Date(now).getDay() + 7) % 7;
+    day = addDays(today, ahead);
+  }
+  else if ((m = RX.iso.exec(rest))) day = dateOf(+m[1], +m[2] - 1, +m[3], now);
+  else if ((m = RX.monFirst.exec(rest))) day = dateOf(null, monIndex(m[1]), +m[2], now);
+  else if ((m = RX.dayFirst.exec(rest))) day = dateOf(null, monIndex(m[2]), +m[1], now);
+  else if ((m = RX.slash.exec(rest))) {
+    const [a, b] = DAY_FIRST ? [+m[2], +m[1]] : [+m[1], +m[2]];
+    day = dateOf(m[3] ? +m[3] : null, a - 1, b, now);
+  }
+  if (m && (repeat || day != null)) rest = rest.slice(m[0].length);
+  else m = null;
+
+  let time = null;
+  const t = TIMED.exec(rest);
+  if (t && (t[2] || t[3])) {
+    let h = +t[1];
+    const min = t[2] ? +t[2] : 0;
+    const mer = t[3] && t[3][0].toLowerCase();
+    const ok = min < 60 && (mer ? h >= 1 && h <= 12 : h < 24);
+    if (ok) {
+      if (mer) h = (h % 12) + (mer === "p" ? 12 : 0);
+      time = { h, m: min };
+      rest = t[4];
+    }
+  }
+  return { what: rest.trim() || text, repeat, day, time, lead: time ? lead : 0 };
+}
+
+// When an item next happens, as seen from now: its day, and its moment if timed.
+function occurrence(p, now) {
+  const today = startOfDay(now);
+  let day = p.day != null ? p.day : today;
+  if (p.repeat) {
+    day = today;
+    while (!p.repeat.includes(new Date(day).getDay())) day = addDays(day, 1);
+  }
+  let at = null;
+  if (p.time) { const d = new Date(day); d.setHours(p.time.h, p.time.m, 0, 0); at = d.getTime(); }
+  return { day, at };
+}
+
+function readScratch() {
+  if (window.SimpleHomeScratch) return window.SimpleHomeScratch.get();
+  try { return localStorage.getItem("homepage.scratch") || ""; } catch { return ""; }
+}
+function writeScratch(value) {
+  if (window.SimpleHomeScratch) window.SimpleHomeScratch.set(value);
+  else try { localStorage.setItem("homepage.scratch", value); } catch {}
 }
 
 function readItems(now) {
-  let raw = "";
-  try { raw = localStorage.getItem("homepage.scratch") || ""; } catch {}
   const items = [];
-  for (const line of raw.split("\n")) {
+  for (const line of readScratch().split("\n")) {
     const m = ITEM.exec(line);
     if (!m || !m[2].trim()) continue;
     const text = m[2].trim();
-    const t = parseTime(text, now);
-    items.push({ done: m[1] !== " ", text, what: t ? t.what : text, at: t ? t.at : null });
+    const p = parseItem(text, now);
+    const o = occurrence(p, now);
+    items.push({ done: m[1] !== " ", text, ...p, ...o });
   }
   return items;
+}
+
+// Rewrites matching checklist lines in the scratchpad; true if any changed.
+function rewriteItems(match, mark) {
+  const lines = readScratch().split("\n");
+  let changed = false;
+  for (let i = 0; i < lines.length; i++) {
+    const m = ITEM.exec(lines[i]);
+    if (!m || !match(m[2].trim(), m[1] !== " ")) continue;
+    lines[i] = lines[i].replace(/\[( |x|X)\]/, mark);
+    changed = true;
+    if (mark === "[x]") break; // checking off: just the first match
+  }
+  if (changed) writeScratch(lines.join("\n"));
+  return changed;
+}
+const checkOff = item => rewriteItems((text, done) => !done && text === item.text, "[x]");
+
+// Repeats come back: on a new day, anything that repeats is unchecked again.
+function rollDay(now) {
+  const today = dayKey(now);
+  const last = LS.get("day", null);
+  if (last === today) return;
+  LS.set("day", today);
+  if (last != null) rewriteItems((text, done) => done && !!parseItem(text, now).repeat, "[ ]");
 }
 
 /* ================= reading Drift ================= */
@@ -11875,8 +12030,9 @@ function phaseAt(now) {
 
 /* ================= the engine ================= */
 
-// Each signal: { id, kind, text, why, weight 0..1, at? }. The heaviest one
-// becomes the line; its weight sets how brightly the line burns.
+// Each signal: { id, kind, text, why, weight 0..1, at?, action?, stage? }. The
+// heaviest one becomes the line; its weight sets how brightly the line burns.
+// A signal with a stage is worth a notification when it flares.
 const fmtClock = ms => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 function inWords(mins) {
   if (mins < 1) return "now";
@@ -11884,85 +12040,136 @@ function inWords(mins) {
   const h = Math.floor(mins / 60), m = mins % 60;
   return m ? `${h}h ${m}m` : `${h} hour${h === 1 ? "" : "s"}`;
 }
+function dayLabel(day, now) {
+  const diff = Math.round((day - startOfDay(now)) / DAY);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Tomorrow";
+  if (diff === -1) return "yesterday";
+  if (Math.abs(diff) < 7) return new Date(day).toLocaleDateString([], { weekday: "short" });
+  return new Date(day).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+const urgency = mins => mins <= 15 ? 0.86 : mins <= 60 ? 0.58 : mins <= 120 ? 0.34 : 0.16;
+const CHECK = { type: "check", label: "Done" };
+const FOCUS = label => ({ type: "focus", label });
+const AHEAD = { type: "ahead", label: "Ahead" };
 
 function gather(now) {
   const items = readItems(now);
   const focus = focusInfo(now);
   const phase = phaseAt(now);
+  const today = startOfDay(now);
   const hour = new Date(now).getHours() + new Date(now).getMinutes() / 60;
-  const open = items.filter(i => !i.done);
-  const timed = open.filter(i => i.at != null).sort((a, b) => a.at - b.at);
-  const loose = open.filter(i => i.at == null);
+  const pending = items.filter(i => !i.done);
+  const todays = pending.filter(i => i.day === today);
+  const timed = todays.filter(i => i.at != null).sort((a, b) => a.at - b.at);
+  const loose = todays.filter(i => i.at == null);
+  const later = pending.filter(i => i.day > today).sort((a, b) => (a.at || a.day) - (b.at || b.day));
+  const missed = pending.filter(i => i.day < today);
   const signals = [];
 
   for (const i of timed) {
-    const mins = Math.round((i.at - now) / MIN);
     const id = "item:" + i.text;
-    if (mins > 0) {
-      const w = mins <= 15 ? 0.86 : mins <= 60 ? 0.58 : mins <= 120 ? 0.34 : 0.16;
-      signals.push({ id, kind: "due", at: i.at, weight: w,
+    const mins = Math.round((i.at - now) / MIN);
+    const leaveAt = i.at - i.lead * MIN;
+    const base = { id, kind: "due", at: i.at, item: i, action: CHECK };
+    if (i.lead && now < leaveAt) {
+      const toLeave = Math.round((leaveAt - now) / MIN);
+      signals.push({ ...base, weight: urgency(toLeave), stage: toLeave <= 15 ? "soon" : null,
+        text: `${i.what} at ${fmtClock(i.at)} — leave in ${inWords(toLeave)}.`, why: `allowing ${inWords(i.lead)} to get there` });
+    } else if (i.lead && now < i.at) {
+      signals.push({ ...base, weight: 0.95, stage: "go",
+        text: `Time to go: ${i.what} at ${fmtClock(i.at)}.`, why: `allowing ${inWords(i.lead)} to get there` });
+    } else if (mins > 0) {
+      signals.push({ ...base, weight: urgency(mins), stage: mins <= 15 ? "soon" : null,
         text: `${i.what} in ${inWords(mins)}.`, why: `at ${fmtClock(i.at)} · from your scratchpad` });
     } else if (mins > -60) {
-      signals.push({ id, kind: "due", at: i.at, weight: 0.95,
+      signals.push({ ...base, weight: 0.95, stage: "due",
         text: mins === 0 ? `${i.what} — now.` : `${i.what} was due ${inWords(-mins)} ago.`, why: `at ${fmtClock(i.at)} · still unchecked` });
     } else {
-      signals.push({ id, kind: "overdue", at: i.at, weight: 0.42,
-        text: `Still open from ${fmtClock(i.at)}: ${i.what}.`, why: "check it off in the scratchpad, or let it go" });
+      signals.push({ ...base, kind: "overdue", weight: 0.42,
+        text: `Still open from ${fmtClock(i.at)}: ${i.what}.`, why: "check it off, or let it go" });
     }
+  }
+  for (const i of missed) {
+    signals.push({ id: "item:" + i.text, kind: "overdue", at: i.at || i.day, item: i, action: CHECK, weight: 0.42,
+      text: `Still open from ${dayLabel(i.day, now)}: ${i.what}.`, why: "check it off, or let it go" });
   }
 
   const st = focus.status;
   if (st.state === "running" || st.state === "paused") {
     const left = Math.max(1, Math.ceil(st.remaining / 60));
     const brk = st.mode === "break";
-    signals.push({ id: "focus", kind: "focus", weight: 0.3,
+    signals.push({ id: "focus", kind: "focus", weight: 0.3, action: FOCUS("Open Drift"),
       text: st.state === "paused" ? `${brk ? "Break" : "Focus"} paused · ${inWords(left)} left.` : brk ? `On a break · ${inWords(left)} left.` : `Focusing · ${inWords(left)} left.`,
       why: "Drift is running" });
   } else if (st.state === "done") {
-    signals.push({ id: "focus:done", kind: "focus", weight: 0.5,
-      text: "Session finished. Note what you worked on.", why: "press F to open Drift" });
+    signals.push({ id: "focus:done", kind: "focus", weight: 0.5, action: FOCUS("Add a note"),
+      text: "Session finished. Note what you worked on.", why: "in Drift" });
   }
 
   if (focus.streak > 0 && focus.today === 0 && hour >= 17) {
-    signals.push({ id: "streak:" + dayKey(now), kind: "streak", weight: hour >= 21 ? 0.62 : 0.4,
-      text: `Your ${focus.streak}-day focus streak ends at midnight.`, why: "one session keeps it alive · F" });
+    signals.push({ id: "streak:" + dayKey(now), kind: "streak", weight: hour >= 21 ? 0.62 : 0.4, action: FOCUS("Start focus"),
+      text: `Your ${focus.streak}-day focus streak ends at midnight.`, why: "one session keeps it alive" });
   }
 
   if (loose.length) {
-    signals.push({ id: "open:" + loose[0].text, kind: "open", weight: Math.min(0.32, 0.18 + loose.length * 0.025),
+    signals.push({ id: "open:" + loose[0].text, kind: "open", item: loose[0], action: CHECK, weight: Math.min(0.32, 0.18 + loose.length * 0.025),
       text: loose.length === 1 ? `One thing open: ${loose[0].what}.` : `${loose.length} things open. Next: ${loose[0].what}.`,
       why: "from your scratchpad" });
   }
 
-  if (phase.id === "dawn" && (timed.length || loose.length)) {
+  if (phase.id === "dawn" && todays.length) {
     const first = timed.find(i => i.at > now);
-    signals.push({ id: "dawn:" + dayKey(now), kind: "brief", weight: 0.26,
-      text: `Morning. ${open.length} thing${open.length === 1 ? "" : "s"} ahead today${first ? ` — first, ${first.what} at ${fmtClock(first.at)}` : ""}.`,
+    signals.push({ id: "dawn:" + dayKey(now), kind: "brief", weight: 0.26, action: AHEAD,
+      text: `Morning. ${todays.length} thing${todays.length === 1 ? "" : "s"} ahead today${first ? ` — first, ${first.what} at ${fmtClock(first.at)}` : ""}.`,
       why: "your dawn briefing" });
+  }
+  const tomorrow = later.filter(i => i.day === addDays(today, 1));
+  if (hour >= 18 && tomorrow.length) {
+    const first = tomorrow.find(i => i.at != null);
+    signals.push({ id: "tomorrow:" + dayKey(now), kind: "brief", weight: 0.2, action: AHEAD,
+      text: first ? `Tomorrow starts with ${first.what} at ${fmtClock(first.at)}.` : `Tomorrow: ${tomorrow.length} thing${tomorrow.length === 1 ? "" : "s"} — first, ${tomorrow[0].what}.`,
+      why: "a look ahead" });
   }
   if (hour >= 22.5 || hour < 4) {
     signals.push({ id: "late:" + dayKey(now - 4 * 60 * MIN), kind: "late", weight: hour < 4 ? 0.48 : 0.36,
-      text: open.length ? "It's late. What's still open can wait for morning." : "It's late. Everything's settled — time to rest.",
+      text: todays.length ? "It's late. What's still open can wait for morning." : "It's late. Everything's settled — time to rest.",
       why: "dusk wind-down" });
   }
 
-  return { items, focus, phase, signals, timed, loose };
+  return { items, focus, phase, signals, timed, loose, later, missed };
 }
 
-/* ================= learning what you dismiss ================= */
+/* ================= learning ================= */
 
-// Every "Not now" quietens that kind of signal a little (never below half),
-// so the things you always wave away stop winning the line.
-let learned = LS.get("learned", {});
+// Every "Not now" quietens that kind of signal a little and every action
+// taken on one makes it a little louder, within half to one and a quarter,
+// so the line drifts toward what you actually act on.
+function loadLearned(v) {
+  const out = { dismissed: {}, acted: {} };
+  if (!v || typeof v !== "object") return out;
+  // the first version kept only dismissals, flat
+  const flat = !("dismissed" in v) && !("acted" in v);
+  for (const side of ["dismissed", "acted"]) {
+    const src = flat ? (side === "dismissed" ? v : {}) : v[side] || {};
+    for (const k in KIND_NAMES) if (typeof src[k] === "number" && src[k] > 0) out[side][k] = Math.min(50, Math.floor(src[k]));
+  }
+  return out;
+}
+const KIND_NAMES = { due: "upcoming times", overdue: "overdue items", focus: "focus sessions", streak: "your streak", open: "open items", brief: "briefings", late: "late-night nudges" };
+let learned = loadLearned(LS.get("learned", null));
 let snoozed = LS.get("snoozed", {});
-const damp = kind => Math.max(0.5, Math.pow(0.88, learned[kind] || 0));
-const KIND_NAMES = { due: "upcoming times", overdue: "overdue items", focus: "focus sessions", streak: "your streak", open: "open items", brief: "the dawn briefing", late: "late-night nudges" };
+const factor = kind => Math.min(1.25, Math.max(0.5, Math.pow(0.88, learned.dismissed[kind] || 0) * Math.pow(1.06, learned.acted[kind] || 0)));
+function learn(side, kind) {
+  learned[side][kind] = Math.min(50, (learned[side][kind] || 0) + 1);
+  LS.set("learned", learned);
+}
 
 function rank(signals, now) {
   for (const id in snoozed) if (snoozed[id] <= now) delete snoozed[id];
   return signals
     .filter(s => !snoozed[s.id])
-    .map(s => ({ ...s, score: s.weight * damp(s.kind) }))
+    .map(s => ({ ...s, score: s.weight * factor(s.kind) }))
     .sort((a, b) => b.score - a.score || (a.at || 0) - (b.at || 0));
 }
 
@@ -11998,6 +12205,49 @@ function chime(tier) {
 }
 function syncSound() { $("#hzSound").setAttribute("aria-pressed", String(soundOn)); }
 
+/* ================= notifications ================= */
+
+// One browser notification per stage of an item (coming up, time to go,
+// due), only when it flares and only while this tab isn't in front. The
+// page raises them itself; nothing goes through a server.
+const canNotify = "Notification" in window;
+let notifyOn = LS.get("notify", false);
+let notified = LS.get("notified", {});
+const granted = () => canNotify && Notification.permission === "granted";
+function syncNotify() {
+  const b = $("#hzNotify");
+  b.hidden = !canNotify;
+  b.setAttribute("aria-pressed", String(notifyOn && granted()));
+}
+async function toggleNotify() {
+  if (notifyOn && granted()) { notifyOn = false; LS.set("notify", false); syncNotify(); say("Alerts off."); return; }
+  let p = Notification.permission;
+  if (p === "default") { try { p = await Notification.requestPermission(); } catch { p = "denied"; } }
+  if (p !== "granted") { say("Notifications are blocked for this page — allow them in the browser's site settings."); syncNotify(); return; }
+  notifyOn = true;
+  LS.set("notify", true);
+  syncNotify();
+  say("Alerts on: you'll get a notification when something flares and this tab isn't in front.");
+}
+function maybeNotify(ranked, now) {
+  for (const k in notified) if (notified[k] < now - 2 * DAY) delete notified[k];
+  let changed = false;
+  for (const s of ranked) {
+    if (!s.stage || tierOf(s.score) !== "flare") continue;
+    const key = s.id + ":" + s.stage + ":" + dayKey(s.at || now);
+    if (notified[key]) continue;
+    notified[key] = now;
+    changed = true;
+    const away = document.visibilityState === "hidden" || !document.hasFocus();
+    if (!notifyOn || !granted() || !away) continue;
+    try {
+      const n = new Notification("Horizon", { body: s.text, tag: key });
+      n.onclick = () => { window.focus(); openHorizon(); n.close(); };
+    } catch {} // some browsers only allow them from a service worker
+  }
+  if (changed) LS.set("notified", notified);
+}
+
 /* ================= drawing ================= */
 
 let open = false;
@@ -12005,6 +12255,9 @@ let view = "line";
 let shown = null; // the signal on the line
 let lastTier = "quiet";
 let heat = 0;
+let notice = null; // a passing message in place of the why line
+
+function say(text) { notice = { text, until: Date.now() + 4500 }; refresh(true); }
 
 function row(when, what, cls, tier) {
   const li = document.createElement("div");
@@ -12027,6 +12280,13 @@ function empty(text) {
   p.textContent = text;
   return p;
 }
+const REPEAT_NAMES = { "0,1,2,3,4,5,6": "daily", "1,2,3,4,5": "weekdays", "0,6": "weekends" };
+const repeatName = r => REPEAT_NAMES[r.join()] || new Date(2026, 9, 18 + r[0]).toLocaleDateString([], { weekday: "short" }) + "s";
+function whenOf(i, now) {
+  const d = i.day === startOfDay(now) ? "" : dayLabel(i.day, now);
+  return [d, i.at != null ? fmtClock(i.at) : ""].filter(Boolean).join(" ") || "today";
+}
+const whatOf = i => i.repeat ? `${i.what} · ${repeatName(i.repeat)}` : i.what;
 
 let listKey = "";
 function renderLists(g, ranked, now) {
@@ -12038,34 +12298,41 @@ function renderLists(g, ranked, now) {
   listKey = key;
   const ahead = $("#hzAhead");
   ahead.replaceChildren(head("Ahead"));
-  const later = g.timed.filter(i => i.at > now);
-  for (const i of later) {
+  // what's slipped comes first: earlier days, then earlier today
+  for (const i of g.missed) ahead.append(row(dayLabel(i.day, now), whatOf(i), "", "steady"));
+  for (const i of g.timed.filter(i => i.at <= now)) ahead.append(row(fmtClock(i.at), whatOf(i), "", "steady"));
+  for (const i of g.timed.filter(i => i.at > now)) {
     const s = ranked.find(r => r.id === "item:" + i.text);
-    ahead.append(row(fmtClock(i.at), i.what, "", s ? tierOf(s.score) : "ember"));
+    ahead.append(row(fmtClock(i.at), whatOf(i) + (i.lead ? ` · leave ${fmtClock(i.at - i.lead * MIN)}` : ""), "", s ? tierOf(s.score) : "ember"));
   }
-  for (const i of g.loose) ahead.append(row("open", i.what));
+  for (const i of g.loose) ahead.append(row("today", whatOf(i)));
   if (st.state === "running" || st.state === "paused") ahead.append(row("drift", `${Math.max(1, Math.ceil(st.remaining / 60))} min left in this ${st.mode === "break" ? "break" : "session"}`));
-  if (!later.length && !g.loose.length && st.state !== "running") ahead.append(empty("Nothing ahead. Add “- [ ] 3:30pm something” to your scratchpad and it shows up here."));
+  for (const i of g.later.slice(0, 12)) ahead.append(row(whenOf(i, now), whatOf(i)));
+  if (ahead.children.length === 1) ahead.append(empty("Nothing ahead. Add “- [ ] tomorrow 3pm something” to your scratchpad and it shows up here."));
 
   const settled = $("#hzSettled");
   settled.replaceChildren(head("Settled"));
   const done = g.items.filter(i => i.done);
   const past = g.timed.filter(i => i.at <= now);
-  for (const i of done) settled.append(row(i.at ? fmtClock(i.at) : "done", i.what, "done"));
+  for (const i of done) settled.append(row(i.repeat ? repeatName(i.repeat) : i.at != null && i.day === startOfDay(now) ? fmtClock(i.at) : "done", i.what, "done"));
   if (g.focus.today) settled.append(row("drift", `${g.focus.today} min focused today`, "done"));
   if (g.focus.streak && g.focus.today) settled.append(row("streak", `${g.focus.streak + 1} days in a row`, "done"));
-  if (!past.length) settled.append(row("✓", "Nothing overdue", "done"));
-  if (!done.length && !g.focus.today && past.length) settled.append(empty("Nothing checked off yet today."));
+  if (!past.length && !g.missed.length) settled.append(row("✓", "Nothing overdue", "done"));
+  if (!done.length && !g.focus.today && (past.length || g.missed.length)) settled.append(empty("Nothing checked off yet today."));
 
-  const quieter = Object.keys(learned).filter(k => learned[k] > 0 && KIND_NAMES[k]);
-  if (quieter.length) {
+  const quieter = Object.keys(KIND_NAMES).filter(k => factor(k) < 1);
+  const louder = Object.keys(KIND_NAMES).filter(k => factor(k) > 1);
+  if (quieter.length || louder.length) {
     const p = document.createElement("p");
     p.className = "learned";
-    p.textContent = "Quieter about " + quieter.map(k => `${KIND_NAMES[k]} (${learned[k]}× not now)`).join(", ") + ". ";
+    const parts = [];
+    if (quieter.length) parts.push("Quieter about " + quieter.map(k => `${KIND_NAMES[k]} (${learned.dismissed[k]}× not now)`).join(", ") + ".");
+    if (louder.length) parts.push("Louder about " + louder.map(k => `${KIND_NAMES[k]} (${learned.acted[k]}× done)`).join(", ") + ".");
+    p.textContent = parts.join(" ") + " ";
     const b = document.createElement("button");
     b.className = "link";
     b.textContent = "Forget this";
-    b.addEventListener("click", () => { learned = {}; LS.set("learned", learned); refresh(true); $("#hzSettledBtn").focus(); });
+    b.addEventListener("click", () => { learned = loadLearned(null); LS.set("learned", learned); refresh(true); $("#hzSettledBtn").focus(); });
     p.append(b);
     settled.append(p);
   }
@@ -12073,23 +12340,25 @@ function renderLists(g, ranked, now) {
 
 function refresh(force) {
   const now = Date.now();
+  rollDay(now);
   const g = gather(now);
   const ranked = rank(g.signals, now);
   const top = ranked[0] && ranked[0].score >= 0.12 ? ranked[0] : null;
   const tier = top ? tierOf(top.score) : "quiet";
   // the line never drops below the light the time of day gives it
-  heat = Math.max(g.phase.floor, top ? top.score : 0);
+  heat = Math.max(g.phase.floor, top ? Math.min(1, top.score) : 0);
 
   if (tier === "flare" && lastTier !== "flare") chime("flare");
   else if (tier === "steady" && lastTier !== "steady" && lastTier !== "flare") chime("steady");
   lastTier = tier;
+  maybeNotify(ranked, now);
 
   // toolbar: a small ember, and the line itself as the tooltip
   if (tab) {
     tab.dataset.tier = tier;
-    const say = top ? top.text : "All clear.";
-    tab.dataset.tip = `${say.length > 52 ? say.slice(0, 51) + "…" : say} · H`;
-    tab.setAttribute("aria-label", `Horizon: ${say}`);
+    const line = top ? top.text : "All clear.";
+    tab.dataset.tip = `${line.length > 52 ? line.slice(0, 51) + "…" : line} · H`;
+    tab.setAttribute("aria-label", `Horizon: ${line}`);
   }
   if (!open && !force) return;
 
@@ -12098,7 +12367,6 @@ function refresh(force) {
   ui.style.setProperty("--heat", heat.toFixed(3));
   $("#hzPhase").textContent = `${g.phase.label} · ${fmtClock(now)}`;
   const text = top ? top.text : quietLine(g);
-  const why = top ? top.why : "";
   const msg = $("#hzMsg");
   if (msg.textContent !== text) {
     if (msg.textContent && !force) {
@@ -12106,9 +12374,13 @@ function refresh(force) {
       setTimeout(() => { msg.textContent = text; msg.classList.remove("swap"); }, 420);
     } else msg.textContent = text;
   }
-  $("#hzWhy").textContent = why;
+  if (notice && notice.until < now) notice = null;
+  $("#hzWhy").textContent = notice ? notice.text : top ? top.why : "";
   shown = top;
   $("#hzDismiss").hidden = !top;
+  const act = $("#hzAct");
+  act.hidden = !(top && top.action);
+  if (top && top.action) act.textContent = top.action.label;
   renderLists(g, ranked, now);
 }
 
@@ -12131,10 +12403,28 @@ function setView(v) {
 function dismiss() {
   if (!shown) return;
   snoozed[shown.id] = Date.now() + SNOOZE;
-  learned[shown.kind] = (learned[shown.kind] || 0) + 1;
   LS.set("snoozed", snoozed);
-  LS.set("learned", learned);
+  learn("dismissed", shown.kind);
   refresh();
+}
+
+// Enter, or the chip: do what the line is asking for.
+function act() {
+  if (!shown || !shown.action) return;
+  const s = shown, a = s.action;
+  if (a.type === "ahead") { if (view !== "ahead") setView("ahead"); return; }
+  learn("acted", s.kind);
+  if (a.type === "focus") {
+    closeHorizon();
+    if (window.SimpleHomeFocus && window.SimpleHomeFocus.open) window.SimpleHomeFocus.open();
+    return;
+  }
+  if (a.type === "check" && checkOff(s.item)) {
+    say(`Checked off: ${s.item.what}`);
+    // the chip may have gone with the line it belonged to
+    const f = root.activeElement;
+    if (!f || f.hidden) ($("#hzAct").hidden ? $("#hzBack") : $("#hzAct")).focus({ preventScroll: true });
+  }
 }
 
 /* ================= stillness ================= */
@@ -12164,7 +12454,7 @@ function openHorizon() {
   clearInterval(ticker);
   ticker = setInterval(refresh, 1000);
   wake();
-  setTimeout(() => $("#hzBack").focus({ preventScroll: true }), 80);
+  setTimeout(() => ($("#hzAct").hidden ? $("#hzBack") : $("#hzAct")).focus({ preventScroll: true }), 80);
 }
 function closeHorizon() {
   if (!open) return;
@@ -12185,6 +12475,8 @@ $("#hzBack").addEventListener("click", closeHorizon);
 $("#hzAheadBtn").addEventListener("click", () => setView("ahead"));
 $("#hzSettledBtn").addEventListener("click", () => setView("settled"));
 $("#hzDismiss").addEventListener("click", dismiss);
+$("#hzAct").addEventListener("click", act);
+$("#hzNotify").addEventListener("click", toggleNotify);
 $("#hzSound").addEventListener("click", () => {
   soundOn = !soundOn;
   LS.set("sound", soundOn);
@@ -12193,6 +12485,8 @@ $("#hzSound").addEventListener("click", () => {
 });
 // a scratchpad edit in another tab shows up straight away
 addEventListener("storage", e => { if (e.key === "homepage.scratch") refresh(); });
+// coming back to the tab catches up at once rather than on the next slow tick
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 
 // swipe up for ahead, down for settled
 let touchY = null;
@@ -12225,28 +12519,28 @@ addEventListener("keydown", e => {
   wake();
   if (e.key === "Escape") { if (view !== "line") setView(view); else closeHorizon(); return; }
   if (typing) return;
-  if (e.key === "ArrowUp") { e.preventDefault(); setView("ahead"); }
+  if (e.key === "Enter") { if (!(target.closest && target.closest("button"))) { e.preventDefault(); act(); } }
+  else if (e.key === "ArrowUp") { e.preventDefault(); setView("ahead"); }
   else if (e.key === "ArrowDown") { e.preventDefault(); setView("settled"); }
   else if (e.key === "d" || e.key === "D") dismiss();
   else if (e.key === "h" || e.key === "H") closeHorizon();
 });
 
-// Settings → Backup carries the tone setting and what Horizon has learned
+// Settings → Backup carries the tone and alert settings and what Horizon has learned
 window.SimpleHomeHorizon = {
-  exportData() { return { sound: soundOn, learned }; },
+  exportData() { return { sound: soundOn, notify: notifyOn, learned }; },
   importData(d) {
     if (!d || typeof d !== "object") return;
     if (typeof d.sound === "boolean") { soundOn = d.sound; LS.set("sound", soundOn); syncSound(); }
-    if (d.learned && typeof d.learned === "object") {
-      learned = {};
-      for (const k in KIND_NAMES) if (typeof d.learned[k] === "number" && d.learned[k] > 0) learned[k] = Math.min(50, Math.floor(d.learned[k]));
-      LS.set("learned", learned);
-    }
+    // alerts still need this browser's permission, asked for from the Alerts button
+    if (typeof d.notify === "boolean") { notifyOn = d.notify; LS.set("notify", notifyOn); syncNotify(); }
+    if (d.learned && typeof d.learned === "object") { learned = loadLearned(d.learned); LS.set("learned", learned); }
     refresh();
   },
 };
 
 syncSound();
+syncNotify();
 refresh();
 ticker = setInterval(refresh, 30 * 1000);
 })();
